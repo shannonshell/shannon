@@ -58,3 +58,43 @@ In `src/main.rs`, the `build_editor` function creates a `Reedline` instance. We
 would add `.with_highlighter(Box::new(highlighter))` where `highlighter` is a
 tree-sitter-backed implementation of reedline's `Highlighter` trait. Each shell
 gets its own highlighter with its own grammar.
+
+## Experiments
+
+### Experiment 1: Research tree-sitter crates and grammar node types
+
+#### Description
+
+Answer all open questions before writing any integration code. We need to:
+
+1. Find the correct crate for the nushell tree-sitter grammar (check crates.io
+   and GitHub).
+2. Write a throwaway Rust program that parses sample bash and nushell input with
+   tree-sitter and prints the syntax tree. This tells us the node types each
+   grammar produces and how incomplete input is handled.
+3. Document the node-type-to-color mapping we'll use.
+4. Choose a color scheme.
+
+#### Changes
+
+- Create `experiments/0001-tree-sitter-research/` with a standalone `Cargo.toml`
+  and `src/main.rs` that:
+  - Depends on `tree-sitter`, `tree-sitter-bash`, and whatever the nushell
+    grammar crate is.
+  - Parses several sample inputs for each shell:
+    - Complete command: `echo "hello world"`
+    - Pipeline: `ls -la | grep foo`
+    - Variable: `export FOO=bar` (bash), `$env.FOO = "bar"` (nushell)
+    - Incomplete input: `echo "unterminated`
+    - Comment: `# this is a comment`
+  - Prints the full S-expression tree for each parse.
+  - Lists all unique node type names found.
+
+#### Verification
+
+1. `cd experiments/0001-tree-sitter-research && cargo run` succeeds.
+2. Output shows the S-expression tree for each sample input.
+3. We can see how tree-sitter represents incomplete/invalid input (look for
+   `ERROR` or `MISSING` nodes).
+4. We have a complete list of node types for both grammars.
+5. Document findings in this issue (as the result).
