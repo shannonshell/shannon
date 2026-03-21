@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-21"
+closed = "2026-03-21"
 +++
 
 # Issue 3: Tab completion
@@ -166,3 +167,22 @@ Tests call `complete()` with the completer's cwd set to the temp dir.
 8. Complete a file — space appended after the filename.
 9. Multiple matches display in a columnar menu below the prompt.
 10. `cargo test` passes — all new completer tests green, no regressions.
+
+**Result:** Pass
+
+All verification steps confirmed. 36 tests pass (9 new completer unit tests,
+16 existing unit tests, 11 integration tests). Tab completion works for files,
+directories, hidden files, tilde expansion, and nested paths.
+
+#### Conclusion
+
+File/directory tab completion is implemented in a single experiment. The
+`FileCompleter` in `src/completer.rs` handles path completion with all expected
+shell UX conventions. Wired into reedline via `ColumnarMenu` and Tab keybinding.
+
+## Conclusion
+
+Issue complete. Tab completion for files and directories is working. Key files:
+
+- `src/completer.rs` — `FileCompleter` struct with 9 unit tests
+- `src/main.rs` — Tab keybinding, completer and menu wired into `build_editor()`
