@@ -3,9 +3,11 @@ use std::process::Command;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use reedline::{
-    default_emacs_keybindings, Emacs, FileBackedHistory, Reedline, ReedlineEvent, Signal,
+    default_emacs_keybindings, ColumnarMenu, Emacs, FileBackedHistory, MenuBuilder, Reedline,
+    ReedlineEvent, ReedlineMenu, Signal,
 };
 
+use shannon::completer::FileCompleter;
 use shannon::executor::execute_command;
 use shannon::highlighter::TreeSitterHighlighter;
 use shannon::prompt::ShannonPrompt;
@@ -29,6 +31,14 @@ fn build_editor(shell: ShellKind) -> Reedline {
         KeyCode::BackTab,
         ReedlineEvent::ExecuteHostCommand(SWITCH_COMMAND.into()),
     );
+    keybindings.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("completion_menu".to_string()),
+            ReedlineEvent::MenuNext,
+        ]),
+    );
     let edit_mode = Box::new(Emacs::new(keybindings));
 
     let history_file = shell.history_file();
@@ -40,10 +50,17 @@ fn build_editor(shell: ShellKind) -> Reedline {
 
     let highlighter = TreeSitterHighlighter::new(shell);
 
+    let completer = Box::new(FileCompleter::new());
+    let completion_menu = Box::new(
+        ColumnarMenu::default().with_name("completion_menu"),
+    );
+
     Reedline::create()
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
         .with_highlighter(Box::new(highlighter))
+        .with_completer(completer)
+        .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .use_bracketed_paste(true)
 }
 
