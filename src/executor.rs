@@ -68,10 +68,10 @@ exit $__olshell_ec"#
 
 fn build_nushell_wrapper(command: &str, temp_path: &str) -> String {
     format!(
-        r#"{command}
+        r#"let __olshell_out = (try {{ {command} }} catch {{ |e| $e.rendered | print -e; null }})
+if ($__olshell_out != null) and (($__olshell_out | describe) != "nothing") {{ $__olshell_out | print }}
 let olshell_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
-$env | reject config? | insert __OLSHELL_CWD (pwd) | insert __OLSHELL_EXIT ($olshell_exit | into string) | to json --serialize | save --force '{temp_path}'
-exit $olshell_exit"#
+$env | reject config? | insert __OLSHELL_CWD (pwd) | insert __OLSHELL_EXIT ($olshell_exit | into string) | to json --serialize | save --force '{temp_path}'"#
     )
 }
 
