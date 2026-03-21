@@ -1,4 +1,5 @@
 mod executor;
+mod highlighter;
 mod prompt;
 mod shell;
 
@@ -11,6 +12,7 @@ use reedline::{
 };
 
 use crate::executor::execute_command;
+use crate::highlighter::TreeSitterHighlighter;
 use crate::prompt::OlshellPrompt;
 use crate::shell::{ShellKind, ShellState};
 
@@ -41,9 +43,12 @@ fn build_editor(shell: ShellKind) -> Reedline {
     let history = FileBackedHistory::with_file(10000, history_file)
         .expect("failed to create history file");
 
+    let highlighter = TreeSitterHighlighter::new(shell);
+
     Reedline::create()
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
+        .with_highlighter(Box::new(highlighter))
 }
 
 fn main() -> io::Result<()> {
