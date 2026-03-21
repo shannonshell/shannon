@@ -1,7 +1,8 @@
 # Shannon
 
-A poly-shell that wraps multiple shell interpreters and lets you switch between
-them mid-session using Shift+Tab.
+An AI-first shell with seamless access to bash, nushell, and any other shell.
+The default mode accepts plain English (via a configurable LLM), and Shift+Tab
+switches to traditional shells. Named after Claude Shannon.
 
 ## Build
 
@@ -39,9 +40,15 @@ fresh subprocess — there are no persistent shell sessions.
 - **Vendor directory is for reference only** — vendored repos are for reading source code, not for building against. Use crates.io dependencies in Cargo.toml.
 - **Nushell output rendering** — nushell's `echo` returns a Value rather than printing. The wrapper uses try/catch + explicit `print` to render output.
 
-## Shells supported
+## Modes
 
-Currently: bash, nushell. The architecture supports any shell — adding one means adding a wrapper script builder and an env parser in `executor.rs`.
+Shannon treats each mode as a "shell" in the Shift+Tab rotation:
+
+- **shannon** (planned) — AI mode. Input goes to a configurable LLM which generates a shell command. User confirms before execution.
+- **bash** — working. Full bash via subprocess wrapper.
+- **nushell** — working. Full nushell via subprocess wrapper.
+
+Adding a new traditional shell means adding a wrapper script builder and env parser in `executor.rs`. The AI mode will be a separate code path that doesn't use wrapper scripts.
 
 ## Config
 
