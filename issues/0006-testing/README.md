@@ -96,3 +96,53 @@ Split tests into layers:
 - Set env in bash, verify it carries to nushell
 - `cd` in one shell, verify cwd carries over
 - Exit code propagation
+
+## Experiments
+
+### Experiment 1: Unit tests for parsers and data model
+
+#### Description
+
+Add unit tests for the pure functions in `executor.rs` and `shell.rs`. These are
+the most critical code paths (env parsing determines whether state syncs
+correctly) and the easiest to test (no external deps, no terminal, no
+subprocesses).
+
+#### Changes
+
+**`src/executor.rs`** — add `#[cfg(test)] mod tests` with:
+
+- `test_parse_bash_env_basic` — parse a typical `export -p` output with a few
+  variables, `__OLSHELL_CWD`, and `__OLSHELL_EXIT`. Verify env map, cwd, and
+  that olshell markers are excluded from env.
+- `test_parse_bash_env_quoted_values` — values containing spaces, quotes, and
+  special characters (`declare -x FOO="hello \"world\""`).
+- `test_parse_bash_env_empty` — empty string returns None.
+- `test_parse_bash_env_no_value` — `declare -x VAR` (exported but unset) is
+  skipped.
+- `test_parse_nushell_env_basic` — parse a JSON object with string values,
+  `__OLSHELL_CWD`, and `__OLSHELL_EXIT`. Verify env map and cwd.
+- `test_parse_nushell_env_arrays` — PATH as a JSON array of strings is joined
+  with `:`.
+- `test_parse_nushell_env_non_string_dropped` — non-string values (objects,
+  numbers, booleans) are silently dropped.
+- `test_parse_nushell_env_invalid_json` — garbage input returns None.
+- `test_unescape_bash_value` — test `\"`, `\\`, `\$`, `\`` escapes.
+- `test_build_bash_wrapper` — verify the wrapper contains the user command and
+  temp path.
+- `test_build_nushell_wrapper` — verify the wrapper contains the user command
+  and temp path.
+
+**`src/shell.rs`** — add `#[cfg(test)] mod tests` with:
+
+- `test_shell_kind_display_name` — Bash -> "bash", Nushell -> "nu".
+- `test_shell_kind_binary` — Bash -> "bash", Nushell -> "nu".
+- `test_shell_kind_history_file` — returns path ending in `bash_history` or
+  `nu_history`.
+- `test_shell_state_from_current_env` — captures at least PATH and a cwd.
+
+#### Verification
+
+1. `cargo test` passes with all tests green.
+2. No tests require bash or nushell to be installed.
+3. Parser edge cases (empty input, special chars, arrays) are covered.
