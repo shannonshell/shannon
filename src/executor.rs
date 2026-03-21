@@ -165,8 +165,19 @@ fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf
             // Skip
         } else if let Some(s) = value.as_str() {
             env.insert(key.clone(), s.to_string());
+        } else if let Some(arr) = value.as_array() {
+            // Nushell stores PATH (and similar) as a list — join with path separator
+            let all_strings = arr.iter().all(|v| v.is_string());
+            if all_strings {
+                let joined = arr
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(if cfg!(windows) { ";" } else { ":" });
+                env.insert(key.clone(), joined);
+            }
         }
-        // Non-string values are silently dropped (strings-only policy)
+        // Other non-string values are silently dropped (strings-only policy)
     }
 
     Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
