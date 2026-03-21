@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-21"
+closed = "2026-03-21"
 +++
 
 # Issue 1: Syntax highlighting for bash and nushell
@@ -191,3 +192,26 @@ shells with Shift+Tab (already handled — `build_editor` is called per shell).
 6. Type `ls | where size > 1kb` — `ls` and `where` colored appropriately.
 7. Type an incomplete string `echo "unterminated` — error portion is red.
 8. Switching shells changes the highlighting rules immediately.
+
+**Result:** Pass
+
+All verification steps confirmed by the user. Syntax highlighting works for both
+bash and nushell with Tokyo Night colors. Switching shells with Shift+Tab swaps
+the highlighter immediately.
+
+#### Conclusion
+
+Tree-sitter integration is complete. The `TreeSitterHighlighter` in
+`src/highlighter.rs` implements reedline's `Highlighter` trait, parses input on
+each keystroke, walks leaf nodes, and maps them to Tokyo Night colors. Adding
+highlighting for a new shell means adding a color mapping function and a
+tree-sitter grammar dependency.
+
+## Conclusion
+
+Issue complete. Syntax highlighting for bash and nushell is implemented using
+tree-sitter grammars and the Tokyo Night color scheme. Key files:
+
+- `src/highlighter.rs` — `TreeSitterHighlighter` struct and color mappings
+- `Cargo.toml` — `tree-sitter`, `tree-sitter-bash`, `tree-sitter-nu` deps
+- `experiments/0001-tree-sitter-research/` — research program (throwaway)
