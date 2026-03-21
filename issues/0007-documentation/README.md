@@ -13,9 +13,9 @@ should be documented — new features shouldn't ship without docs.
 
 ## Background
 
-olshell currently has a README.md with a high-level overview and a CLAUDE.md
+shannon currently has a README.md with a high-level overview and a CLAUDE.md
 with architecture notes. But there is no user-facing documentation explaining
-how to use olshell, what features it has, or how it works.
+how to use shannon, what features it has, or how it works.
 
 We need a `docs/` directory with markdown files that:
 
@@ -47,7 +47,7 @@ We need a `docs/` directory with markdown files that:
 
 - Supported shells
 - Keybindings
-- Configuration (~/.config/olshell/)
+- Configuration (~/.config/shannon/)
 - Architecture overview (how wrapper scripts work, strings-only policy)
 
 **Future features (document as implemented):**
@@ -89,7 +89,7 @@ docs/
 
 - **Every feature gets a doc.** No feature ships without a corresponding
   markdown file.
-- **User-first language.** Write for someone who just installed olshell, not for
+- **User-first language.** Write for someone who just installed shannon, not for
   contributors reading the source.
 - **Show, don't tell.** Use concrete examples and terminal output snippets.
 - **Keep docs in sync.** When a feature changes, its doc changes in the same

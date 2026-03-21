@@ -8,13 +8,13 @@ closed = "2026-03-21"
 
 ## Goal
 
-Add syntax highlighting to the olshell input line for both bash and nushell,
+Add syntax highlighting to the shannon input line for both bash and nushell,
 using tree-sitter grammars. Highlighting should update live as the user types
 and switch automatically when the user switches shells with Shift+Tab.
 
 ## Background
 
-olshell uses reedline as its line editor. Reedline supports syntax highlighting
+shannon uses reedline as its line editor. Reedline supports syntax highlighting
 via the `Highlighter` trait:
 
 ```rust

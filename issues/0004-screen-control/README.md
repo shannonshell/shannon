@@ -7,7 +7,7 @@ opened = "2026-03-21"
 
 ## Goal
 
-Verify and ensure Ctrl+L clears the screen in olshell.
+Verify and ensure Ctrl+L clears the screen in shannon.
 
 ## Background
 

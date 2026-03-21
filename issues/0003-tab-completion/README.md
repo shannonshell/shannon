@@ -7,7 +7,7 @@ opened = "2026-03-21"
 
 ## Goal
 
-Add file and directory tab completion to olshell. Every shell has this — olshell
+Add file and directory tab completion to shannon. Every shell has this — shannon
 feels broken without it.
 
 ## Background

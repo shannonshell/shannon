@@ -9,18 +9,18 @@ closed = "2026-03-21"
 ## Goal
 
 Identify all the features users expect from an interactive shell, assess which
-ones olshell already has, and create issues for the ones we still need. The
+ones shannon already has, and create issues for the ones we still need. The
 output is a prioritized checklist that becomes our roadmap.
 
 ## Background
 
-olshell is not a new shell language — it delegates to real shells. But it still
+shannon is not a new shell language — it delegates to real shells. But it still
 owns the interactive experience: the prompt, input editing, keybindings,
 history, tab completion, job control, and everything else that happens between
 the user pressing a key and a subprocess being spawned.
 
 Users coming from bash, zsh, fish, or nushell will expect certain baseline
-features to just work. If olshell is missing something fundamental (like tab
+features to just work. If shannon is missing something fundamental (like tab
 completion or Ctrl+L to clear screen), it will feel broken regardless of how
 well the shell-switching works.
 
@@ -38,18 +38,18 @@ well the shell-switching works.
 | Exit code propagation         | Done   | Shown in prompt indicator    |
 | Visual shell indicator        | Done   | `[bash]` / `[nu]` in prompt  |
 | Ctrl+C interrupt              | Done   | During input and subprocess  |
-| Ctrl+D exit                   | Done   | Exits olshell                |
+| Ctrl+D exit                   | Done   | Exits shannon                |
 
 ### What we need to audit
 
 The experiment for this issue is a research task: survey what features
-interactive shells provide, categorize them, and determine which ones olshell
+interactive shells provide, categorize them, and determine which ones shannon
 needs. For each feature, decide:
 
-1. **Must have** — users will consider olshell broken without it.
+1. **Must have** — users will consider shannon broken without it.
 2. **Should have** — noticeably better experience, worth implementing soon.
 3. **Nice to have** — can defer, but should be on the roadmap.
-4. **Out of scope** — belongs to the sub-shell, not olshell.
+4. **Out of scope** — belongs to the sub-shell, not shannon.
 
 ### Categories to investigate
 
@@ -65,7 +65,7 @@ needs. For each feature, decide:
 - **Aliases and functions** — per-shell config files (already planned in README)
 - **Startup/shutdown** — rc files, login vs non-login, MOTD
 - **Terminal integration** — title bar updates, OSC sequences, clipboard
-- **Globbing and expansion** — does olshell need to expand anything, or does the
+- **Globbing and expansion** — does shannon need to expand anything, or does the
   sub-shell handle it all?
 
 ## Experiments
@@ -117,8 +117,8 @@ experiment result.
 
 1. Feature matrix covers all six shells across all categories.
 2. Each feature is classified as: must have / should have / nice to have / out
-   of scope for olshell.
-3. Must-have features that olshell is missing are identified clearly.
+   of scope for shannon.
+3. Must-have features that shannon is missing are identified clearly.
 4. New issues are created for each missing must-have and should-have feature.
 
 **Result:** Pass
@@ -136,7 +136,7 @@ experiment result.
 | powershell | TabExpansion2, Register-ArgumentCompleter, .NET method completion                |
 | elvish     | Completion mode with matchers (prefix, subsequence, substring)                   |
 
-**olshell: Must have.** Every shell has this. Minimum: file/directory
+**shannon: Must have.** Every shell has this. Minimum: file/directory
 completion.
 
 ##### Autosuggestions / Hints
@@ -150,13 +150,13 @@ completion.
 | elvish     | No                                                    |
 | powershell | Via PSReadLine predictive IntelliSense                |
 
-**olshell: Should have.** Reedline already has hinter support — just wire it up.
+**shannon: Should have.** Reedline already has hinter support — just wire it up.
 
 ##### Screen Control (Ctrl+L)
 
 All six shells support Ctrl+L to clear screen.
 
-**olshell: Must have.** Verify reedline handles this (likely already works).
+**shannon: Must have.** Verify reedline handles this (likely already works).
 
 ##### Job Control (bg, fg, Ctrl+Z, jobs, disown)
 
@@ -166,7 +166,7 @@ All six shells support Ctrl+L to clear screen.
 | powershell      | Full (different API) |
 | nushell, elvish | Limited              |
 
-**olshell: Out of scope.** Requires persistent process group model we don't
+**shannon: Out of scope.** Requires persistent process group model we don't
 have. Users who need job control should run `bash` or `zsh` directly.
 
 ##### Hooks (preexec, precmd, chpwd)
@@ -180,49 +180,49 @@ have. Users who need job control should run `bash` or `zsh` directly.
 | elvish     | before-readline, after-readline, after-command                           |
 | powershell | Register-EngineEvent                                                     |
 
-**olshell: Nice to have.** Architecture should allow for it later.
+**shannon: Nice to have.** Architecture should allow for it later.
 
 ##### Right Prompt
 
 Supported by zsh, fish, nushell, elvish. Not bash or powershell.
 
-**olshell: Nice to have.** Reedline supports it. Low effort.
+**shannon: Nice to have.** Reedline supports it. Low effort.
 
 ##### Prompt Features (git branch, command duration)
 
 All six shells support git info in prompt via various mechanisms.
 
-**olshell: Should have.** Git branch is expected by modern users.
+**shannon: Should have.** Git branch is expected by modern users.
 
 ##### Bracketed Paste
 
 All modern shells support it.
 
-**olshell: Must have.** Reedline likely handles this — verify.
+**shannon: Must have.** Reedline likely handles this — verify.
 
 ##### History Deduplication
 
 All six shells support dedup in some form.
 
-**olshell: Should have.** Consider SQLite history backend.
+**shannon: Should have.** Consider SQLite history backend.
 
 ##### Terminal Title (OSC 2)
 
 All six shells support setting terminal title.
 
-**olshell: Nice to have.** Straightforward to add.
+**shannon: Nice to have.** Straightforward to add.
 
 ##### Startup/Config Files
 
-All shells have rc files. Already planned for olshell.
+All shells have rc files. Already planned for shannon.
 
-**olshell: Should have.** Per-shell rc files in ~/.config/olshell/.
+**shannon: Should have.** Per-shell rc files in ~/.config/shannon/.
 
 ##### Vi Mode
 
 All six shells support vi keybindings.
 
-**olshell: Should have.** Reedline has built-in Vi mode. Needs config option.
+**shannon: Should have.** Reedline has built-in Vi mode. Needs config option.
 
 #### Priority Summary
 

@@ -8,13 +8,13 @@ closed = "2026-03-21"
 
 ## Goal
 
-Establish a testing strategy for olshell and write tests for all existing
+Establish a testing strategy for shannon and write tests for all existing
 features. Every new feature should have tests before or alongside its
 implementation — but first we need to cover what we already have.
 
 ## Background
 
-olshell currently has zero tests. Every feature has been verified manually. This
+shannon currently has zero tests. Every feature has been verified manually. This
 is unsustainable as the project grows — we need automated tests before adding
 more features (tab completion, hints, config files, etc.).
 
@@ -39,7 +39,7 @@ The existing features that need test coverage:
 
 ### Testing challenges
 
-olshell is an interactive terminal application. This creates challenges:
+shannon is an interactive terminal application. This creates challenges:
 
 - **Reedline interaction** is hard to test directly — it owns the terminal.
   Testing shell switching or keybindings requires either mocking reedline or
@@ -58,7 +58,7 @@ Split tests into layers:
    `#[cfg(test)] mod tests { ... }`.
 2. **Integration tests** (require bash/nu installed) — test actual command
    execution and env capture round-trips. These go in `tests/`.
-3. **PTY-based tests** (future, optional) — drive olshell via a pseudo-terminal
+3. **PTY-based tests** (future, optional) — drive shannon via a pseudo-terminal
    to test interactive features like Shift+Tab and Ctrl+R. Complex to set up,
    defer to later.
 
@@ -114,15 +114,15 @@ subprocesses).
 **`src/executor.rs`** — add `#[cfg(test)] mod tests` with:
 
 - `test_parse_bash_env_basic` — parse a typical `export -p` output with a few
-  variables, `__OLSHELL_CWD`, and `__OLSHELL_EXIT`. Verify env map, cwd, and
-  that olshell markers are excluded from env.
+  variables, `__SHANNON_CWD`, and `__SHANNON_EXIT`. Verify env map, cwd, and
+  that shannon markers are excluded from env.
 - `test_parse_bash_env_quoted_values` — values containing spaces, quotes, and
   special characters (`declare -x FOO="hello \"world\""`).
 - `test_parse_bash_env_empty` — empty string returns None.
 - `test_parse_bash_env_no_value` — `declare -x VAR` (exported but unset) is
   skipped.
 - `test_parse_nushell_env_basic` — parse a JSON object with string values,
-  `__OLSHELL_CWD`, and `__OLSHELL_EXIT`. Verify env map and cwd.
+  `__SHANNON_CWD`, and `__SHANNON_EXIT`. Verify env map and cwd.
 - `test_parse_nushell_env_arrays` — PATH as a JSON array of strings is joined
   with `:`.
 - `test_parse_nushell_env_non_string_dropped` — non-string values (objects,

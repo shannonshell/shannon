@@ -7,7 +7,7 @@ opened = "2026-03-21"
 
 ## Goal
 
-Verify and ensure bracketed paste works in olshell.
+Verify and ensure bracketed paste works in shannon.
 
 ## Background
 
