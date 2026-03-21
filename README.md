@@ -64,20 +64,19 @@ Only string-typed data crosses the shell boundary. Shell-internal data structure
 
 ## Configuration
 
-shannon uses its own configuration directory (e.g.
-`~/.config/shannon/`). This includes:
+shannon uses its own configuration directory at `~/.config/shannon/`. Currently
+this stores per-shell history files. Planned additions:
 
 - **Shell list and order** — which shells to include in the Shift+Tab cycle
 - **Per-shell rc files** — e.g. `config.nu`, `.bashrc`, `.zshrc` scoped to
-  shannon. These are separate from the user's normal shell configs because the
-  experience inside shannon is different from running each shell standalone.
+  shannon. These will be separate from the user's normal shell configs because
+  the experience inside shannon is different from running each shell standalone.
 
 ## Signal Handling
 
 - **Ctrl+C** — interrupts the running command in the active sub-shell
 - **Ctrl+Z** — suspends the running command in the active sub-shell
-- **Ctrl+D** — sends EOF to the active sub-shell (does not quit shannon unless
-  all shells have exited)
+- **Ctrl+D** — exits shannon
 
 ## Supported Platforms
 

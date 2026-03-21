@@ -18,9 +18,11 @@ fresh subprocess — there are no persistent shell sessions.
 ### Source files
 
 - `src/main.rs` — entry point, reedline loop, Shift+Tab shell switching
+- `src/lib.rs` — re-exports modules for integration tests
 - `src/shell.rs` — `ShellKind` enum (Bash/Nushell), `ShellState` (env, cwd, exit code)
 - `src/executor.rs` — subprocess spawning, wrapper scripts, env capture parsing
 - `src/prompt.rs` — custom reedline `Prompt` impl showing active shell + cwd
+- `src/highlighter.rs` — tree-sitter syntax highlighting with Tokyo Night colors
 
 ### How command execution works
 
