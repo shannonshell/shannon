@@ -1,0 +1,173 @@
+use std::collections::HashMap;
+use std::io;
+use std::path::PathBuf;
+use std::process::Command;
+
+use crate::shell::{ShellKind, ShellState};
+
+pub fn execute_command(
+    shell: ShellKind,
+    command: &str,
+    state: &ShellState,
+) -> io::Result<ShellState> {
+    let temp_file = tempfile::Builder::new()
+        .prefix("olshell_")
+        .suffix(".env")
+        .tempfile()?;
+    let temp_path = temp_file.path().to_string_lossy().to_string();
+
+    let wrapper = match shell {
+        ShellKind::Bash => build_bash_wrapper(command, &temp_path),
+        ShellKind::Nushell => build_nushell_wrapper(command, &temp_path),
+    };
+
+    let status = Command::new(shell.binary())
+        .args(["-c", &wrapper])
+        .env_clear()
+        .envs(&state.env)
+        .current_dir(&state.cwd)
+        .status();
+
+    let exit_code = match &status {
+        Ok(s) => s.code().unwrap_or(1),
+        Err(_) => 1,
+    };
+
+    // Try to read captured state; fall back to previous state on failure
+    let new_state = std::fs::read_to_string(&temp_path)
+        .ok()
+        .and_then(|contents| match shell {
+            ShellKind::Bash => parse_bash_env(&contents),
+            ShellKind::Nushell => parse_nushell_env(&contents),
+        })
+        .map(|(env, cwd)| ShellState {
+            env,
+            cwd,
+            last_exit_code: exit_code,
+        })
+        .unwrap_or_else(|| ShellState {
+            env: state.env.clone(),
+            cwd: state.cwd.clone(),
+            last_exit_code: exit_code,
+        });
+
+    // Propagate spawn errors after we've built state
+    status?;
+
+    Ok(new_state)
+}
+
+fn build_bash_wrapper(command: &str, temp_path: &str) -> String {
+    format!(
+        r#"{command}
+__olshell_ec=$?
+(export -p; echo "__OLSHELL_CWD=$(pwd)"; echo "__OLSHELL_EXIT=$__olshell_ec") > '{temp_path}'
+exit $__olshell_ec"#
+    )
+}
+
+fn build_nushell_wrapper(command: &str, temp_path: &str) -> String {
+    format!(
+        r#"{command}
+let olshell_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
+$env | reject config? | insert __OLSHELL_CWD (pwd) | insert __OLSHELL_EXIT ($olshell_exit | into string) | to json --serialize | save --force '{temp_path}'
+exit $olshell_exit"#
+    )
+}
+
+/// Parse bash `export -p` output plus our special __OLSHELL_ markers.
+fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+    let mut env = HashMap::new();
+    let mut cwd: Option<PathBuf> = None;
+
+    for line in contents.lines() {
+        // Lines from `export -p` look like: declare -x KEY="VALUE"
+        // or: declare -x KEY (no value)
+        // Our markers look like: __OLSHELL_CWD=/some/path
+        if let Some(rest) = line.strip_prefix("declare -x ") {
+            if let Some((key, value)) = parse_declare_line(rest) {
+                if key == "__OLSHELL_CWD" {
+                    cwd = Some(PathBuf::from(&value));
+                } else if key == "__OLSHELL_EXIT" {
+                    // Skip — we use the process exit code directly
+                } else {
+                    env.insert(key, value);
+                }
+            }
+        } else if let Some(rest) = line.strip_prefix("__OLSHELL_CWD=") {
+            cwd = Some(PathBuf::from(rest));
+        } else if line.starts_with("__OLSHELL_EXIT=") {
+            // Skip
+        }
+    }
+
+    Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
+}
+
+/// Parse a single `KEY="VALUE"` or `KEY` from a declare -x line.
+fn parse_declare_line(s: &str) -> Option<(String, String)> {
+    if let Some(eq_pos) = s.find('=') {
+        let key = s[..eq_pos].to_string();
+        let raw_value = &s[eq_pos + 1..];
+        // Strip surrounding quotes if present
+        let value = if raw_value.starts_with('"') && raw_value.ends_with('"') && raw_value.len() >= 2
+        {
+            unescape_bash_value(&raw_value[1..raw_value.len() - 1])
+        } else {
+            raw_value.to_string()
+        };
+        Some((key, value))
+    } else {
+        // Exported but no value — skip
+        None
+    }
+}
+
+/// Unescape common bash escape sequences in double-quoted strings.
+fn unescape_bash_value(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('"') => result.push('"'),
+                Some('\\') => result.push('\\'),
+                Some('$') => result.push('$'),
+                Some('`') => result.push('`'),
+                Some('\n') => {} // line continuation
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Parse nushell JSON env output.
+fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+    let obj: serde_json::Value = serde_json::from_str(contents).ok()?;
+    let map = obj.as_object()?;
+
+    let mut env = HashMap::new();
+    let mut cwd: Option<PathBuf> = None;
+
+    for (key, value) in map {
+        if key == "__OLSHELL_CWD" {
+            if let Some(s) = value.as_str() {
+                cwd = Some(PathBuf::from(s));
+            }
+        } else if key == "__OLSHELL_EXIT" {
+            // Skip
+        } else if let Some(s) = value.as_str() {
+            env.insert(key.clone(), s.to_string());
+        }
+        // Non-string values are silently dropped (strings-only policy)
+    }
+
+    Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
+}
