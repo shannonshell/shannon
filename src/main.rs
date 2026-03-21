@@ -1,8 +1,3 @@
-mod executor;
-mod highlighter;
-mod prompt;
-mod shell;
-
 use std::io;
 use std::process::Command;
 
@@ -11,10 +6,10 @@ use reedline::{
     default_emacs_keybindings, Emacs, FileBackedHistory, Reedline, ReedlineEvent, Signal,
 };
 
-use crate::executor::execute_command;
-use crate::highlighter::TreeSitterHighlighter;
-use crate::prompt::OlshellPrompt;
-use crate::shell::{ShellKind, ShellState};
+use olshell::executor::execute_command;
+use olshell::highlighter::TreeSitterHighlighter;
+use olshell::prompt::OlshellPrompt;
+use olshell::shell::{ShellKind, ShellState};
 
 const SWITCH_COMMAND: &str = "__olshell_switch";
 
