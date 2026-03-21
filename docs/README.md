@@ -7,22 +7,22 @@ automatically.
 
 ## Getting Started
 
-- [Getting Started](getting-started.md) — install, first run, basic usage
+- [Getting Started](01-getting-started.md) — install, first run, basic usage
 
 ## Features
 
-- [Shell Switching](features/shell-switching.md) — Shift+Tab between bash and nushell
-- [State Synchronization](features/state-sync.md) — env vars, cwd, and exit code across shells
-- [Syntax Highlighting](features/syntax-highlighting.md) — tree-sitter with Tokyo Night colors
-- [Command History](features/history.md) — per-shell history and Ctrl+R search
-- [Tab Completion](features/tab-completion.md) — file and directory completion
+- [Shell Switching](features/01-shell-switching.md) — Shift+Tab between bash and nushell
+- [State Synchronization](features/02-state-sync.md) — env vars, cwd, and exit code across shells
+- [Syntax Highlighting](features/03-syntax-highlighting.md) — tree-sitter with Tokyo Night colors
+- [Command History](features/04-history.md) — per-shell history and Ctrl+R search
+- [Tab Completion](features/05-tab-completion.md) — file and directory completion
 
 ## Reference
 
-- [Keybindings](reference/keybindings.md) — complete list of keyboard shortcuts
-- [Configuration](reference/configuration.md) — config directory and files
-- [Supported Shells](reference/supported-shells.md) — bash, nushell, and adding more
+- [Keybindings](reference/01-keybindings.md) — complete list of keyboard shortcuts
+- [Configuration](reference/02-configuration.md) — config directory and files
+- [Supported Shells](reference/03-supported-shells.md) — bash, nushell, and adding more
 
 ## Architecture
 
-- [How Shannon Works](architecture.md) — subprocess model, wrapper scripts, state capture
+- [How Shannon Works](02-architecture.md) — subprocess model, wrapper scripts, state capture

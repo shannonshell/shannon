@@ -23,6 +23,11 @@ function sectionName(slug: string): string | null {
   return dir.charAt(0).toUpperCase() + dir.slice(1);
 }
 
+// Strip leading number prefix (e.g. "01-getting-started" → "getting-started")
+function stripOrder(name: string): string {
+  return name.replace(/^\d+-/, "");
+}
+
 function collectDocs(dir: string, base: string = ""): DocPage[] {
   const pages: DocPage[] = [];
 
@@ -31,9 +36,11 @@ function collectDocs(dir: string, base: string = ""): DocPage[] {
     const stat = statSync(fullPath);
 
     if (stat.isDirectory()) {
-      pages.push(...collectDocs(fullPath, base ? `${base}/${entry}` : entry));
+      const dirSlug = stripOrder(entry);
+      pages.push(...collectDocs(fullPath, base ? `${base}/${dirSlug}` : dirSlug));
     } else if (entry.endsWith(".md") && entry !== "README.md") {
-      const slug = base ? `${base}/${entry.replace(/\.md$/, "")}` : entry.replace(/\.md$/, "");
+      const name = stripOrder(entry.replace(/\.md$/, ""));
+      const slug = base ? `${base}/${name}` : name;
       const content = readFileSync(fullPath, "utf-8");
       pages.push({
         slug,

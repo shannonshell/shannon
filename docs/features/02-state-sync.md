@@ -50,7 +50,7 @@ The exit code carries across shell switches.
 
 After every command, shannon reads the subprocess's resulting state from a
 temporary file. The next command — even in a different shell — starts with that
-state. See [Architecture](../architecture.md) for the full details on wrapper
+state. See [Architecture](../02-architecture.md) for the full details on wrapper
 scripts and state capture.
 
 ## The Strings-Only Boundary

@@ -58,7 +58,7 @@ hello
 ```
 
 Your environment variables and working directory carry over when you switch.
-See [Shell Switching](features/shell-switching.md) for details.
+See [Shell Switching](features/01-shell-switching.md) for details.
 
 ## Tab Completion
 
@@ -69,7 +69,7 @@ Press **Tab** to complete file and directory names:
 Cargo.lock  Cargo.toml
 ```
 
-See [Tab Completion](features/tab-completion.md) for details.
+See [Tab Completion](features/05-tab-completion.md) for details.
 
 ## Exiting
 

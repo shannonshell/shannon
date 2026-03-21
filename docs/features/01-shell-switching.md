@@ -50,7 +50,7 @@ Shell-internal data structures do not transfer between shells. This includes:
 - Shell-local variables (unexported)
 
 Only string-valued environment variables cross the shell boundary. This is by
-design — see [Architecture](../architecture.md) for why.
+design — see [Architecture](../02-architecture.md) for why.
 
 ## Per-Shell Features
 
@@ -60,5 +60,5 @@ Each shell keeps its own:
 - **Syntax highlighting** — colors match the active shell's grammar
 - **Tab completion** — file completion works the same in both shells
 
-See [History](history.md) and [Syntax Highlighting](syntax-highlighting.md) for
-details.
+See [History](04-history.md) and [Syntax Highlighting](03-syntax-highlighting.md)
+for details.

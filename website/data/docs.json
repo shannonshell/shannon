@@ -1,14 +1,14 @@
 {
   "pages": [
     {
-      "slug": "architecture",
-      "title": "Architecture",
+      "slug": "getting-started",
+      "title": "Getting Started",
       "section": null
     },
     {
-      "slug": "features/history",
-      "title": "Command History",
-      "section": "Features"
+      "slug": "architecture",
+      "title": "Architecture",
+      "section": null
     },
     {
       "slug": "features/shell-switching",
@@ -26,23 +26,23 @@
       "section": "Features"
     },
     {
+      "slug": "features/history",
+      "title": "Command History",
+      "section": "Features"
+    },
+    {
       "slug": "features/tab-completion",
       "title": "Tab Completion",
       "section": "Features"
     },
     {
-      "slug": "getting-started",
-      "title": "Getting Started",
-      "section": null
+      "slug": "reference/keybindings",
+      "title": "Keybindings",
+      "section": "Reference"
     },
     {
       "slug": "reference/configuration",
       "title": "Configuration",
-      "section": "Reference"
-    },
-    {
-      "slug": "reference/keybindings",
-      "title": "Keybindings",
       "section": "Reference"
     },
     {
