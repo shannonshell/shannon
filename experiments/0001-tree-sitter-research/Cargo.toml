@@ -1,0 +1,9 @@
+[package]
+name = "tree-sitter-research"
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+tree-sitter = "0.26"
+tree-sitter-bash = "0.23"
+tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }

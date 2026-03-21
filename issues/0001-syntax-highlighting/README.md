@@ -98,3 +98,40 @@ Answer all open questions before writing any integration code. We need to:
    `ERROR` or `MISSING` nodes).
 4. We have a complete list of node types for both grammars.
 5. Document findings in this issue (as the result).
+
+**Result:** Pass
+
+All open questions answered:
+
+1. **Nushell grammar crate:** `tree-sitter-nu` from
+   `github.com/nushell/tree-sitter-nu` (git dependency — not on crates.io).
+   Works out of the box with `tree-sitter = "0.26"`.
+
+2. **Incomplete input handling:** Bash uses `ERROR` nodes, nushell uses
+   `MISSING` nodes. Both set `has_error: true` on the root. The rest of the tree
+   remains valid — tree-sitter recovers gracefully.
+
+3. **Color scheme:** Tokyo Night.
+
+4. **Node type to highlight category mapping:**
+
+   | Highlight category | Bash node types                                                 | Nushell node types                                             | Tokyo Night color    |
+   | ------------------ | --------------------------------------------------------------- | -------------------------------------------------------------- | -------------------- |
+   | Keyword            | `if`, `then`, `else`, `fi`, `for`, `in`, `do`, `done`, `export` | `if`, `else`, `for`, `in`, `let`, `def`, `where`, `true`       | Purple `#bb9af7`     |
+   | Command name       | `command_name`, `word` (first child of `command`)               | `cmd_identifier`                                               | Blue `#7aa2f7`       |
+   | String             | `string`, `string_content`, `heredoc_body`                      | `val_string`, `string_content`, `escaped_interpolated_content` | Green `#9ece6a`      |
+   | Number             | `number`                                                        | `val_number`                                                   | Orange `#ff9e64`     |
+   | Variable           | `variable_name`, `simple_expansion`                             | `val_variable`, `identifier` (in `$env.X` context)             | Cyan `#7dcfff`       |
+   | Operator / Pipe    | `\|`, `>`, `<`, `=`                                             | `\|`, `>`, `+`, `=`, `..`                                      | Magenta `#c0caf5`    |
+   | Comment            | `comment`                                                       | `comment`                                                      | Gray `#565f89`       |
+   | Type               | —                                                               | `flat_type`, `param_type`                                      | Yellow `#e0af68`     |
+   | Boolean            | —                                                               | `val_bool`, `true`                                             | Orange `#ff9e64`     |
+   | Error              | `ERROR`                                                         | `MISSING`                                                      | Red `#f7768e`        |
+   | Default            | everything else                                                 | everything else                                                | Foreground `#a9b1d6` |
+
+#### Conclusion
+
+tree-sitter is viable for both shells. The grammars produce rich, well-labeled
+node types. Incomplete input is handled gracefully. We have a clear color
+mapping for Tokyo Night. Ready to implement the reedline `Highlighter` trait
+backed by tree-sitter in Experiment 2.
