@@ -25,7 +25,7 @@ impl ShellKind {
     pub fn history_file(&self) -> PathBuf {
         let config_dir = dirs::config_dir()
             .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("olshell");
+            .join("shannon");
         match self {
             ShellKind::Bash => config_dir.join("bash_history"),
             ShellKind::Nushell => config_dir.join("nu_history"),
@@ -69,8 +69,8 @@ mod tests {
     fn test_shell_kind_history_file() {
         let bash_path = ShellKind::Bash.history_file();
         let nu_path = ShellKind::Nushell.history_file();
-        assert!(bash_path.ends_with("olshell/bash_history"));
-        assert!(nu_path.ends_with("olshell/nu_history"));
+        assert!(bash_path.ends_with("shannon/bash_history"));
+        assert!(nu_path.ends_with("shannon/nu_history"));
     }
 
     #[test]

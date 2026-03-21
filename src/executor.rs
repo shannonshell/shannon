@@ -11,7 +11,7 @@ pub fn execute_command(
     state: &ShellState,
 ) -> io::Result<ShellState> {
     let temp_file = tempfile::Builder::new()
-        .prefix("olshell_")
+        .prefix("shannon_")
         .suffix(".env")
         .tempfile()?;
     let temp_path = temp_file.path().to_string_lossy().to_string();
@@ -60,22 +60,22 @@ pub fn execute_command(
 fn build_bash_wrapper(command: &str, temp_path: &str) -> String {
     format!(
         r#"{command}
-__olshell_ec=$?
-(export -p; echo "__OLSHELL_CWD=$(pwd)"; echo "__OLSHELL_EXIT=$__olshell_ec") > '{temp_path}'
-exit $__olshell_ec"#
+__shannon_ec=$?
+(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{temp_path}'
+exit $__shannon_ec"#
     )
 }
 
 fn build_nushell_wrapper(command: &str, temp_path: &str) -> String {
     format!(
-        r#"let __olshell_out = (try {{ {command} }} catch {{ |e| $e.rendered | print -e; null }})
-if ($__olshell_out != null) and (($__olshell_out | describe) != "nothing") {{ $__olshell_out | print }}
-let olshell_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
-$env | reject config? | insert __OLSHELL_CWD (pwd) | insert __OLSHELL_EXIT ($olshell_exit | into string) | to json --serialize | save --force '{temp_path}'"#
+        r#"let __shannon_out = (try {{ {command} }} catch {{ |e| $e.rendered | print -e; null }})
+if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") {{ $__shannon_out | print }}
+let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
+$env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{temp_path}'"#
     )
 }
 
-/// Parse bash `export -p` output plus our special __OLSHELL_ markers.
+/// Parse bash `export -p` output plus our special __SHANNON_ markers.
 fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
     let mut env = HashMap::new();
     let mut cwd: Option<PathBuf> = None;
@@ -83,20 +83,20 @@ fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> 
     for line in contents.lines() {
         // Lines from `export -p` look like: declare -x KEY="VALUE"
         // or: declare -x KEY (no value)
-        // Our markers look like: __OLSHELL_CWD=/some/path
+        // Our markers look like: __SHANNON_CWD=/some/path
         if let Some(rest) = line.strip_prefix("declare -x ") {
             if let Some((key, value)) = parse_declare_line(rest) {
-                if key == "__OLSHELL_CWD" {
+                if key == "__SHANNON_CWD" {
                     cwd = Some(PathBuf::from(&value));
-                } else if key == "__OLSHELL_EXIT" {
+                } else if key == "__SHANNON_EXIT" {
                     // Skip — we use the process exit code directly
                 } else {
                     env.insert(key, value);
                 }
             }
-        } else if let Some(rest) = line.strip_prefix("__OLSHELL_CWD=") {
+        } else if let Some(rest) = line.strip_prefix("__SHANNON_CWD=") {
             cwd = Some(PathBuf::from(rest));
-        } else if line.starts_with("__OLSHELL_EXIT=") {
+        } else if line.starts_with("__SHANNON_EXIT=") {
             // Skip
         }
     }
@@ -157,11 +157,11 @@ fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf
     let mut cwd: Option<PathBuf> = None;
 
     for (key, value) in map {
-        if key == "__OLSHELL_CWD" {
+        if key == "__SHANNON_CWD" {
             if let Some(s) = value.as_str() {
                 cwd = Some(PathBuf::from(s));
             }
-        } else if key == "__OLSHELL_EXIT" {
+        } else if key == "__SHANNON_EXIT" {
             // Skip
         } else if let Some(s) = value.as_str() {
             env.insert(key.clone(), s.to_string());
@@ -194,27 +194,27 @@ mod tests {
         let input = r#"declare -x HOME="/Users/ryan"
 declare -x PATH="/usr/bin:/bin"
 declare -x TERM="xterm-256color"
-__OLSHELL_CWD=/tmp
-__OLSHELL_EXIT=0"#;
+__SHANNON_CWD=/tmp
+__SHANNON_EXIT=0"#;
         let (env, cwd) = parse_bash_env(input).unwrap();
         assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
         assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
         assert_eq!(env.get("TERM").unwrap(), "xterm-256color");
         assert_eq!(cwd, PathBuf::from("/tmp"));
-        assert!(!env.contains_key("__OLSHELL_CWD"));
-        assert!(!env.contains_key("__OLSHELL_EXIT"));
+        assert!(!env.contains_key("__SHANNON_CWD"));
+        assert!(!env.contains_key("__SHANNON_EXIT"));
     }
 
     #[test]
-    fn test_parse_bash_env_olshell_markers_in_declare() {
+    fn test_parse_bash_env_shannon_markers_in_declare() {
         let input = r#"declare -x FOO="bar"
-declare -x __OLSHELL_CWD="/home/user"
-declare -x __OLSHELL_EXIT="0""#;
+declare -x __SHANNON_CWD="/home/user"
+declare -x __SHANNON_EXIT="0""#;
         let (env, cwd) = parse_bash_env(input).unwrap();
         assert_eq!(env.get("FOO").unwrap(), "bar");
         assert_eq!(cwd, PathBuf::from("/home/user"));
-        assert!(!env.contains_key("__OLSHELL_CWD"));
-        assert!(!env.contains_key("__OLSHELL_EXIT"));
+        assert!(!env.contains_key("__SHANNON_CWD"));
+        assert!(!env.contains_key("__SHANNON_EXIT"));
     }
 
     #[test]
@@ -222,7 +222,7 @@ declare -x __OLSHELL_EXIT="0""#;
         let input = r#"declare -x MSG="hello \"world\""
 declare -x DOLLAR="price is \$5"
 declare -x BACK="a\\b"
-__OLSHELL_CWD=/"#;
+__SHANNON_CWD=/"#;
         let (env, _) = parse_bash_env(input).unwrap();
         assert_eq!(env.get("MSG").unwrap(), r#"hello "world""#);
         assert_eq!(env.get("DOLLAR").unwrap(), "price is $5");
@@ -238,7 +238,7 @@ __OLSHELL_CWD=/"#;
 
     #[test]
     fn test_parse_bash_env_no_value() {
-        let input = "declare -x EXPORTED_BUT_UNSET\n__OLSHELL_CWD=/tmp";
+        let input = "declare -x EXPORTED_BUT_UNSET\n__SHANNON_CWD=/tmp";
         let (env, _) = parse_bash_env(input).unwrap();
         assert!(!env.contains_key("EXPORTED_BUT_UNSET"));
     }
@@ -262,18 +262,18 @@ __OLSHELL_CWD=/"#;
 
     #[test]
     fn test_parse_nushell_env_basic() {
-        let input = r#"{"HOME": "/Users/ryan", "TERM": "xterm", "__OLSHELL_CWD": "/tmp", "__OLSHELL_EXIT": "0"}"#;
+        let input = r#"{"HOME": "/Users/ryan", "TERM": "xterm", "__SHANNON_CWD": "/tmp", "__SHANNON_EXIT": "0"}"#;
         let (env, cwd) = parse_nushell_env(input).unwrap();
         assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
         assert_eq!(env.get("TERM").unwrap(), "xterm");
         assert_eq!(cwd, PathBuf::from("/tmp"));
-        assert!(!env.contains_key("__OLSHELL_CWD"));
-        assert!(!env.contains_key("__OLSHELL_EXIT"));
+        assert!(!env.contains_key("__SHANNON_CWD"));
+        assert!(!env.contains_key("__SHANNON_EXIT"));
     }
 
     #[test]
     fn test_parse_nushell_env_arrays() {
-        let input = r#"{"PATH": ["/usr/bin", "/bin", "/usr/local/bin"], "__OLSHELL_CWD": "/home"}"#;
+        let input = r#"{"PATH": ["/usr/bin", "/bin", "/usr/local/bin"], "__SHANNON_CWD": "/home"}"#;
         let (env, _) = parse_nushell_env(input).unwrap();
         assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin:/usr/local/bin");
     }
@@ -281,7 +281,7 @@ __OLSHELL_CWD=/"#;
     #[test]
     fn test_parse_nushell_env_non_string_dropped() {
         let input =
-            r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__OLSHELL_CWD": "/"}"#;
+            r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__SHANNON_CWD": "/"}"#;
         let (env, _) = parse_nushell_env(input).unwrap();
         assert_eq!(env.get("FOO").unwrap(), "bar");
         assert!(!env.contains_key("NUM"));
@@ -303,7 +303,7 @@ __OLSHELL_CWD=/"#;
         assert!(wrapper.contains("echo hello"));
         assert!(wrapper.contains("/tmp/state.env"));
         assert!(wrapper.contains("export -p"));
-        assert!(wrapper.contains("__OLSHELL_CWD"));
+        assert!(wrapper.contains("__SHANNON_CWD"));
     }
 
     #[test]
@@ -311,7 +311,7 @@ __OLSHELL_CWD=/"#;
         let wrapper = build_nushell_wrapper("echo hello", "/tmp/state.env");
         assert!(wrapper.contains("echo hello"));
         assert!(wrapper.contains("/tmp/state.env"));
-        assert!(wrapper.contains("__OLSHELL_CWD"));
+        assert!(wrapper.contains("__SHANNON_CWD"));
         assert!(wrapper.contains("to json"));
     }
 }

@@ -1,4 +1,4 @@
-# olshell
+# Shannon
 
 A poly-shell that wraps multiple shell interpreters and lets you switch between
 them mid-session using Shift+Tab.
@@ -12,7 +12,7 @@ cargo run
 
 ## Architecture
 
-olshell uses reedline (from crates.io) as its line editor. Each command spawns a
+shannon uses reedline (from crates.io) as its line editor. Each command spawns a
 fresh subprocess — there are no persistent shell sessions.
 
 ### Source files
@@ -25,9 +25,9 @@ fresh subprocess — there are no persistent shell sessions.
 ### How command execution works
 
 1. User types a command
-2. olshell wraps it in a shell-specific script that captures env vars + cwd after execution
+2. shannon wraps it in a shell-specific script that captures env vars + cwd after execution
 3. Subprocess runs with inherited stdio (output streams directly to terminal)
-4. After exit, olshell reads captured state from a temp file
+4. After exit, shannon reads captured state from a temp file
 5. State (env vars, cwd, exit code) is injected into the next command's subprocess
 
 ### Key design decisions
@@ -43,7 +43,7 @@ Currently: bash, nushell. The architecture supports any shell — adding one mea
 
 ## Config
 
-History files are stored in `~/.config/olshell/` (per-shell).
+History files are stored in `~/.config/shannon/` (per-shell).
 
 ## Issues and Experiments
 

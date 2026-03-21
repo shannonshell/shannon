@@ -418,21 +418,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "olshell"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "dirs",
- "nu-ansi-term",
- "reedline",
- "serde_json",
- "tempfile",
- "tree-sitter",
- "tree-sitter-bash",
- "tree-sitter-nu",
-]
-
-[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,6 +638,21 @@ dependencies = [
  "serde",
  "serde_core",
  "zmij",
+]
+
+[[package]]
+name = "shannon"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "dirs",
+ "nu-ansi-term",
+ "reedline",
+ "serde_json",
+ "tempfile",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-nu",
 ]
 
 [[package]]

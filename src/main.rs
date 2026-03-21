@@ -6,12 +6,12 @@ use reedline::{
     default_emacs_keybindings, Emacs, FileBackedHistory, Reedline, ReedlineEvent, Signal,
 };
 
-use olshell::executor::execute_command;
-use olshell::highlighter::TreeSitterHighlighter;
-use olshell::prompt::OlshellPrompt;
-use olshell::shell::{ShellKind, ShellState};
+use shannon::executor::execute_command;
+use shannon::highlighter::TreeSitterHighlighter;
+use shannon::prompt::ShannonPrompt;
+use shannon::shell::{ShellKind, ShellState};
 
-const SWITCH_COMMAND: &str = "__olshell_switch";
+const SWITCH_COMMAND: &str = "__shannon_switch";
 
 fn shell_available(shell: ShellKind) -> bool {
     Command::new(shell.binary())
@@ -54,7 +54,7 @@ fn main() -> io::Result<()> {
         .collect();
 
     if shells.is_empty() {
-        eprintln!("olshell: no supported shells found (looked for bash, nu)");
+        eprintln!("shannon: no supported shells found (looked for bash, nu)");
         std::process::exit(1);
     }
 
@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
     let mut editor = build_editor(active_shell);
 
     loop {
-        let prompt = OlshellPrompt {
+        let prompt = ShannonPrompt {
             shell: active_shell,
             cwd: state.cwd.clone(),
             last_exit_code: state.last_exit_code,
@@ -93,7 +93,7 @@ fn main() -> io::Result<()> {
                         state = new_state;
                     }
                     Err(e) => {
-                        eprintln!("olshell: {e}");
+                        eprintln!("shannon: {e}");
                         state.last_exit_code = 1;
                     }
                 }
@@ -101,7 +101,7 @@ fn main() -> io::Result<()> {
             Ok(Signal::CtrlD) => break,
             Ok(Signal::CtrlC) => continue,
             Err(e) => {
-                eprintln!("olshell: {e}");
+                eprintln!("shannon: {e}");
                 break;
             }
         }

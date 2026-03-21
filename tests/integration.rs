@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use olshell::executor::execute_command;
-use olshell::shell::{ShellKind, ShellState};
+use shannon::executor::execute_command;
+use shannon::shell::{ShellKind, ShellState};
 
 fn has_shell(shell: ShellKind) -> bool {
     Command::new(shell.binary())

@@ -6,13 +6,13 @@ use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchS
 
 use crate::shell::ShellKind;
 
-pub struct OlshellPrompt {
+pub struct ShannonPrompt {
     pub shell: ShellKind,
     pub cwd: PathBuf,
     pub last_exit_code: i32,
 }
 
-impl OlshellPrompt {
+impl ShannonPrompt {
     fn tilde_contract(&self) -> String {
         if let Some(home) = dirs::home_dir() {
             if let Ok(rest) = self.cwd.strip_prefix(&home) {
@@ -26,7 +26,7 @@ impl OlshellPrompt {
     }
 }
 
-impl Prompt for OlshellPrompt {
+impl Prompt for ShannonPrompt {
     fn render_prompt_left(&self) -> Cow<'_, str> {
         Cow::Owned(format!(
             "[{}] {}",
