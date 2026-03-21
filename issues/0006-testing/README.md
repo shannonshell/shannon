@@ -207,9 +207,9 @@ installed, used to skip tests gracefully.
 
 **Result:** Pass
 
-27 tests total: 16 unit tests (parsers + data model) and 11 integration tests
-(5 bash, 4 nushell, 2 cross-shell). All run by default with `cargo test`.
-Added `src/lib.rs` to expose modules to integration tests.
+27 tests total: 16 unit tests (parsers + data model) and 11 integration tests (5
+bash, 4 nushell, 2 cross-shell). All run by default with `cargo test`. Added
+`src/lib.rs` to expose modules to integration tests.
 
 #### Conclusion
 
