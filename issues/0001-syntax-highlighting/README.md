@@ -135,3 +135,59 @@ tree-sitter is viable for both shells. The grammars produce rich, well-labeled
 node types. Incomplete input is handled gracefully. We have a clear color
 mapping for Tokyo Night. Ready to implement the reedline `Highlighter` trait
 backed by tree-sitter in Experiment 2.
+
+### Experiment 2: Implement tree-sitter highlighter for reedline
+
+#### Description
+
+Implement the reedline `Highlighter` trait using tree-sitter grammars and the
+Tokyo Night color mapping from Experiment 1. The highlighter parses the input
+line on every keystroke, walks the syntax tree, and returns styled segments.
+
+Each shell gets its own highlighter instance with its own grammar and
+node-type-to-color mapping. The highlighter is swapped when the user switches
+shells with Shift+Tab (already handled — `build_editor` is called per shell).
+
+#### Changes
+
+**`Cargo.toml`** — add dependencies:
+
+- `tree-sitter = "0.26"`
+- `tree-sitter-bash = "0.23"`
+- `tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }`
+
+**`src/highlighter.rs`** (new file):
+
+- `TreeSitterHighlighter` struct holding a `tree_sitter::Parser` and the
+  `ShellKind` (to select the color mapping).
+- `TreeSitterHighlighter::new(shell: ShellKind) -> Self` — creates the parser
+  and sets the language.
+- `impl Highlighter for TreeSitterHighlighter` — the `highlight` method:
+  1. Parse the input line with tree-sitter.
+  2. Walk the tree with a `TreeCursor`, visiting every leaf node.
+  3. For each leaf node, map its `kind()` to a Tokyo Night color based on the
+     shell-specific mapping table from Experiment 1.
+  4. Build a `StyledText` from the styled segments.
+  5. Any bytes not covered by a leaf node get the default foreground color.
+- Helper function `node_style(shell: ShellKind, kind: &str) -> Style` — returns
+  the `nu_ansi_term::Style` for a given node type.
+- Tokyo Night colors as constants (using `nu_ansi_term::Color::Rgb`).
+
+**`src/main.rs`** — update `build_editor`:
+
+- Add `mod highlighter;`
+- In `build_editor`, create a `TreeSitterHighlighter` for the active shell and
+  pass it via `.with_highlighter(Box::new(highlighter))`.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo run`, type `echo "hello world"` in bash — `echo` is blue,
+   `"hello
+   world"` is green.
+3. Type `# comment` — gray text.
+4. Type `export FOO=bar` — `export` is purple, `FOO` is cyan.
+5. Shift+Tab to nushell, type `let x = 42` — `let` is purple, `42` is orange.
+6. Type `ls | where size > 1kb` — `ls` and `where` colored appropriately.
+7. Type an incomplete string `echo "unterminated` — error portion is red.
+8. Switching shells changes the highlighting rules immediately.
