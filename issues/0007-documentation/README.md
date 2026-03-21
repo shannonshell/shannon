@@ -110,29 +110,29 @@ produces the accurate, current list.
 
 Audited from source code on 2026-03-21:
 
-| Feature | Files | Key details |
-|---------|-------|-------------|
-| Shell switching | main.rs | Shift+Tab cycles Bash → Nushell → Bash. Auto-detects installed shells. |
-| Env var synchronization | executor.rs | Captured via wrapper scripts. Strings only — nushell arrays joined with `:`. |
-| Working directory sync | executor.rs | Captured alongside env vars. Tilde-contracted in prompt. |
-| Exit code propagation | executor.rs, prompt.rs | Prompt shows `>` on success, `!` on failure. |
-| Syntax highlighting | highlighter.rs | Tree-sitter grammars for bash and nushell. Tokyo Night color scheme. |
-| Per-shell command history | main.rs, shell.rs | FileBackedHistory, 10k entries, stored in `~/.config/shannon/`. |
-| Ctrl+R reverse search | main.rs (reedline) | Built into reedline's default emacs keybindings. |
-| Tab completion | completer.rs | File/directory completion. Hidden files excluded unless `.` prefix. Tilde expansion. |
-| Bracketed paste | main.rs | Enabled via reedline. Pasted text treated as atomic input. |
-| Ctrl+L clear screen | main.rs (reedline) | Built into reedline's default emacs keybindings. |
-| Ctrl+C interrupt | main.rs | Re-prompts during input. Forwarded to subprocess during execution. |
-| Ctrl+D exit | main.rs | Exits shannon cleanly. |
-| Emacs keybindings | main.rs (reedline) | Standard emacs line editing (Ctrl+A/E/U/K/W/Y, Alt+B/F, etc.). |
-| Prompt display | prompt.rs | Shows `[shell] ~/path >` with shell-colored name. |
+| Feature                   | Files                  | Key details                                                                          |
+| ------------------------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| Shell switching           | main.rs                | Shift+Tab cycles Bash → Nushell → Bash. Auto-detects installed shells.               |
+| Env var synchronization   | executor.rs            | Captured via wrapper scripts. Strings only — nushell arrays joined with `:`.         |
+| Working directory sync    | executor.rs            | Captured alongside env vars. Tilde-contracted in prompt.                             |
+| Exit code propagation     | executor.rs, prompt.rs | Prompt shows `>` on success, `!` on failure.                                         |
+| Syntax highlighting       | highlighter.rs         | Tree-sitter grammars for bash and nushell. Tokyo Night color scheme.                 |
+| Per-shell command history | main.rs, shell.rs      | FileBackedHistory, 10k entries, stored in `~/.config/shannon/`.                      |
+| Ctrl+R reverse search     | main.rs (reedline)     | Built into reedline's default emacs keybindings.                                     |
+| Tab completion            | completer.rs           | File/directory completion. Hidden files excluded unless `.` prefix. Tilde expansion. |
+| Bracketed paste           | main.rs                | Enabled via reedline. Pasted text treated as atomic input.                           |
+| Ctrl+L clear screen       | main.rs (reedline)     | Built into reedline's default emacs keybindings.                                     |
+| Ctrl+C interrupt          | main.rs                | Re-prompts during input. Forwarded to subprocess during execution.                   |
+| Ctrl+D exit               | main.rs                | Exits shannon cleanly.                                                               |
+| Emacs keybindings         | main.rs (reedline)     | Standard emacs line editing (Ctrl+A/E/U/K/W/Y, Alt+B/F, etc.).                       |
+| Prompt display            | prompt.rs              | Shows `[shell] ~/path >` with shell-colored name.                                    |
 
 #### Updated Doc Structure
 
 Based on the inventory, the proposed structure needs minor updates. Tab
-completion moves from "future" to "features". Bracketed paste and screen
-control don't need their own pages — they're standard behavior mentioned in
-the keybindings reference.
+completion moves from "future" to "features". Bracketed paste and screen control
+don't need their own pages — they're standard behavior mentioned in the
+keybindings reference.
 
 ```
 docs/
@@ -152,6 +152,7 @@ docs/
 ```
 
 Changes from the original proposal:
+
 - **Merged** env-sync, cwd-sync, exit code into single `state-sync.md` — they
   use the same mechanism and are better explained together.
 - **Added** `tab-completion.md` — now implemented.
@@ -172,6 +173,85 @@ The inventory is complete and the doc structure is updated.
 
 #### Conclusion
 
-We have 14 user-facing features, all mapped to 10 documentation files across
-3 categories (getting started, features, reference) plus an architecture page.
+We have 14 user-facing features, all mapped to 10 documentation files across 3
+categories (getting started, features, reference) plus an architecture page.
 Ready to write the docs in Experiment 2.
+
+### Experiment 2: Write all documentation
+
+#### Description
+
+Create the `docs/` directory and write all 10 documentation files from the
+structure defined in Experiment 1. Each file follows the documentation
+principles: user-first language, concrete examples with terminal snippets, no
+unimplemented features.
+
+#### Changes
+
+**`docs/README.md`** — Index page. One-paragraph description of shannon, then a
+bulleted list of links to every doc page organized by category (Getting Started,
+Features, Reference, Architecture).
+
+**`docs/getting-started.md`** — Installation (requires Rust,
+`cargo build
+--release`), first run (`cargo run` or path to binary), what you see
+on launch (the `[bash]` prompt), switching shells with Shift+Tab, running your
+first command, exiting with Ctrl+D or `exit`.
+
+**`docs/features/shell-switching.md`** — How Shift+Tab works, the rotation
+order, auto-detection of installed shells, what happens when a shell isn't
+installed, state preservation across switches, example session showing a switch
+from bash to nushell.
+
+**`docs/features/state-sync.md`** — Environment variables, working directory,
+and exit code synchronization. How the wrapper script mechanism works (high
+level — point to architecture.md for details). What transfers and what doesn't
+(strings only — no bash arrays or nushell tables). Example: export a variable in
+bash, switch to nushell, use it. Example: `cd` in one shell, switch, see the new
+cwd.
+
+**`docs/features/syntax-highlighting.md`** — Tokyo Night theme, per-shell
+grammars (bash and nushell), what gets colored (keywords, strings, variables,
+commands, comments, errors, etc.), how incomplete input is handled (graceful
+fallback). Include a color reference table.
+
+**`docs/features/history.md`** — Per-shell history files, storage location
+(`~/.config/shannon/bash_history`, `nu_history`), 10k entry limit, Ctrl+R
+reverse search, up/down arrow navigation, history isolation between shells.
+
+**`docs/features/tab-completion.md`** — File and directory completion, how to
+trigger (Tab key), behavior on single match vs multiple matches, directory
+trailing slash, hidden file filtering (type `.` to see them), tilde expansion,
+columnar menu display.
+
+**`docs/reference/keybindings.md`** — Complete table of all keybindings:
+Shift+Tab (shell switch), Tab (completion), Ctrl+R (history search), Ctrl+L
+(clear screen), Ctrl+C (interrupt), Ctrl+D (exit), Ctrl+A/E (line start/end),
+Ctrl+U/K (kill line), Ctrl+W (kill word), Ctrl+Y (yank), Alt+B/F (word
+movement), and other emacs defaults.
+
+**`docs/reference/configuration.md`** — Config directory location
+(`~/.config/shannon/`), what's stored there today (history files only), planned
+future configuration (mention briefly without documenting unimplemented
+features).
+
+**`docs/reference/supported-shells.md`** — Bash and nushell: version
+requirements, what works, known limitations per shell. Brief note on what adding
+a new shell would require (wrapper script + parser in executor.rs, grammar in
+highlighter.rs).
+
+**`docs/architecture.md`** — The subprocess-per-command model, wrapper scripts,
+env capture and parsing, the strings-only boundary, why no persistent sessions.
+Aimed at someone who wants to understand how shannon works under the hood, not
+just how to use it.
+
+#### Verification
+
+1. All 10 files exist in the correct directory structure.
+2. Every feature from the Experiment 1 inventory is covered in at least one doc
+   file.
+3. No doc file references unimplemented features as if they exist (AI mode,
+   config files, vi mode, etc.).
+4. Each doc file has at least one concrete example or terminal snippet.
+5. All internal links between docs are correct.
+6. Files are plain markdown with no generator-specific syntax.
