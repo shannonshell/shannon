@@ -112,6 +112,47 @@ full MVP — if this works, tab completion is done.
 
 **`src/lib.rs`** — add `pub mod completer;` for test access.
 
+**`src/completer.rs`** — add `#[cfg(test)] mod tests` with:
+
+Unit tests use a temporary directory (`tempfile::TempDir`) populated with a
+known file tree so tests are deterministic and don't depend on the repo's
+working directory. Helper function `setup_test_dir()` creates:
+
+```
+tmp/
+├── src/
+│   ├── main.rs
+│   └── lib.rs
+├── Cargo.toml
+├── Cargo.lock
+├── .gitignore
+├── .hidden_dir/
+│   └── secret.txt
+└── notes.txt
+```
+
+Tests call `complete()` with the completer's cwd set to the temp dir.
+
+- `test_complete_partial_filename` — line `"cat Car"`, pos at end →
+  suggestions include `Cargo.toml` and `Cargo.lock`.
+- `test_complete_directory_contents` — line `"ls src/"`, pos at end →
+  suggestions include `src/main.rs` and `src/lib.rs`.
+- `test_complete_directory_trailing_slash` — completing `sr` → `src/` with
+  `append_whitespace: false`.
+- `test_complete_file_appends_space` — completing `notes` → `notes.txt` with
+  `append_whitespace: true`.
+- `test_hidden_files_excluded` — line `"ls "`, pos at end → suggestions do
+  not include `.gitignore` or `.hidden_dir/`.
+- `test_hidden_files_included_with_dot_prefix` — line `"ls ."`, pos at end →
+  suggestions include `.gitignore` and `.hidden_dir/`.
+- `test_no_matches` — line `"cat zzz"`, pos at end → empty suggestions.
+- `test_sort_order` — directories sort before files, alphabetical within
+  each group.
+- `test_tilde_expansion` — line with `~/` completes home directory contents
+  and keeps `~` in suggestion values.
+
+**`Cargo.toml`** — add `tempfile` as a dev dependency.
+
 #### Verification
 
 1. `cargo build` succeeds.
@@ -124,4 +165,4 @@ full MVP — if this works, tab completion is done.
 7. Complete a directory — trailing `/` appears, no space appended.
 8. Complete a file — space appended after the filename.
 9. Multiple matches display in a columnar menu below the prompt.
-10. `cargo test` still passes (no regressions).
+10. `cargo test` passes — all new completer tests green, no regressions.
