@@ -44,6 +44,7 @@ fn build_editor(shell: ShellKind) -> Reedline {
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
         .with_highlighter(Box::new(highlighter))
+        .use_bracketed_paste(true)
 }
 
 fn main() -> io::Result<()> {
