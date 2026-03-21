@@ -7,6 +7,7 @@
 | [0003](0003-tab-completion/README.md)  | Tab completion          | 2026-03-21 |
 | [0004](0004-screen-control/README.md)  | Screen control (Ctrl+L) | 2026-03-21 |
 | [0005](0005-bracketed-paste/README.md) | Bracketed paste         | 2026-03-21 |
+| [0007](0007-documentation/README.md)   | Documentation system    | 2026-03-21 |
 
 ## Closed
 
