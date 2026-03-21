@@ -66,3 +66,56 @@ needs. For each feature, decide:
 - **Terminal integration** — title bar updates, OSC sequences, clipboard
 - **Globbing and expansion** — does olshell need to expand anything, or does the
   sub-shell handle it all?
+
+## Experiments
+
+### Experiment 1: Audit interactive features across vendored shells
+
+#### Description
+
+Research the interactive features provided by all six vendored shells (bash,
+zsh, fish, nushell, powershell, elvish). Focus exclusively on the **interactive
+layer** — features that belong to the shell's line editor, session management,
+and terminal integration. Ignore language features (syntax, control flow, data
+types) since those are handled by the sub-shell.
+
+For each shell, examine:
+
+1. **Line editor capabilities** — what keybindings, completion, and editing
+   features does their input handler provide?
+2. **Tab completion** — how does it work? File completion, command completion,
+   argument-aware completion? What triggers it?
+3. **History features** — beyond basic up/down, what history features exist?
+   Substring search, deduplication, per-directory history, timestamps?
+4. **Screen/terminal control** — clear screen, scrollback, terminal title, OSC
+   sequences, bracketed paste?
+5. **Job control** — background jobs, fg/bg, suspend, job list, disown?
+6. **Hooks and events** — preexec, precmd, chpwd, command-not-found handlers?
+7. **Prompt features** — right prompt, transient prompt, async prompt, git
+   integration?
+8. **Startup** — rc files, profile files, env files, login vs interactive
+   distinction?
+
+#### Method
+
+Use the vendored source repos to identify features. For each shell, look at:
+
+- README / documentation files for feature lists
+- Line editor / input handling source code
+- Completion system source code
+- Key binding definitions
+
+Record findings in a comparison matrix.
+
+#### Changes
+
+No code changes. Output is a feature matrix documented in this issue as the
+experiment result.
+
+#### Verification
+
+1. Feature matrix covers all six shells across all categories.
+2. Each feature is classified as: must have / should have / nice to have / out
+   of scope for olshell.
+3. Must-have features that olshell is missing are identified clearly.
+4. New issues are created for each missing must-have and should-have feature.
