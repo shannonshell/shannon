@@ -88,7 +88,6 @@ body {
   margin-bottom: 1rem;
   overflow-x: auto;
   border-left: 2px solid var(--color-border);
-  line-height: 1;
 }
 
 .prose-shannon pre code {
