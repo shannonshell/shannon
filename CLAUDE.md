@@ -33,6 +33,15 @@ fresh subprocess — there are no persistent shell sessions.
 4. After exit, shannon reads captured state from a temp file
 5. State (env vars, cwd, exit code) is injected into the next command's subprocess
 
+### Testing
+
+Every new feature must include tests. No feature ships without test coverage.
+
+- **Unit tests** go in each module as `#[cfg(test)] mod tests { ... }`.
+- **Integration tests** go in `tests/`.
+- Use `tempfile::TempDir` for tests that need filesystem fixtures.
+- `cargo test` must pass before a feature is considered done.
+
 ### Key design decisions
 
 - **Strings only** — only env vars (strings), cwd, and exit code cross the shell boundary. No shell-internal data structures.
