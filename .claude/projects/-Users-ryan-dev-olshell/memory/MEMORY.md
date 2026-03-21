@@ -1,0 +1,1 @@
+- [feedback_use_crates_io.md](../../memory/feedback_use_crates_io.md) — Use crates.io deps, not vendored path deps
