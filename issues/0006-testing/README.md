@@ -146,3 +146,61 @@ subprocesses).
 1. `cargo test` passes with all tests green.
 2. No tests require bash or nushell to be installed.
 3. Parser edge cases (empty input, special chars, arrays) are covered.
+
+**Result:** Pass. 16 tests, all green.
+
+#### Conclusion
+
+Parser and data model unit tests are in place. Ready to test the real execution
+round-trip in Experiment 2.
+
+### Experiment 2: Integration tests for command execution
+
+#### Description
+
+Test the full round-trip: `execute_command()` with real bash and nushell
+subprocesses. These tests verify that the wrapper scripts actually work in real
+shells and produce parseable output — the critical path that unit tests can't
+cover.
+
+Tests that require nushell use `#[ignore]` so `cargo test` passes on machines
+without nushell installed. Run ignored tests with `cargo test -- --ignored`.
+
+#### Changes
+
+**`tests/integration.rs`** (new file):
+
+Bash tests:
+
+- `test_bash_echo` — run `echo hello`, verify command succeeds (exit code 0).
+- `test_bash_env_capture` — run `export FOO=test_value_123`, verify `FOO`
+  appears in returned state env.
+- `test_bash_cwd_capture` — run `cd /tmp`, verify cwd is `/tmp` (or
+  `/private/tmp` on macOS).
+- `test_bash_exit_code` — run `false`, verify exit code is nonzero.
+- `test_bash_env_persistence` — run `export A=1`, then run `echo $A` with the
+  returned state, verify it works (exit code 0).
+
+Nushell tests (all `#[ignore]`):
+
+- `test_nushell_echo` — run `print hello`, verify exit code 0.
+- `test_nushell_env_capture` — run `$env.FOO = "test_value_456"`, verify `FOO`
+  in returned env.
+- `test_nushell_cwd_capture` — run `cd /tmp`, verify cwd.
+- `test_nushell_exit_code` — run `exit 1`, verify nonzero exit code.
+
+Cross-shell tests (`#[ignore]`):
+
+- `test_env_bash_to_nushell` — set `CROSS=hello` in bash, then execute in
+  nushell with the returned state, verify `CROSS` is present.
+- `test_cwd_bash_to_nushell` — `cd /tmp` in bash, then execute in nushell with
+  returned state, verify cwd.
+
+Helper: a `has_shell(ShellKind) -> bool` function that checks if a shell is
+installed, used to skip tests gracefully.
+
+#### Verification
+
+1. `cargo test` passes (nushell tests are `#[ignore]`).
+2. `cargo test -- --ignored` passes on machines with nushell installed.
+3. All execution round-trips produce correct env, cwd, and exit codes.
