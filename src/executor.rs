@@ -110,12 +110,12 @@ fn parse_declare_line(s: &str) -> Option<(String, String)> {
         let key = s[..eq_pos].to_string();
         let raw_value = &s[eq_pos + 1..];
         // Strip surrounding quotes if present
-        let value = if raw_value.starts_with('"') && raw_value.ends_with('"') && raw_value.len() >= 2
-        {
-            unescape_bash_value(&raw_value[1..raw_value.len() - 1])
-        } else {
-            raw_value.to_string()
-        };
+        let value =
+            if raw_value.starts_with('"') && raw_value.ends_with('"') && raw_value.len() >= 2 {
+                unescape_bash_value(&raw_value[1..raw_value.len() - 1])
+            } else {
+                raw_value.to_string()
+            };
         Some((key, value))
     } else {
         // Exported but no value — skip
@@ -247,7 +247,10 @@ __OLSHELL_CWD=/"#;
 
     #[test]
     fn test_unescape_bash_value() {
-        assert_eq!(unescape_bash_value(r#"hello \"world\""#), r#"hello "world""#);
+        assert_eq!(
+            unescape_bash_value(r#"hello \"world\""#),
+            r#"hello "world""#
+        );
         assert_eq!(unescape_bash_value(r"a\\b"), "a\\b");
         assert_eq!(unescape_bash_value(r"\$HOME"), "$HOME");
         assert_eq!(unescape_bash_value(r"back\`tick"), "back`tick");
@@ -277,7 +280,8 @@ __OLSHELL_CWD=/"#;
 
     #[test]
     fn test_parse_nushell_env_non_string_dropped() {
-        let input = r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__OLSHELL_CWD": "/"}"#;
+        let input =
+            r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__OLSHELL_CWD": "/"}"#;
         let (env, _) = parse_nushell_env(input).unwrap();
         assert_eq!(env.get("FOO").unwrap(), "bar");
         assert!(!env.contains_key("NUM"));

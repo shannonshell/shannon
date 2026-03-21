@@ -31,7 +31,9 @@ impl TreeSitterHighlighter {
             ShellKind::Bash => tree_sitter_bash::LANGUAGE.into(),
             ShellKind::Nushell => tree_sitter_nu::LANGUAGE.into(),
         };
-        parser.set_language(&language).expect("failed to set language");
+        parser
+            .set_language(&language)
+            .expect("failed to set language");
         parser
     }
 
@@ -61,9 +63,7 @@ impl TreeSitterHighlighter {
             "command_name" => BLUE,
 
             // Strings
-            "string" | "raw_string" | "heredoc_body" | "string_content" | "ansii_c_string" => {
-                GREEN
-            }
+            "string" | "raw_string" | "heredoc_body" | "string_content" | "ansii_c_string" => GREEN,
 
             // Numbers
             "number" => ORANGE,
@@ -88,9 +88,9 @@ impl TreeSitterHighlighter {
         let kind = node.kind();
         match kind {
             // Keywords
-            "if" | "else" | "for" | "in" | "let" | "mut" | "def" | "where" | "match"
-            | "while" | "loop" | "break" | "continue" | "return" | "try" | "catch"
-            | "export" | "use" | "module" | "overlay" | "source" | "hide" | "const" => PURPLE,
+            "if" | "else" | "for" | "in" | "let" | "mut" | "def" | "where" | "match" | "while"
+            | "loop" | "break" | "continue" | "return" | "try" | "catch" | "export" | "use"
+            | "module" | "overlay" | "source" | "hide" | "const" => PURPLE,
 
             // Command identifiers
             "cmd_identifier" => BLUE,

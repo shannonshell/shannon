@@ -28,7 +28,11 @@ impl OlshellPrompt {
 
 impl Prompt for OlshellPrompt {
     fn render_prompt_left(&self) -> Cow<'_, str> {
-        Cow::Owned(format!("[{}] {}", self.shell.display_name(), self.tilde_contract()))
+        Cow::Owned(format!(
+            "[{}] {}",
+            self.shell.display_name(),
+            self.tilde_contract()
+        ))
     }
 
     fn render_prompt_right(&self) -> Cow<'_, str> {
@@ -55,7 +59,10 @@ impl Prompt for OlshellPrompt {
             PromptHistorySearchStatus::Passing => "",
             PromptHistorySearchStatus::Failing => "failing ",
         };
-        Cow::Owned(format!("({}reverse-search: {}) ", prefix, history_search.term))
+        Cow::Owned(format!(
+            "({}reverse-search: {}) ",
+            prefix, history_search.term
+        ))
     }
 
     fn get_prompt_color(&self) -> Color {

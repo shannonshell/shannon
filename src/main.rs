@@ -40,8 +40,8 @@ fn build_editor(shell: ShellKind) -> Reedline {
     if let Some(parent) = history_file.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let history = FileBackedHistory::with_file(10000, history_file)
-        .expect("failed to create history file");
+    let history =
+        FileBackedHistory::with_file(10000, history_file).expect("failed to create history file");
 
     let highlighter = TreeSitterHighlighter::new(shell);
 
