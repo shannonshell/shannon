@@ -48,3 +48,36 @@ impl ShellState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shell_kind_display_name() {
+        assert_eq!(ShellKind::Bash.display_name(), "bash");
+        assert_eq!(ShellKind::Nushell.display_name(), "nu");
+    }
+
+    #[test]
+    fn test_shell_kind_binary() {
+        assert_eq!(ShellKind::Bash.binary(), "bash");
+        assert_eq!(ShellKind::Nushell.binary(), "nu");
+    }
+
+    #[test]
+    fn test_shell_kind_history_file() {
+        let bash_path = ShellKind::Bash.history_file();
+        let nu_path = ShellKind::Nushell.history_file();
+        assert!(bash_path.ends_with("olshell/bash_history"));
+        assert!(nu_path.ends_with("olshell/nu_history"));
+    }
+
+    #[test]
+    fn test_shell_state_from_current_env() {
+        let state = ShellState::from_current_env();
+        assert!(state.env.contains_key("PATH"));
+        assert!(state.cwd.is_absolute());
+        assert_eq!(state.last_exit_code, 0);
+    }
+}

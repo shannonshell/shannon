@@ -182,3 +182,132 @@ fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf
 
     Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- parse_bash_env ---
+
+    #[test]
+    fn test_parse_bash_env_basic() {
+        let input = r#"declare -x HOME="/Users/ryan"
+declare -x PATH="/usr/bin:/bin"
+declare -x TERM="xterm-256color"
+__OLSHELL_CWD=/tmp
+__OLSHELL_EXIT=0"#;
+        let (env, cwd) = parse_bash_env(input).unwrap();
+        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
+        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
+        assert_eq!(env.get("TERM").unwrap(), "xterm-256color");
+        assert_eq!(cwd, PathBuf::from("/tmp"));
+        assert!(!env.contains_key("__OLSHELL_CWD"));
+        assert!(!env.contains_key("__OLSHELL_EXIT"));
+    }
+
+    #[test]
+    fn test_parse_bash_env_olshell_markers_in_declare() {
+        let input = r#"declare -x FOO="bar"
+declare -x __OLSHELL_CWD="/home/user"
+declare -x __OLSHELL_EXIT="0""#;
+        let (env, cwd) = parse_bash_env(input).unwrap();
+        assert_eq!(env.get("FOO").unwrap(), "bar");
+        assert_eq!(cwd, PathBuf::from("/home/user"));
+        assert!(!env.contains_key("__OLSHELL_CWD"));
+        assert!(!env.contains_key("__OLSHELL_EXIT"));
+    }
+
+    #[test]
+    fn test_parse_bash_env_quoted_values() {
+        let input = r#"declare -x MSG="hello \"world\""
+declare -x DOLLAR="price is \$5"
+declare -x BACK="a\\b"
+__OLSHELL_CWD=/"#;
+        let (env, _) = parse_bash_env(input).unwrap();
+        assert_eq!(env.get("MSG").unwrap(), r#"hello "world""#);
+        assert_eq!(env.get("DOLLAR").unwrap(), "price is $5");
+        assert_eq!(env.get("BACK").unwrap(), "a\\b");
+    }
+
+    #[test]
+    fn test_parse_bash_env_empty() {
+        let (env, cwd) = parse_bash_env("").unwrap();
+        assert!(env.is_empty());
+        assert_eq!(cwd, PathBuf::from("/"));
+    }
+
+    #[test]
+    fn test_parse_bash_env_no_value() {
+        let input = "declare -x EXPORTED_BUT_UNSET\n__OLSHELL_CWD=/tmp";
+        let (env, _) = parse_bash_env(input).unwrap();
+        assert!(!env.contains_key("EXPORTED_BUT_UNSET"));
+    }
+
+    // --- unescape_bash_value ---
+
+    #[test]
+    fn test_unescape_bash_value() {
+        assert_eq!(unescape_bash_value(r#"hello \"world\""#), r#"hello "world""#);
+        assert_eq!(unescape_bash_value(r"a\\b"), "a\\b");
+        assert_eq!(unescape_bash_value(r"\$HOME"), "$HOME");
+        assert_eq!(unescape_bash_value(r"back\`tick"), "back`tick");
+        assert_eq!(unescape_bash_value("no escapes"), "no escapes");
+        assert_eq!(unescape_bash_value(r"trailing\"), "trailing\\");
+    }
+
+    // --- parse_nushell_env ---
+
+    #[test]
+    fn test_parse_nushell_env_basic() {
+        let input = r#"{"HOME": "/Users/ryan", "TERM": "xterm", "__OLSHELL_CWD": "/tmp", "__OLSHELL_EXIT": "0"}"#;
+        let (env, cwd) = parse_nushell_env(input).unwrap();
+        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
+        assert_eq!(env.get("TERM").unwrap(), "xterm");
+        assert_eq!(cwd, PathBuf::from("/tmp"));
+        assert!(!env.contains_key("__OLSHELL_CWD"));
+        assert!(!env.contains_key("__OLSHELL_EXIT"));
+    }
+
+    #[test]
+    fn test_parse_nushell_env_arrays() {
+        let input = r#"{"PATH": ["/usr/bin", "/bin", "/usr/local/bin"], "__OLSHELL_CWD": "/home"}"#;
+        let (env, _) = parse_nushell_env(input).unwrap();
+        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin:/usr/local/bin");
+    }
+
+    #[test]
+    fn test_parse_nushell_env_non_string_dropped() {
+        let input = r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__OLSHELL_CWD": "/"}"#;
+        let (env, _) = parse_nushell_env(input).unwrap();
+        assert_eq!(env.get("FOO").unwrap(), "bar");
+        assert!(!env.contains_key("NUM"));
+        assert!(!env.contains_key("OBJ"));
+        assert!(!env.contains_key("BOOL"));
+    }
+
+    #[test]
+    fn test_parse_nushell_env_invalid_json() {
+        assert!(parse_nushell_env("not json at all").is_none());
+        assert!(parse_nushell_env("").is_none());
+    }
+
+    // --- build wrappers ---
+
+    #[test]
+    fn test_build_bash_wrapper() {
+        let wrapper = build_bash_wrapper("echo hello", "/tmp/state.env");
+        assert!(wrapper.contains("echo hello"));
+        assert!(wrapper.contains("/tmp/state.env"));
+        assert!(wrapper.contains("export -p"));
+        assert!(wrapper.contains("__OLSHELL_CWD"));
+    }
+
+    #[test]
+    fn test_build_nushell_wrapper() {
+        let wrapper = build_nushell_wrapper("echo hello", "/tmp/state.env");
+        assert!(wrapper.contains("echo hello"));
+        assert!(wrapper.contains("/tmp/state.env"));
+        assert!(wrapper.contains("__OLSHELL_CWD"));
+        assert!(wrapper.contains("to json"));
+    }
+}
