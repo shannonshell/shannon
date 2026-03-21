@@ -201,6 +201,18 @@ installed, used to skip tests gracefully.
 
 #### Verification
 
-1. `cargo test` passes (nushell tests are `#[ignore]`).
-2. `cargo test -- --ignored` passes on machines with nushell installed.
+1. `cargo test` passes — all 27 tests green.
+2. All integration tests run by default (no `#[ignore]`).
 3. All execution round-trips produce correct env, cwd, and exit codes.
+
+**Result:** Pass
+
+27 tests total: 16 unit tests (parsers + data model) and 11 integration tests
+(5 bash, 4 nushell, 2 cross-shell). All run by default with `cargo test`.
+Added `src/lib.rs` to expose modules to integration tests.
+
+#### Conclusion
+
+Testing foundation is in place. Unit tests cover parsers, integration tests
+cover the full execution round-trip including cross-shell env transfer. Future
+features should add tests alongside implementation.
