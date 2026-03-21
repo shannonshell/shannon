@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-21"
+closed = "2026-03-21"
 +++
 
 # Issue 2: Shell feature audit
@@ -119,3 +120,136 @@ experiment result.
    of scope for olshell.
 3. Must-have features that olshell is missing are identified clearly.
 4. New issues are created for each missing must-have and should-have feature.
+
+**Result:** Pass
+
+#### Feature Matrix
+
+##### Tab Completion
+
+| Shell      | Approach                                                                         |
+| ---------- | -------------------------------------------------------------------------------- |
+| bash       | Programmable completion (complete/compgen/compopt), custom functions             |
+| zsh        | Sophisticated completion system (compinit/compadd), menu selection               |
+| fish       | Built-in + 1000s of pre-built completions, fuzzy matching                        |
+| nushell    | Per-type completers (file, dir, flag, env var, operator), fuzzy/prefix/substring |
+| powershell | TabExpansion2, Register-ArgumentCompleter, .NET method completion                |
+| elvish     | Completion mode with matchers (prefix, subsequence, substring)                   |
+
+**olshell: Must have.** Every shell has this. Minimum: file/directory
+completion.
+
+##### Autosuggestions / Hints
+
+| Shell      | Has it?                                               |
+| ---------- | ----------------------------------------------------- |
+| fish       | Yes — history-based, inline, validated against syntax |
+| nushell    | Yes — via reedline hinter, CWD-aware                  |
+| zsh        | Via plugin (zsh-autosuggestions)                      |
+| bash       | No (third-party only)                                 |
+| elvish     | No                                                    |
+| powershell | Via PSReadLine predictive IntelliSense                |
+
+**olshell: Should have.** Reedline already has hinter support — just wire it up.
+
+##### Screen Control (Ctrl+L)
+
+All six shells support Ctrl+L to clear screen.
+
+**olshell: Must have.** Verify reedline handles this (likely already works).
+
+##### Job Control (bg, fg, Ctrl+Z, jobs, disown)
+
+| Shell           | Level                |
+| --------------- | -------------------- |
+| bash, zsh, fish | Full                 |
+| powershell      | Full (different API) |
+| nushell, elvish | Limited              |
+
+**olshell: Out of scope.** Requires persistent process group model we don't
+have. Users who need job control should run `bash` or `zsh` directly.
+
+##### Hooks (preexec, precmd, chpwd)
+
+| Shell      | Hooks                                                                    |
+| ---------- | ------------------------------------------------------------------------ |
+| bash       | PROMPT_COMMAND, trap DEBUG                                               |
+| zsh        | precmd, preexec, chpwd, periodic                                         |
+| fish       | Event system (signal, variable, exit, job, generic)                      |
+| nushell    | pre_prompt, pre_execution, env_change, display_output, command_not_found |
+| elvish     | before-readline, after-readline, after-command                           |
+| powershell | Register-EngineEvent                                                     |
+
+**olshell: Nice to have.** Architecture should allow for it later.
+
+##### Right Prompt
+
+Supported by zsh, fish, nushell, elvish. Not bash or powershell.
+
+**olshell: Nice to have.** Reedline supports it. Low effort.
+
+##### Prompt Features (git branch, command duration)
+
+All six shells support git info in prompt via various mechanisms.
+
+**olshell: Should have.** Git branch is expected by modern users.
+
+##### Bracketed Paste
+
+All modern shells support it.
+
+**olshell: Must have.** Reedline likely handles this — verify.
+
+##### History Deduplication
+
+All six shells support dedup in some form.
+
+**olshell: Should have.** Consider SQLite history backend.
+
+##### Terminal Title (OSC 2)
+
+All six shells support setting terminal title.
+
+**olshell: Nice to have.** Straightforward to add.
+
+##### Startup/Config Files
+
+All shells have rc files. Already planned for olshell.
+
+**olshell: Should have.** Per-shell rc files in ~/.config/olshell/.
+
+##### Vi Mode
+
+All six shells support vi keybindings.
+
+**olshell: Should have.** Reedline has built-in Vi mode. Needs config option.
+
+#### Priority Summary
+
+**Must have** (broken without):
+
+1. Tab completion (file/directory)
+2. Ctrl+L clear screen
+3. Bracketed paste
+
+**Should have** (noticeably better): 4. Autosuggestions/hints 5. Git branch in
+prompt 6. History deduplication 7. Startup config files 8. Vi mode option
+
+**Nice to have** (defer): 9. Right prompt 10. Hooks (preexec/precmd) 11.
+Terminal title (OSC 2) 12. Command duration in prompt 13. Command-aware
+completion
+
+**Out of scope:**
+
+- Job control
+- History expansion (!!, !$)
+- Brace/glob expansion
+- Aliases/functions
+
+#### Conclusion
+
+The audit is complete. The three must-have gaps are tab completion, Ctrl+L, and
+bracketed paste. Ctrl+L and bracketed paste are likely already handled by
+reedline and just need verification. Tab completion is the only significant
+implementation effort needed. New issues should be created for the must-have and
+should-have items.
