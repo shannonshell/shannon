@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 16: Terminal integration (OSC sequences)
@@ -108,25 +109,28 @@ Nushell's REPL implements all of these via `run_shell_integration_osc2`,
 
 #### Description
 
-Add OSC 2 (title) and OSC 7 (cwd) to the REPL loop. These are the two
-most impactful sequences — they fix the broken new-pane-cwd and missing
-title. Defer OSC 133 (prompt markers) to a later experiment since reedline
-may already handle parts of it.
+Add OSC 2 (title) and OSC 7 (cwd) to the REPL loop. These are the two most
+impactful sequences — they fix the broken new-pane-cwd and missing title. Defer
+OSC 133 (prompt markers) to a later experiment since reedline may already handle
+parts of it.
 
 #### Changes
 
 **`src/repl.rs`** — add helper functions and emit calls:
 
 `emit_osc7(cwd: &Path)`:
+
 - Get hostname from `$HOSTNAME` env var, fall back to "localhost"
 - Percent-encode the path (just encode control chars and spaces)
 - Print `\x1b]7;file://{hostname}{path}\x1b\\` to stderr
 
 `emit_osc2_idle(shell_name: &str, cwd: &Path)`:
+
 - Tilde-contract the cwd
 - Print `\x1b]2;[{shell_name}] {contracted_path}\x07` to stderr
 
 `emit_osc2_command(shell_name: &str, cwd: &Path, command: &str)`:
+
 - Tilde-contract the cwd
 - Extract first word of command (the binary name)
 - Print `\x1b]2;[{shell_name}] {contracted_path}> {binary}\x07` to stderr
@@ -136,23 +140,23 @@ Emit points in the REPL loop:
 1. **Before each prompt** (top of loop): `emit_osc2_idle` + `emit_osc7`
 2. **Before executing a command** (after user presses Enter, before
    `run_command`): `emit_osc2_command`
-3. **After command completes** (after `run_command` returns): `emit_osc7`
-   (cwd may have changed)
+3. **After command completes** (after `run_command` returns): `emit_osc7` (cwd
+   may have changed)
 
-For AI mode: emit `emit_osc2_command` before the AI-suggested command runs,
-not when the user types the question.
+For AI mode: emit `emit_osc2_command` before the AI-suggested command runs, not
+when the user types the question.
 
 **Tilde contraction:** Extract the existing tilde contraction logic from
-`ShannonPrompt` into a standalone function in `prompt.rs` so it can be
-reused by both the prompt and OSC emission.
+`ShannonPrompt` into a standalone function in `prompt.rs` so it can be reused by
+both the prompt and OSC emission.
 
 #### What about nushell mode?
 
-When running nushell commands via `eval_source`, nushell might emit its own
-OSC sequences if its shell_integration config is enabled. For now, we emit
-ours regardless — double-emitting OSC 7 is harmless (terminal just gets the
-cwd twice). If it becomes a problem, we can disable nushell's internal
-shell integration.
+When running nushell commands via `eval_source`, nushell might emit its own OSC
+sequences if its shell_integration config is enabled. For now, we emit ours
+regardless — double-emitting OSC 7 is harmless (terminal just gets the cwd
+twice). If it becomes a problem, we can disable nushell's internal shell
+integration.
 
 #### Tests
 
@@ -172,3 +176,24 @@ without a terminal emulator. Manual verification only.
    - Open a new pane/split — it opens in `/tmp` (not home dir).
 5. Switch shells — title updates to `[bash] ~/project` etc.
 6. AI mode — title shows command only when executing, not the question.
+
+**Result:** Pass
+
+All verification steps confirmed. Tab title shows shell name and cwd,
+updates during command execution, and reverts to idle after. New panes
+open in the correct directory. 76 tests pass, no regressions.
+
+#### Conclusion
+
+OSC 2 and OSC 7 are working. Terminal emulators now track shannon's cwd
+and display meaningful titles.
+
+## Conclusion
+
+Issue complete. Shannon now emits OSC 2 (title) and OSC 7 (cwd) escape
+sequences at the right points in the REPL loop. Terminal emulators can
+track the working directory and show the active command in the tab title.
+
+Key files:
+- `src/repl.rs` — `emit_osc7`, `emit_osc2_idle`, `emit_osc2_command`
+- `src/prompt.rs` — `tilde_contract` extracted as standalone function

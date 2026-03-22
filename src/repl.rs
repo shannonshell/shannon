@@ -19,7 +19,7 @@ use crate::config::{AiConfig, ShellConfig};
 use crate::executor::execute_command;
 use crate::highlighter::TreeSitterHighlighter;
 use crate::nushell_engine::NushellEngine;
-use crate::prompt::ShannonPrompt;
+use crate::prompt::{tilde_contract, ShannonPrompt};
 use crate::shell::{self, ShellState};
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
@@ -112,6 +112,41 @@ fn read_confirmation() -> io::Result<KeyCode> {
     result
 }
 
+/// Emit OSC 7 to report the current working directory to the terminal.
+fn emit_osc7(cwd: &std::path::Path) {
+    let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
+    let path = cwd.to_string_lossy();
+    let encoded: String = path
+        .chars()
+        .map(|c| {
+            if c.is_ascii_control() || c == ' ' {
+                format!("%{:02X}", c as u32)
+            } else {
+                c.to_string()
+            }
+        })
+        .collect();
+    eprint!(
+        "\x1b]7;file://{}{}{}\x1b\\",
+        hostname,
+        if encoded.starts_with('/') { "" } else { "/" },
+        encoded
+    );
+}
+
+/// Emit OSC 2 to set the terminal title (idle — showing shell + cwd).
+fn emit_osc2_idle(shell_name: &str, cwd: &std::path::PathBuf) {
+    let path = tilde_contract(cwd);
+    eprint!("\x1b]2;[{}] {}\x07", shell_name, path);
+}
+
+/// Emit OSC 2 to set the terminal title (running a command).
+fn emit_osc2_command(shell_name: &str, cwd: &std::path::PathBuf, command: &str) {
+    let path = tilde_contract(cwd);
+    let binary = command.split_whitespace().next().unwrap_or(command);
+    eprint!("\x1b]2;[{}] {}> {}\x07", shell_name, path, binary);
+}
+
 /// Execute a command using the nushell engine (for "nu") or wrapper (for others).
 fn run_command(
     shell: &(String, ShellConfig),
@@ -154,6 +189,10 @@ pub fn run(
     let mut ai_session: Option<Session> = None;
 
     loop {
+        // Report cwd and title to terminal
+        emit_osc7(&state.cwd);
+        emit_osc2_idle(&shells[active_idx].0, &state.cwd);
+
         let prompt = ShannonPrompt {
             shell_name: shells[active_idx].0.clone(),
             cwd: state.cwd.clone(),
@@ -210,12 +249,14 @@ pub fn run(
                                 KeyCode::Enter => {
                                     eprintln!(); // newline after confirmation
                                     // Run the command through the active shell
+                                    emit_osc2_command(&shells[active_idx].0, &state.cwd, &command);
                                     run_command(
                                         &shells[active_idx],
                                         &command,
                                         &mut state,
                                         &mut nushell_engine,
                                     );
+                                    emit_osc7(&state.cwd);
 
                                     // Exit AI mode after execution
                                     ai_mode = false;
@@ -246,12 +287,14 @@ pub fn run(
                         c
                     });
 
+                    emit_osc2_command(&shells[active_idx].0, &state.cwd, line);
                     run_command(
                         &shells[active_idx],
                         line,
                         &mut state,
                         &mut nushell_engine,
                     );
+                    emit_osc7(&state.cwd);
                 }
             }
             Ok(Signal::CtrlD) => break,

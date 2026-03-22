@@ -12,17 +12,22 @@ pub struct ShannonPrompt {
     pub ai_mode: bool,
 }
 
+/// Tilde-contract a path (replace home dir prefix with ~).
+pub fn tilde_contract(cwd: &PathBuf) -> String {
+    if let Some(home) = dirs::home_dir() {
+        if let Ok(rest) = cwd.strip_prefix(&home) {
+            if rest.as_os_str().is_empty() {
+                return "~".to_string();
+            }
+            return format!("~/{}", rest.display());
+        }
+    }
+    cwd.display().to_string()
+}
+
 impl ShannonPrompt {
     fn tilde_contract(&self) -> String {
-        if let Some(home) = dirs::home_dir() {
-            if let Ok(rest) = self.cwd.strip_prefix(&home) {
-                if rest.as_os_str().is_empty() {
-                    return "~".to_string();
-                }
-                return format!("~/{}", rest.display());
-            }
-        }
-        self.cwd.display().to_string()
+        tilde_contract(&self.cwd)
     }
 }
 
