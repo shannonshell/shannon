@@ -1,2 +1,7 @@
-*
-!.gitignore
+/bash/
+/elvish/
+/fish/
+/nushell/
+/powershell/
+/reedline/
+/zsh/
