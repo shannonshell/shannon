@@ -71,6 +71,21 @@ Cargo.lock  Cargo.toml
 
 See [Tab Completion](features/05-tab-completion.md) for details.
 
+## Setting Up Your Environment
+
+If shannon is your default shell (e.g. in your terminal emulator config), you
+may need to configure PATH and other environment variables. Create a startup
+script:
+
+```bash
+# ~/.config/shannon/config.sh
+eval "$(/opt/homebrew/bin/brew shellenv)"
+export PATH="$PATH:$HOME/.cargo/bin"
+```
+
+This runs once when shannon starts. See
+[Configuration](reference/02-configuration.md) for details.
+
 ## Exiting
 
 - **Ctrl+D** — exit shannon

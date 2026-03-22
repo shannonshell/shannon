@@ -1,26 +1,53 @@
 # Configuration
 
-Shannon stores its files in `~/.config/shannon/`.
+Shannon stores its files in `~/.config/shannon/`. The config directory respects
+`XDG_CONFIG_HOME` — if set, shannon uses `$XDG_CONFIG_HOME/shannon/` instead.
 
-## Current Files
+## Files
 
-| File            | Purpose                             |
-| --------------- | ----------------------------------- |
-| `bash_history`  | Bash command history (up to 10,000) |
-| `nu_history`    | Nushell command history (up to 10,000) |
+| File         | Purpose                                            |
+| ------------ | -------------------------------------------------- |
+| `config.sh`  | Startup script — sets PATH, env vars, API keys     |
+| `history.db` | SQLite database storing all command history         |
 
 The config directory is created automatically on first run.
 
-## Platform Paths
+## Startup Script (config.sh)
 
-The config directory follows platform conventions via the `dirs` crate:
+Shannon can run an optional bash script at startup to configure the
+environment. Create `~/.config/shannon/config.sh` with any environment setup
+you need:
 
-| Platform | Path                                    |
-| -------- | --------------------------------------- |
-| macOS    | `~/Library/Application Support/shannon` |
-| Linux    | `~/.config/shannon`                     |
-| Windows  | `C:\Users\<user>\AppData\Roaming\shannon` |
+```bash
+# ~/.config/shannon/config.sh
 
-Note: On macOS, the actual path is `~/Library/Application Support/shannon`,
-not `~/.config/shannon`. The `~/.config` notation is used throughout these docs
-for readability.
+# Homebrew
+eval "$(/opt/homebrew/bin/brew shellenv)"
+
+# Custom paths
+export PATH="$PATH:$HOME/.cargo/bin"
+export PATH="$PATH:$HOME/.local/bin"
+
+# Environment variables
+export EDITOR="nvim"
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+This script runs once when shannon starts. The resulting environment is
+captured and used for all sub-shell commands. If the file doesn't exist,
+shannon inherits the environment from the launching terminal.
+
+The script is always executed by bash — shannon requires bash, and the primary
+use case (setting PATH and env vars) works perfectly in bash. If the script
+fails, shannon prints a warning and continues with the inherited environment.
+
+## History Database (history.db)
+
+Command history is stored in a SQLite database shared across all shells and
+instances. See [Command History](../features/04-history.md) for details.
+
+## Platform Notes
+
+Shannon uses `XDG_CONFIG_HOME` if set, otherwise `~/.config`. This applies on
+all platforms, including macOS (where the Apple convention would be
+`~/Library/Application Support`, but CLI tools universally use `~/.config`).

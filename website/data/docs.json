@@ -36,6 +36,11 @@
       "section": "Features"
     },
     {
+      "slug": "features/autosuggestions",
+      "title": "Autosuggestions",
+      "section": "Features"
+    },
+    {
       "slug": "reference/keybindings",
       "title": "Keybindings",
       "section": "Reference"

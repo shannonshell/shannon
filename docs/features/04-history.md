@@ -1,22 +1,47 @@
 # Command History
 
-Shannon keeps separate command history for each shell. Your bash history and
-nushell history don't mix.
+Shannon stores all command history in a shared SQLite database. Commands typed
+in bash and nushell share the same history — switch shells and your history
+comes with you.
 
 ## Storage
 
-History files are stored in your config directory:
+History is stored in a single database file:
 
-- `~/.config/shannon/bash_history`
-- `~/.config/shannon/nu_history`
+```
+~/.config/shannon/history.db
+```
 
-Each file holds up to 10,000 entries. The directory is created automatically on
-first run.
+The database stores rich metadata for each command: the command text, a
+timestamp, the session ID, and the working directory. The database is created
+automatically on first run.
+
+## Shared Across Shells
+
+Unlike traditional shells that keep separate history files, shannon uses one
+history for all shells. A command typed in bash appears when you search history
+in nushell, and vice versa. This makes sense for a poly-shell — you're one
+user, not two.
+
+## Cross-Instance Sharing
+
+Multiple shannon instances (e.g. multiple terminal windows) share the same
+database. History from one instance is visible in another via Ctrl+R and
+autosuggestions.
+
+Shannon uses session-aware queries to prioritize sensibly:
+
+- **Current session commands** are always visible.
+- **Other sessions' commands** are visible if they were saved before this
+  session started.
+
+This means your current session's history is preferred, but you can still find
+commands from other windows.
 
 ## Navigating History
 
-- **Up/Down arrows** — step through previous commands in the active shell
-- **Ctrl+R** — reverse search through history
+- **Up/Down arrows** — step through previous commands
+- **Ctrl+R** — reverse search through all history (current + other sessions)
 
 ### Reverse Search
 
@@ -34,11 +59,18 @@ The prompt updates as you type, showing the best match. If no match is found:
 
 Press Enter to execute the match, or Esc to cancel.
 
-## Per-Shell Isolation
+## Autosuggestions
 
-When you switch shells with Shift+Tab, the history switches too. Pressing up
-arrow in nushell shows nushell commands, not bash commands. This keeps each
-shell's history relevant and uncluttered.
+As you type, shannon shows a faded "ghost text" suggestion based on your
+history. If you've previously typed `git status`, typing `gi` shows the rest
+of the command in muted text:
 
-History files persist across shannon sessions. When you restart shannon, your
-previous history is still there.
+```
+[bash] ~/project > gi|t status
+                     ^^^^^^^^ ghost text (muted)
+```
+
+- **Right arrow** — accept the full suggestion
+- Keep typing to narrow the suggestion or ignore it
+
+See [Autosuggestions](06-autosuggestions.md) for more details.

@@ -9,15 +9,16 @@ additions.
 | --------- | -------------------------------- |
 | Shift+Tab | Switch to next shell             |
 | Tab       | File/directory completion        |
+| Right     | Accept autosuggestion (at end of line) |
 | Ctrl+D    | Exit shannon                     |
 
 ## History
 
-| Key        | Action                          |
-| ---------- | ------------------------------- |
-| Up         | Previous command in history      |
-| Down       | Next command in history          |
-| Ctrl+R     | Reverse search through history   |
+| Key    | Action                         |
+| ------ | ------------------------------ |
+| Up     | Previous command in history    |
+| Down   | Next command in history        |
+| Ctrl+R | Reverse search through history |
 
 ## Line Editing
 

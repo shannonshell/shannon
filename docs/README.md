@@ -14,8 +14,9 @@ automatically.
 - [Shell Switching](features/01-shell-switching.md) — Shift+Tab between bash and nushell
 - [State Synchronization](features/02-state-sync.md) — env vars, cwd, and exit code across shells
 - [Syntax Highlighting](features/03-syntax-highlighting.md) — tree-sitter with Tokyo Night colors
-- [Command History](features/04-history.md) — per-shell history and Ctrl+R search
+- [Command History](features/04-history.md) — shared SQLite history across shells and instances
 - [Tab Completion](features/05-tab-completion.md) — file and directory completion
+- [Autosuggestions](features/06-autosuggestions.md) — ghost text from history as you type
 
 ## Reference
 
