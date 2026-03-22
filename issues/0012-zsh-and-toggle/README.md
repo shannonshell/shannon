@@ -8,7 +8,8 @@ opened = "2026-03-22"
 ## Goal
 
 Add zsh as a fourth built-in shell and add a `toggle` config option that lets
-users control which shells appear in the Shift+Tab rotation.
+users control which shells appear in the Shift+Tab rotation. Replace
+`default_shell` with `toggle` — the first entry in the list is the default.
 
 ## Background
 
@@ -28,18 +29,18 @@ someone only uses bash and nushell, cycling through fish and zsh is noise.
 - Parser: `env`
 - Highlighter: `bash` (zsh syntax is close enough)
 
-**Add `toggle` to config.toml:**
+**Replace `default_shell` with `toggle`:**
+
+The `toggle` list controls both which shells appear and their order. The
+first shell in the list is the default. This replaces `default_shell` — one
+setting instead of two.
 
 ```toml
 toggle = ["nu", "bash"]
 ```
 
-If `toggle` is specified, only those shells appear in the Shift+Tab rotation, in
-that order. The first shell in the list is the default (unless `default_shell`
-is also set, which overrides).
-
 If `toggle` is omitted, all installed built-in + custom shells are available
-(current behavior).
+in default order: bash → nu → fish → zsh.
 
 If a shell in the toggle list isn't installed, it's silently skipped.
 
@@ -58,16 +59,22 @@ toggle = ["nu", "bash"]
 ```
 
 ```
-nu → bash  (only these two)
+nu → bash  (nu is default, only these two in rotation)
 ```
 
-Toggle list with default override:
+Toggle with all shells reordered:
 
 ```toml
-default_shell = "bash"
-toggle = ["nu", "bash", "fish"]
+toggle = ["fish", "zsh", "nu", "bash"]
 ```
 
 ```
-bash → nu → fish  (bash moved to front)
+fish → zsh → nu → bash  (fish is default)
 ```
+
+### Migration
+
+`default_shell` is removed from config.toml. Users who had
+`default_shell = "nu"` should change to `toggle = ["nu", "bash", "fish"]` (or
+whatever shells they want). Backward compatibility: if `default_shell` is
+present and `toggle` is not, treat it as `toggle = [default_shell, ...rest]`.
