@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod completer;
 pub mod completions;
 pub mod config;

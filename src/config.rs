@@ -13,6 +13,20 @@ pub struct ShannonConfig {
     pub default_shell: Option<String>,
     #[serde(default)]
     pub shells: HashMap<String, ShellConfig>,
+    /// AI mode configuration.
+    #[serde(default)]
+    pub ai: AiConfig,
+}
+
+/// Configuration for AI mode.
+#[derive(Deserialize, Default, Clone)]
+pub struct AiConfig {
+    /// LLM provider (default: "anthropic")
+    pub provider: Option<String>,
+    /// Model name (default: "claude-sonnet-4-20250514")
+    pub model: Option<String>,
+    /// Environment variable name for the API key (default: "ANTHROPIC_API_KEY")
+    pub api_key_env: Option<String>,
 }
 
 /// Configuration for a single shell.
@@ -39,7 +53,8 @@ __shannon_ec=$?
 exit $__shannon_ec"#;
 
 const NUSHELL_WRAPPER: &str = r#"{{init}}
-try { {{command}} } catch { |e| $e.rendered | print -e }
+let __shannon_out = (try { {{command}} } catch { |e| $e.rendered | print -e; null })
+if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") { $__shannon_out | print }
 let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
 $env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{{temp_path}}'"#;
 

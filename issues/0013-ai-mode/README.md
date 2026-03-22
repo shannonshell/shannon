@@ -508,12 +508,12 @@ streaming, no edit mode, no tools.
 
 Researched four multi-provider Rust LLM crates:
 
-| Crate | Recent downloads | Providers | Maturity |
-|-------|-----------------|-----------|----------|
-| `rig-core` | 222K | 20+ (Anthropic, OpenAI, Ollama, Gemini...) | Stable, 6K GitHub stars |
-| `async-openai` | 1.9M | OpenAI only | Very mature, but single-provider |
-| `genai` | 46K | 10+ | Beta (0.6.0-beta) |
-| `llm` | 17K | 15+ | Smaller community |
+| Crate          | Recent downloads | Providers                                  | Maturity                         |
+| -------------- | ---------------- | ------------------------------------------ | -------------------------------- |
+| `rig-core`     | 222K             | 20+ (Anthropic, OpenAI, Ollama, Gemini...) | Stable, 6K GitHub stars          |
+| `async-openai` | 1.9M             | OpenAI only                                | Very mature, but single-provider |
+| `genai`        | 46K              | 10+                                        | Beta (0.6.0-beta)                |
+| `llm`          | 17K              | 15+                                        | Smaller community                |
 
 **Decision: `rig-core`** — largest multi-provider crate, first-class Anthropic
 support, agent/tool abstractions that align with our full-agent roadmap,
@@ -551,6 +551,7 @@ For MVP, just base + context. Later: tools section, project context, etc.
 - `session_dir: PathBuf`
 
 Methods:
+
 - `Session::new()` — creates session with UUID, ensures session dir exists
 - `add_message(&mut self, role, content)` — appends to in-memory list
 - `save(&self)` — writes full message list to `{session_dir}/{id}.jsonl`
@@ -573,9 +574,9 @@ JSONL format: `{"role":"user","content":"..."}\n` per line.
 8. Save session to disk
 9. Return the command text
 
-Uses `tokio::runtime::Runtime::new().block_on()` to run the async rig-core
-call from our synchronous main loop. This is fine for MVP — one blocking
-call while the user waits.
+Uses `tokio::runtime::Runtime::new().block_on()` to run the async rig-core call
+from our synchronous main loop. This is fine for MVP — one blocking call while
+the user waits.
 
 **`src/config.rs`** — add `[ai]` section:
 
@@ -592,8 +593,8 @@ Add `pub ai: AiConfig` to `ShannonConfig` (with `#[serde(default)]`).
 
 **`src/main.rs`** — AI mode integration:
 
-Add `ai_mode: bool` state variable (starts false).
-Add `ai_session: Option<Session>` (None when not in AI mode).
+Add `ai_mode: bool` state variable (starts false). Add
+`ai_session: Option<Session>` (None when not in AI mode).
 
 In the main loop, when `Signal::Success(line)` and line is empty/whitespace:
 
@@ -605,8 +606,8 @@ When in AI mode and line is non-empty:
 1. Print "Thinking..."
 2. Call `translate_command(...)` with the line as the question
 3. If error → print error, continue in AI mode
-4. Print the suggested command: `  → {command}`
-5. Print `  [Enter] run  [Esc] cancel`
+4. Print the suggested command: `→ {command}`
+5. Print `[Enter] run  [Esc] cancel`
 6. Read a single key from stdin (crossterm raw mode):
    - Enter → run the command via `execute_command` with active shell
    - Esc → cancel, return to AI mode prompt
@@ -615,7 +616,8 @@ When in AI mode and line is non-empty:
 **`src/prompt.rs`** — update prompt display:
 
 When `ai_mode` is true, render `[nu:ai]` instead of `[nu]`. Add `ai_mode:
-bool` field to `ShannonPrompt`.
+bool`
+field to `ShannonPrompt`.
 
 **`src/lib.rs`** — add `pub mod ai;`
 
@@ -640,3 +642,27 @@ bool` field to `ShannonPrompt`.
 8. Ask a follow-up ("now show only the .rs files") → AI remembers context.
 9. Missing API key → helpful error message.
 10. `~/.config/shannon/sessions/` contains a JSONL file after a session.
+
+**Result:** Pass
+
+AI mode is working end-to-end. Enter on empty line toggles AI mode, prompt
+shows `[nu:ai]`, LLM generates commands via rig-core + Anthropic, user
+confirms with Enter/Esc, command executes through the active shell. 76 tests
+pass (56 unit + 20 integration). Sessions saved as JSONL to disk.
+
+Fixes applied during implementation:
+- Syntax highlighting disabled in AI mode (plain text for natural language)
+- Nushell wrapper restored to capture+print pattern (commands like `pwd`
+  need explicit `| print` in nushell `-c` mode)
+- Editor rebuilt when toggling AI mode (to switch highlighter)
+
+Known issue: vim doesn't open in nushell mode (pre-existing nushell wrapper
+issue with `try { }` capturing stdout from interactive programs — separate
+from AI mode).
+
+#### Conclusion
+
+AI mode MVP is working. The architecture is solid: Provider trait via
+rig-core, composable system prompt, disk-backed JSONL sessions, confirmation
+UX. The foundation supports adding streaming, tools, multiple providers, and
+full agent capabilities incrementally.

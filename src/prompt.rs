@@ -9,6 +9,7 @@ pub struct ShannonPrompt {
     pub cwd: PathBuf,
     pub last_exit_code: i32,
     pub depth: u32,
+    pub ai_mode: bool,
 }
 
 impl ShannonPrompt {
@@ -27,9 +28,11 @@ impl ShannonPrompt {
 
 impl Prompt for ShannonPrompt {
     fn render_prompt_left(&self) -> Cow<'_, str> {
+        let mode = if self.ai_mode { ":ai" } else { "" };
         Cow::Owned(format!(
-            "[{}] {}",
+            "[{}{}] {}",
             self.shell_name,
+            mode,
             self.tilde_contract()
         ))
     }

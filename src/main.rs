@@ -42,5 +42,5 @@ fn main() -> io::Result<()> {
     }
 
     // Run the REPL
-    repl::run(shells, state, depth)
+    repl::run(shells, config.ai, state, depth)
 }
