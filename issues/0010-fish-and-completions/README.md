@@ -104,3 +104,93 @@ This requires implementing the two generic fish condition functions in Rust:
 
 - "needs subcommand" — no non-flag argument after the command name
 - "seen subcommand from" — a specific subcommand has been typed
+
+## Experiments
+
+### Experiment 1: Add fish as a supported shell
+
+#### Description
+
+Add fish to shannon's Shift+Tab rotation following the same pattern as bash and
+nushell. This is the simpler of the two tracks and gives us fish support before
+tackling completions.
+
+Fish's env can be captured via the `env` command (standard `KEY=VALUE` per
+line), which is simpler than bash's `declare -x` or nushell's JSON. The `env`
+command is a POSIX utility available everywhere, and fish can call it directly.
+
+A `tree-sitter-fish` grammar exists on crates.io (v3.6.0) for syntax
+highlighting.
+
+#### Changes
+
+**`Cargo.toml`** — add `tree-sitter-fish = "3.6"`.
+
+**`src/shell.rs`** — add `Fish` variant to `ShellKind`:
+
+- `display_name()` → `"fish"`
+- `binary()` → `"fish"`
+
+**`src/executor.rs`** — add fish wrapper and parser:
+
+`build_fish_wrapper(command, temp_path)`:
+
+```fish
+{command}
+set __shannon_ec $status
+env > '{temp_path}'
+echo "__SHANNON_CWD="(pwd) >> '{temp_path}'
+echo "__SHANNON_EXIT=$__shannon_ec" >> '{temp_path}'
+exit $__shannon_ec
+```
+
+`parse_fish_env(contents)`:
+
+- Parse `KEY=VALUE` lines (one per line, from `env` output)
+- Extract `__SHANNON_CWD` and `__SHANNON_EXIT`
+- Handle multiline values if present (env vars with newlines are rare but
+  possible)
+- Return `(HashMap<String, String>, PathBuf)` like the other parsers
+
+Add `ShellKind::Fish` match arms to `execute_command`.
+
+**`src/highlighter.rs`** — add fish color mapping:
+
+- Import `tree_sitter_fish::LANGUAGE`
+- Add `fish_color()` method matching fish's node types to Tokyo Night colors
+- Fish keywords: `if`, `else`, `for`, `while`, `switch`, `case`, `function`,
+  `end`, `begin`, `set`, `return`, `and`, `or`, `not`
+- Fish variables use `$` prefix like bash
+
+**`src/main.rs`** — add `ShellKind::Fish` to the detection list:
+
+```rust
+let shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell, ShellKind::Fish]
+    .into_iter()
+    .filter(|s| shell_available(*s))
+    .collect();
+```
+
+**`src/executor.rs` tests** — add:
+
+- `test_parse_fish_env_basic` — standard `KEY=VALUE` output with cwd and exit
+- `test_parse_fish_env_empty` — empty input
+- `test_build_fish_wrapper` — verify wrapper contains command and temp path
+
+**`tests/integration.rs`** — add fish integration tests (skip if fish not
+installed):
+
+- `test_fish_echo` — run `echo hello`, verify exit code 0
+- `test_fish_env_capture` — run `set -gx FOO test_val`, verify in returned env
+- `test_fish_cwd_capture` — run `cd /tmp`, verify cwd
+- `test_env_bash_to_fish` — set env in bash, verify in fish
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes — all new and existing tests green.
+3. `cargo run`, Shift+Tab cycles through bash → nushell → fish.
+4. Fish prompt shows `[fish]` with syntax highlighting.
+5. Commands typed in fish execute correctly.
+6. Env vars set in bash carry to fish and vice versa.
+7. If fish is not installed, it's silently skipped.
