@@ -78,3 +78,66 @@ fish → zsh → nu → bash  (fish is default)
 `default_shell = "nu"` should change to `toggle = ["nu", "bash", "fish"]` (or
 whatever shells they want). Backward compatibility: if `default_shell` is
 present and `toggle` is not, treat it as `toggle = [default_shell, ...rest]`.
+
+Duplicates in the toggle list are allowed — the list is used as-is with no
+deduplication.
+
+## Experiments
+
+### Experiment 1: Add zsh, toggle list, remove default_shell
+
+#### Description
+
+Add zsh as a fourth built-in shell, add the `toggle` config option, and
+remove `default_shell`. Small, focused changes to config.rs and main.rs.
+
+#### Changes
+
+**`src/config.rs`**:
+
+- Add zsh to `builtin_shells()` with the fish-style `env` wrapper, `env`
+  parser, and `bash` highlighter.
+- Replace `default_shell: Option<String>` with `toggle: Option<Vec<String>>`
+  in `ShannonConfig`.
+- Keep `default_shell` as a deprecated field for backward compat — if present
+  and `toggle` is not, convert to a toggle list with that shell first.
+- Update `shells()` method:
+  - If `toggle` is set: iterate the toggle list, look up each name in
+    built-in + custom shells, return in order. Unknown names are skipped
+    with a warning.
+  - If `toggle` is not set: return all built-in + custom shells (current
+    behavior).
+  - No deduplication — the list is used as-is.
+
+**`src/main.rs`**:
+
+- Remove `default_shell` references (already removed the env var in previous
+  commit).
+
+**Update tests in `src/config.rs`**:
+
+- `test_empty_config` — returns 4 shells (bash, nu, fish, zsh)
+- `test_toggle_list` — `toggle = ["nu", "bash"]` returns only those two, nu
+  first
+- `test_toggle_unknown_shell` — unknown name is skipped
+- `test_toggle_with_custom_shell` — custom shell in toggle list works
+- `test_default_shell_backward_compat` — `default_shell = "nu"` without
+  `toggle` puts nu first
+- `test_toggle_duplicates` — `["fish", "bash", "fish"]` returns all three
+  entries
+
+**`tests/integration.rs`**:
+
+- Update `zsh` integration tests (same pattern as fish: skip if not
+  installed, test echo, env capture, cwd, exit code)
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes.
+3. `cargo run` with no config.toml — bash, nu, fish, zsh all in rotation
+   (if installed).
+4. Create `config.toml` with `toggle = ["nu", "bash"]` — only nu and bash.
+5. Shift+Tab cycles through the toggle list in order.
+6. Zsh works: commands execute, env captured, syntax highlighted (via bash
+   grammar).
