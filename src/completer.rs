@@ -2,11 +2,13 @@ use std::path::{Path, PathBuf};
 
 use reedline::{Completer, Span, Suggestion};
 
-pub struct FileCompleter {
+use crate::completions::CompletionTable;
+
+pub struct ShannonCompleter {
     cwd: PathBuf,
 }
 
-impl FileCompleter {
+impl ShannonCompleter {
     pub fn new() -> Self {
         Self {
             cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
@@ -17,13 +19,9 @@ impl FileCompleter {
     fn with_cwd(cwd: PathBuf) -> Self {
         Self { cwd }
     }
-}
 
-impl Completer for FileCompleter {
-    fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
+    fn complete_file(&self, line: &str, pos: usize) -> Vec<Suggestion> {
         let line = &line[..pos];
-
-        // Extract the word being completed by scanning backward to whitespace
         let word_start = line.rfind(' ').map(|i| i + 1).unwrap_or(0);
         let word = &line[word_start..];
 
@@ -31,10 +29,8 @@ impl Completer for FileCompleter {
             return Vec::new();
         }
 
-        // Handle tilde expansion
         let home = dirs::home_dir();
         let (search_path, display_prefix) = if word == "~" {
-            // Just "~" — list home directory contents
             match &home {
                 Some(h) => (h.clone(), "~/".to_string()),
                 None => return Vec::new(),
@@ -61,7 +57,6 @@ impl Completer for FileCompleter {
             (self.cwd.clone(), String::new())
         };
 
-        // Extract the filename prefix to match against
         let filename_prefix = if word == "~" {
             ""
         } else if word.ends_with('/') {
@@ -72,7 +67,6 @@ impl Completer for FileCompleter {
 
         let show_hidden = filename_prefix.starts_with('.');
 
-        // Read directory and collect matches
         let entries = match std::fs::read_dir(&search_path) {
             Ok(entries) => entries,
             Err(_) => return Vec::new(),
@@ -85,7 +79,6 @@ impl Completer for FileCompleter {
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
 
-            // Skip hidden files unless prefix starts with '.'
             if !show_hidden && name_str.starts_with('.') {
                 continue;
             }
@@ -127,6 +120,67 @@ impl Completer for FileCompleter {
     }
 }
 
+impl Completer for ShannonCompleter {
+    fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
+        let line_to_pos = &line[..pos];
+
+        // Tokenize the line up to cursor
+        let tokens: Vec<&str> = line_to_pos.split_whitespace().collect();
+
+        // If we're on the first word or the line is empty, do file completion
+        if tokens.is_empty() || (tokens.len() == 1 && !line_to_pos.ends_with(' ')) {
+            return self.complete_file(line, pos);
+        }
+
+        let command = tokens[0];
+        let table = CompletionTable::global();
+
+        // Check if this command has completions
+        if table.get(command).is_none() {
+            return self.complete_file(line, pos);
+        }
+
+        // Determine the current word and args before it
+        let word_start = line_to_pos.rfind(' ').map(|i| i + 1).unwrap_or(0);
+        let current_word = &line_to_pos[word_start..];
+        let args: Vec<&str> = tokens[1..].to_vec();
+
+        // If current word is being typed (not yet space-terminated), exclude it from args
+        let args_before = if line_to_pos.ends_with(' ') {
+            &args[..]
+        } else if args.is_empty() {
+            &[]
+        } else {
+            &args[..args.len() - 1]
+        };
+
+        let results = table.complete(command, args_before, current_word);
+
+        if results.is_empty() {
+            // Fall back to file completion
+            return self.complete_file(line, pos);
+        }
+
+        results
+            .into_iter()
+            .map(|(value, desc)| Suggestion {
+                value,
+                description: if desc.is_empty() {
+                    None
+                } else {
+                    Some(desc)
+                },
+                style: None,
+                extra: None,
+                span: Span::new(word_start, pos),
+                append_whitespace: true,
+                display_override: None,
+                match_indices: None,
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,10 +204,12 @@ mod tests {
         dir
     }
 
+    // --- File completion tests (preserved from FileCompleter) ---
+
     #[test]
     fn test_complete_partial_filename() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("cat Car", 7);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&"Cargo.lock"), "expected Cargo.lock in {values:?}");
@@ -164,7 +220,7 @@ mod tests {
     #[test]
     fn test_complete_directory_contents() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("ls src/", 7);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&"src/lib.rs"), "expected src/lib.rs in {values:?}");
@@ -175,7 +231,7 @@ mod tests {
     #[test]
     fn test_complete_directory_trailing_slash() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("cd sr", 5);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].value, "src/");
@@ -185,7 +241,7 @@ mod tests {
     #[test]
     fn test_complete_file_appends_space() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("cat notes", 9);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].value, "notes.txt");
@@ -195,7 +251,7 @@ mod tests {
     #[test]
     fn test_hidden_files_excluded() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("ls C", 4);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         for v in &values {
@@ -206,7 +262,7 @@ mod tests {
     #[test]
     fn test_hidden_files_included_with_dot_prefix() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("ls .", 4);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&".gitignore"), "expected .gitignore in {values:?}");
@@ -216,7 +272,7 @@ mod tests {
     #[test]
     fn test_no_matches() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
         let results = c.complete("cat zzz", 7);
         assert!(results.is_empty());
     }
@@ -224,37 +280,28 @@ mod tests {
     #[test]
     fn test_sort_order() {
         let dir = setup_test_dir();
-        let mut c = FileCompleter::with_cwd(dir.path().to_path_buf());
-        // Complete with no prefix filter — use a single char that matches both dirs and files
-        // All non-hidden entries: Cargo.lock, Cargo.toml, notes.txt, src/
-        let results = c.complete("ls C", 4);
-        // Should only match Cargo.lock and Cargo.toml (files, alphabetical)
+        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        // Use "myapp" (not in fish completions) to test pure file completion
+        let results = c.complete("myapp Car", 9);
         assert_eq!(results[0].value, "Cargo.lock");
         assert_eq!(results[1].value, "Cargo.toml");
 
-        // Now test with a prefix that matches both a dir and files
-        // Use "s" which matches "src/"
-        let results = c.complete("ls s", 4);
+        let results = c.complete("myapp s", 7);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].value, "src/");
 
-        // Broader test: complete everything non-hidden
-        // We need a prefix that matches dirs and files — use empty-ish approach
-        // Actually let's create a scenario where we can verify ordering
         let root = dir.path();
         fs::write(root.join("aaa_file.txt"), "").unwrap();
         fs::create_dir(root.join("aaa_dir")).unwrap();
-        let results = c.complete("ls aaa", 6);
+        let results = c.complete("myapp aaa", 9);
         assert_eq!(results.len(), 2);
-        assert_eq!(results[0].value, "aaa_dir/"); // dir first
-        assert_eq!(results[1].value, "aaa_file.txt"); // then file
+        assert_eq!(results[0].value, "aaa_dir/");
+        assert_eq!(results[1].value, "aaa_file.txt");
     }
 
     #[test]
     fn test_tilde_expansion() {
-        // This test verifies tilde handling — we can't control $HOME in tests,
-        // but we can verify the completer returns suggestions starting with ~/
-        let mut c = FileCompleter::new();
+        let mut c = ShannonCompleter::new();
         let results = c.complete("ls ~/", 4);
         for s in &results {
             assert!(
@@ -263,5 +310,36 @@ mod tests {
                 s.value
             );
         }
+    }
+
+    // --- Command completion tests ---
+
+    #[test]
+    fn test_command_completion_git() {
+        let mut c = ShannonCompleter::new();
+        let results = c.complete("git ", 4);
+        let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
+        assert!(values.contains(&"commit"), "expected commit in git completions");
+        assert!(values.contains(&"push"), "expected push in git completions");
+    }
+
+    #[test]
+    fn test_command_completion_git_prefix() {
+        let mut c = ShannonCompleter::new();
+        let results = c.complete("git com", 7);
+        let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
+        assert!(values.contains(&"commit"), "expected commit");
+        assert!(!values.contains(&"push"), "push should be filtered out");
+    }
+
+    #[test]
+    fn test_command_completion_git_commit_flags() {
+        let mut c = ShannonCompleter::new();
+        let results = c.complete("git commit --", 13);
+        let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
+        assert!(
+            values.contains(&"--message"),
+            "expected --message in git commit flags, got: {values:?}"
+        );
     }
 }

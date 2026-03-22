@@ -9,7 +9,7 @@ use reedline::{
     MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, SqliteBackedHistory,
 };
 
-use shannon::completer::FileCompleter;
+use shannon::completer::ShannonCompleter;
 use shannon::executor::{execute_command, run_startup_script};
 use shannon::highlighter::TreeSitterHighlighter;
 use shannon::prompt::ShannonPrompt;
@@ -60,7 +60,7 @@ fn build_editor(shell: ShellKind, session_id: Option<HistorySessionId>) -> Reedl
     let hinter = DefaultHinter::default()
         .with_style(Style::new().fg(Color::Rgb(86, 95, 137))); // Tokyo Night muted #565f89
 
-    let completer = Box::new(FileCompleter::new());
+    let completer = Box::new(ShannonCompleter::new());
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
     Reedline::create()

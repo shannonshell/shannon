@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 10: Add fish shell support and adopt fish completions
@@ -368,3 +369,39 @@ values.
 5. Type `git commit --` then Tab → flags appear (--message, --amend, etc.).
 6. Type `cat ` then Tab → file completion (fallback).
 7. Works in all shell modes (bash, nushell, fish).
+
+**Result:** Pass
+
+All verification steps confirmed. build.rs parsed 983 commands from 1,055
+fish completion files. Git has 92 subcommands, 22 global flags, and 101
+subcommand-specific flag sets. The 3MB JSON is baked into the binary — zero
+runtime parsing cost. 57 tests pass (41 unit + 16 integration).
+
+Key implementation detail: the parser handles both generic fish condition
+functions (`__fish_use_subcommand`, `__fish_seen_subcommand_from`) and
+tool-specific variants (`__fish_git_needs_command`,
+`__fish_git_using_command`, etc.) by recognizing the naming convention. This
+significantly increased coverage beyond the original 74% estimate.
+
+#### Conclusion
+
+Fish completions are working for all shells. 983 commands have subcommand
+and flag completions baked into the binary. The `ShannonCompleter` checks
+command completions first and falls back to file completion.
+
+## Conclusion
+
+Issue complete. Both goals achieved:
+
+1. **Fish shell support** — fish is in the Shift+Tab rotation with wrapper
+   script, env parser, and tree-sitter syntax highlighting.
+2. **Fish completions for all shells** — 983 commands with subcommands and
+   flags, parsed at build time from fish's community-maintained completion
+   files, available in bash, nushell, and fish modes.
+
+Key files:
+- `completions/` — 1,055 fish completion files (updated via
+  `scripts/update-completions.sh`)
+- `build.rs` — parses fish `complete` statements at build time
+- `src/completions.rs` — `CompletionTable` with context-aware completion
+- `src/completer.rs` — `ShannonCompleter` combining command + file completion
