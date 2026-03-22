@@ -110,8 +110,7 @@ impl ShannonConfig {
 
     /// Returns the ordered list of shells: built-in defaults merged with user config.
     /// The default_shell (if set) is moved to the front.
-    /// Also respects SHANNON_DEFAULT_SHELL env var as fallback.
-    pub fn shells(&self, env_default: Option<&str>) -> Vec<(String, ShellConfig)> {
+    pub fn shells(&self) -> Vec<(String, ShellConfig)> {
         let mut shells: Vec<(String, ShellConfig)> = Vec::new();
 
         // Start with built-in defaults
@@ -131,11 +130,7 @@ impl ShannonConfig {
             }
         }
 
-        // Determine default shell: config.toml > env var > first in list
-        let default = self
-            .default_shell
-            .as_deref()
-            .or(env_default);
+        let default = self.default_shell.as_deref();
 
         if let Some(default_name) = default {
             if let Some(pos) = shells.iter().position(|(n, _)| n == default_name) {
@@ -177,7 +172,7 @@ mod tests {
     #[test]
     fn test_empty_config() {
         let config = ShannonConfig::default();
-        let shells = config.shells(None);
+        let shells = config.shells();
         assert_eq!(shells.len(), 3);
         assert_eq!(shells[0].0, "bash");
         assert_eq!(shells[1].0, "nu");
@@ -190,27 +185,10 @@ mod tests {
             default_shell: Some("nu".to_string()),
             shells: HashMap::new(),
         };
-        let shells = config.shells(None);
+        let shells = config.shells();
         assert_eq!(shells[0].0, "nu");
     }
 
-    #[test]
-    fn test_env_default_fallback() {
-        let config = ShannonConfig::default();
-        let shells = config.shells(Some("fish"));
-        assert_eq!(shells[0].0, "fish");
-    }
-
-    #[test]
-    fn test_config_overrides_env() {
-        let config = ShannonConfig {
-            default_shell: Some("nu".to_string()),
-            shells: HashMap::new(),
-        };
-        // config.toml default takes precedence over env var
-        let shells = config.shells(Some("fish"));
-        assert_eq!(shells[0].0, "nu");
-    }
 
     #[test]
     fn test_custom_shell() {
@@ -229,7 +207,7 @@ mod tests {
             default_shell: None,
             shells: shells_map,
         };
-        let shells = config.shells(None);
+        let shells = config.shells();
         assert_eq!(shells.len(), 4); // 3 built-in + zsh
         assert!(shells.iter().any(|(n, _)| n == "zsh"));
     }
@@ -251,7 +229,7 @@ mod tests {
             default_shell: None,
             shells: shells_map,
         };
-        let shells = config.shells(None);
+        let shells = config.shells();
         assert_eq!(shells[0].1.binary, "/custom/bash");
     }
 

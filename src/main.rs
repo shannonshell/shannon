@@ -103,8 +103,7 @@ fn main() -> io::Result<()> {
     }
 
     // Get ordered shell list from config, filter to installed shells
-    let env_default = state.env.get("SHANNON_DEFAULT_SHELL").map(|s| s.as_str());
-    let all_shells = config.shells(env_default);
+    let all_shells = config.shells();
     let shells: Vec<(String, ShellConfig)> = all_shells
         .into_iter()
         .filter(|(_, cfg)| shell_available(&cfg.binary))

@@ -20,7 +20,7 @@ fn initial_state() -> ShellState {
 
 fn bash_config() -> ShellConfig {
     shannon::config::ShannonConfig::default()
-        .shells(None)
+        .shells()
         .into_iter()
         .find(|(name, _)| name == "bash")
         .unwrap()
@@ -29,7 +29,7 @@ fn bash_config() -> ShellConfig {
 
 fn nushell_config() -> ShellConfig {
     shannon::config::ShannonConfig::default()
-        .shells(None)
+        .shells()
         .into_iter()
         .find(|(name, _)| name == "nu")
         .unwrap()
@@ -38,7 +38,7 @@ fn nushell_config() -> ShellConfig {
 
 fn fish_config() -> ShellConfig {
     shannon::config::ShannonConfig::default()
-        .shells(None)
+        .shells()
         .into_iter()
         .find(|(name, _)| name == "fish")
         .unwrap()
