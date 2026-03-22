@@ -18,5 +18,5 @@ fi
 
 echo "==> Installing shannon to /usr/local/bin/shannon..."
 cp "$BINARY" /usr/local/bin/shannon
-
+codesign --force --sign - /usr/local/bin/shannon
 echo "  Bin: /usr/local/bin/shannon"
