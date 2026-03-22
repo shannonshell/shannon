@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 11: TOML configuration and custom shell support
@@ -352,3 +353,29 @@ text already identifies which shell is active.
 7. Syntax highlighting works for built-in shells, falls back to plain text for
    custom shells.
 8. `env.sh` works. `config.sh` fallback works.
+
+**Result:** Pass
+
+All verification steps confirmed. 60 tests pass (44 unit + 16 integration).
+The `ShellKind` enum is gone — shells are now string names with `ShellConfig`
+structs. Built-in defaults for bash, nushell, and fish match previous behavior
+exactly. Custom shells can be added via config.toml.
+
+#### Conclusion
+
+Config-driven shell support is complete. The entire shell system is now driven
+by configuration rather than hardcoded enum variants. Wrapper templates use
+`{{placeholder}}` syntax. Parsers are selectable by name. Highlighting maps
+to built-in grammars by string. The `env.sh` rename with `config.sh` fallback
+preserves backward compatibility.
+
+## Conclusion
+
+Issue complete. Shannon now supports TOML configuration and custom shells.
+
+Key files:
+- `src/config.rs` — config loading, built-in defaults, wrapper templates
+- `src/executor.rs` — generic execution with config-driven wrappers and parsers
+- `src/main.rs` — config-driven startup and shell rotation
+- `src/highlighter.rs` — string-based grammar selection
+- `src/prompt.rs` — string-based shell name, single prompt color
