@@ -53,8 +53,7 @@ __shannon_ec=$?
 exit $__shannon_ec"#;
 
 const NUSHELL_WRAPPER: &str = r#"{{init}}
-let __shannon_out = (try { {{command}} } catch { |e| $e.rendered | print -e; null })
-if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") { $__shannon_out | print }
+{{command}}
 let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
 $env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{{temp_path}}'"#;
 
