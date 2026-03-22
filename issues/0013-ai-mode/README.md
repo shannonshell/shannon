@@ -436,32 +436,31 @@ foundation right even if MVP only uses a fraction of it.
 
 **Revised answers:**
 
-- **Q9 (Chat storage):** Disk, not in-memory. Use JSONL files per session
-  in `~/.config/shannon/sessions/`. JSONL is the format Codex and Pi
-  converged on — append-only, simple, one JSON object per line. Each AI
-  mode activation creates a new session file. This is simpler than adding
-  a table to history.db and avoids coupling the chat system to reedline.
+- **Q9 (Chat storage):** Disk, not in-memory. Use JSONL files per session in
+  `~/.config/shannon/sessions/`. JSONL is the format Codex and Pi converged on —
+  append-only, simple, one JSON object per line. Each AI mode activation creates
+  a new session file. This is simpler than adding a table to history.db and
+  avoids coupling the chat system to reedline.
 
-- **Q12 (Provider abstraction):** Define a `Provider` trait from day one.
-  MVP implements `AnthropicProvider` only. The trait handles: send messages,
-  parse response, extract command text. Adding OpenAI-compatible later
-  means implementing the trait, not refactoring the call site.
+- **Q12 (Provider abstraction):** Define a `Provider` trait from day one. MVP
+  implements `AnthropicProvider` only. The trait handles: send messages, parse
+  response, extract command text. Adding OpenAI-compatible later means
+  implementing the trait, not refactoring the call site.
 
-- **Q7/Q8 (Conversation model):** Session-aware from the start. Each AI
-  mode activation creates a session with a UUID. Messages are appended to
-  the session's JSONL file. For MVP, the conversation resets when you exit
-  AI mode (new session next time). But the infrastructure supports resuming
-  sessions later.
+- **Q7/Q8 (Conversation model):** Session-aware from the start. Each AI mode
+  activation creates a session with a UUID. Messages are appended to the
+  session's JSONL file. For MVP, the conversation resets when you exit AI mode
+  (new session next time). But the infrastructure supports resuming sessions
+  later.
 
 - **System prompt:** Composable from sections, not a static string. A
-  `PromptBuilder` that concatenates: base instructions → shell context →
-  tool descriptions (empty for MVP) → project context (empty for MVP).
-  Adding tools or project context later means adding a section, not
-  rewriting the prompt.
+  `PromptBuilder` that concatenates: base instructions → shell context → tool
+  descriptions (empty for MVP) → project context (empty for MVP). Adding tools
+  or project context later means adding a section, not rewriting the prompt.
 
 - **API call structure:** Use the full Messages API format with the `tools`
-  field (empty array for MVP). This means the response parsing already
-  handles `tool_use` content blocks even though none will appear yet.
+  field (empty array for MVP). This means the response parsing already handles
+  `tool_use` content blocks even though none will appear yet.
 
 **What doesn't change:**
 
@@ -487,12 +486,152 @@ src/
 
 **Result:** Pass
 
-All three repos analyzed, all 22 questions answered, architecture revised
-for full agent trajectory.
+All three repos analyzed, all 22 questions answered, architecture revised for
+full agent trajectory.
 
 #### Conclusion
 
-The research is complete. MVP is a command translator, but the infrastructure
-is designed for a full coding agent: Provider trait, disk-backed sessions,
+The research is complete. MVP is a command translator, but the infrastructure is
+designed for a full coding agent: Provider trait, disk-backed sessions,
 composable prompts, Messages API with tools support. The scope is intentionally
 narrow (one API call, no tools) but the foundation scales.
+
+### Experiment 2: End-to-end AI mode MVP
+
+#### Description
+
+Wire up the complete AI mode flow: toggle → question → API call → command →
+confirm → execute. Smallest vertical slice that proves the concept. No
+streaming, no edit mode, no tools.
+
+#### Changes
+
+**`Cargo.toml`** — add `ureq = "3"` for HTTP calls.
+
+**`src/ai/mod.rs`** (new) — re-exports the ai submodules.
+
+**`src/ai/provider.rs`** (new):
+
+```rust
+pub trait Provider {
+    fn send(&self, messages: &[Message], system: &str) -> Result<String, AiError>;
+}
+```
+
+`AnthropicProvider` struct:
+
+- Holds: model name, API key
+- `send()` makes a POST to `https://api.anthropic.com/v1/messages`
+- Headers: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type`
+- Body: `{ model, system, messages, max_tokens: 1024, tools: [] }`
+- Parses response: extracts first `text` content block
+- Returns the text or an `AiError`
+
+`AiError` enum: `NoApiKey`, `HttpError(String)`, `ParseError(String)`,
+`NoResponse`.
+
+**`src/ai/prompt.rs`** (new):
+
+`PromptBuilder` with sections:
+
+- `base()` — static instructions ("You are a shell command translator...")
+- `context(shell_name, cwd, os)` — runtime context
+- `build()` → concatenated string
+
+For MVP, just base + context. Later: tools, project context, etc.
+
+**`src/ai/session.rs`** (new):
+
+`Session` struct:
+
+- `id: String` (UUID)
+- `messages: Vec<Message>` (in-memory list)
+- `session_dir: PathBuf` (`~/.config/shannon/sessions/`)
+
+`Message` struct: `{ role: "user"|"assistant", content: String }`
+
+Methods:
+
+- `Session::new()` — creates new session with UUID
+- `add_user(&mut self, text: &str)` — appends user message
+- `add_assistant(&mut self, text: &str)` — appends assistant message
+- `save(&self)` — writes all messages to JSONL file
+- `messages_for_api(&self) -> Vec<Message>` — returns the message list
+
+The JSONL file is written after each exchange (append). File path:
+`~/.config/shannon/sessions/{uuid}.jsonl`
+
+**`src/ai/translate.rs`** (new):
+
+`translate_command(provider, session, prompt, question) -> Result<String>`:
+
+1. Add user message to session
+2. Build system prompt via PromptBuilder
+3. Call `provider.send(session.messages_for_api(), system_prompt)`
+4. Add assistant response to session
+5. Save session to disk
+6. Return the command text
+
+**`src/config.rs`** — add `[ai]` section:
+
+```rust
+#[derive(Deserialize, Default)]
+pub struct AiConfig {
+    pub provider: Option<String>,      // default: "anthropic"
+    pub model: Option<String>,         // default: "claude-sonnet-4-20250514"
+    pub api_key_env: Option<String>,   // default: "ANTHROPIC_API_KEY"
+}
+```
+
+Add `pub ai: AiConfig` to `ShannonConfig` (with `#[serde(default)]`).
+
+**`src/main.rs`** — AI mode integration:
+
+Add `ai_mode: bool` state variable (starts false).
+
+In the main loop, when `Signal::Success(line)` and line is empty/whitespace:
+
+- If not in AI mode → set `ai_mode = true`, rebuild prompt, continue
+- If in AI mode → set `ai_mode = false`, continue
+
+When in AI mode and line is non-empty:
+
+1. Print "Thinking..."
+2. Call `translate_command(...)` with the line as the question
+3. If error → print error, continue in AI mode
+4. Print the suggested command: `→ {command}`
+5. Print `[Enter] run  [Esc] cancel`
+6. Read a single key from stdin (crossterm raw mode):
+   - Enter → run the command via `execute_command` with active shell
+   - Esc → cancel, return to AI mode prompt
+7. After execution, exit AI mode (back to normal)
+
+**`src/prompt.rs`** — update prompt display:
+
+When `ai_mode` is true, render `[nu:ai]` instead of `[nu]`. Add `ai_mode:
+bool`
+field to `ShannonPrompt`.
+
+**`src/lib.rs`** — add `pub mod ai;`
+
+#### What's deferred
+
+- Streaming (print tokens as they arrive)
+- Edit mode (`e` to edit the suggested command)
+- Multiple providers
+- Tools
+- Compaction
+- Config validation (missing API key detected at call time, not startup)
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes (no regressions — AI tests are manual for now).
+3. Run shannon, press Enter on empty line → prompt changes to `[nu:ai]`.
+4. Type "list all files in this directory" → see `ls` (or similar).
+5. Press Enter → command executes, output appears, back to normal mode.
+6. Press Esc → cancel, stay in AI mode.
+7. Press Enter on empty in AI mode → back to normal mode.
+8. Ask a follow-up ("now show only the .rs files") → AI remembers context.
+9. Missing API key → helpful error message.
+10. `~/.config/shannon/sessions/` contains a JSONL file after a session.
