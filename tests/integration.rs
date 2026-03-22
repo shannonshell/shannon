@@ -45,6 +45,15 @@ fn fish_config() -> ShellConfig {
         .1
 }
 
+fn zsh_config() -> ShellConfig {
+    shannon::config::ShannonConfig::default()
+        .shells()
+        .into_iter()
+        .find(|(name, _)| name == "zsh")
+        .unwrap()
+        .1
+}
+
 // --- Bash tests ---
 
 #[test]
@@ -191,6 +200,53 @@ fn test_fish_exit_code() {
     }
     let state = initial_state();
     let result = execute_command(&fish_config(), "false", &state).unwrap();
+    assert_ne!(result.last_exit_code, 0);
+}
+
+// --- Zsh tests ---
+
+#[test]
+fn test_zsh_echo() {
+    if !has_binary("zsh") {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(&zsh_config(), "echo hello", &state).unwrap();
+    assert_eq!(result.last_exit_code, 0);
+}
+
+#[test]
+fn test_zsh_env_capture() {
+    if !has_binary("zsh") {
+        return;
+    }
+    let state = initial_state();
+    let result =
+        execute_command(&zsh_config(), "export FOO=test_value_zsh", &state).unwrap();
+    assert_eq!(result.env.get("FOO").unwrap(), "test_value_zsh");
+}
+
+#[test]
+fn test_zsh_cwd_capture() {
+    if !has_binary("zsh") {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(&zsh_config(), "cd /tmp", &state).unwrap();
+    assert!(
+        result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
+        "unexpected cwd: {:?}",
+        result.cwd
+    );
+}
+
+#[test]
+fn test_zsh_exit_code() {
+    if !has_binary("zsh") {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(&zsh_config(), "false", &state).unwrap();
     assert_ne!(result.last_exit_code, 0);
 }
 

@@ -7,6 +7,9 @@ use crate::shell::config_dir;
 /// Top-level shannon configuration, loaded from config.toml.
 #[derive(Deserialize, Default)]
 pub struct ShannonConfig {
+    /// Ordered list of shells for Shift+Tab rotation. First is default.
+    pub toggle: Option<Vec<String>>,
+    /// Deprecated: use `toggle` instead. Kept for backward compat.
     pub default_shell: Option<String>,
     #[serde(default)]
     pub shells: HashMap<String, ShellConfig>,
@@ -39,6 +42,14 @@ const NUSHELL_WRAPPER: &str = r#"{{init}}
 try { {{command}} } catch { |e| $e.rendered | print -e }
 let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
 $env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{{temp_path}}'"#;
+
+const ENV_WRAPPER: &str = r#"{{init}}
+{{command}}
+__shannon_ec=$?
+env > '{{temp_path}}'
+echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
+echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
+exit $__shannon_ec"#;
 
 const FISH_WRAPPER: &str = r#"{{init}}
 {{command}}
@@ -80,7 +91,34 @@ fn builtin_shells() -> Vec<(String, ShellConfig)> {
                 init: None,
             },
         ),
+        (
+            "zsh".to_string(),
+            ShellConfig {
+                binary: "zsh".to_string(),
+                wrapper: ENV_WRAPPER.to_string(),
+                parser: "env".to_string(),
+                highlighter: Some("bash".to_string()),
+                init: None,
+            },
+        ),
     ]
+}
+
+/// Build the full map of available shells (built-in + custom).
+fn all_shells(config: &ShannonConfig) -> HashMap<String, ShellConfig> {
+    let mut map = HashMap::new();
+
+    // Built-in defaults
+    for (name, shell_config) in builtin_shells() {
+        map.insert(name, shell_config);
+    }
+
+    // User overrides and custom shells
+    for (name, shell_config) in &config.shells {
+        map.insert(name.clone(), shell_config.clone());
+    }
+
+    map
 }
 
 impl ShannonConfig {
@@ -108,38 +146,51 @@ impl ShannonConfig {
         }
     }
 
-    /// Returns the ordered list of shells: built-in defaults merged with user config.
-    /// The default_shell (if set) is moved to the front.
+    /// Returns the ordered list of shells for the Shift+Tab rotation.
+    ///
+    /// If `toggle` is set, returns those shells in order (duplicates allowed).
+    /// If only `default_shell` is set (backward compat), puts that shell first.
+    /// If neither is set, returns all built-in + custom shells in default order.
     pub fn shells(&self) -> Vec<(String, ShellConfig)> {
-        let mut shells: Vec<(String, ShellConfig)> = Vec::new();
+        let available = all_shells(self);
 
-        // Start with built-in defaults
-        for (name, config) in builtin_shells() {
-            if let Some(user_config) = self.shells.get(&name) {
-                // User overrides a built-in
-                shells.push((name, user_config.clone()));
-            } else {
-                shells.push((name, config));
+        if let Some(toggle) = &self.toggle {
+            // Toggle list: return shells in the specified order
+            let mut result = Vec::new();
+            for name in toggle {
+                if let Some(config) = available.get(name) {
+                    result.push((name.clone(), config.clone()));
+                } else {
+                    eprintln!("shannon: unknown shell in toggle list: {name}");
+                }
             }
+            return result;
         }
 
-        // Add user-defined shells that aren't built-in
+        // No toggle list — return all shells in default order
+        let mut result = Vec::new();
+        // Built-in shells first, in their defined order
+        for (name, _) in builtin_shells() {
+            if let Some(config) = available.get(&name) {
+                result.push((name, config.clone()));
+            }
+        }
+        // Custom shells after
         for (name, config) in &self.shells {
-            if !shells.iter().any(|(n, _)| n == name) {
-                shells.push((name.clone(), config.clone()));
+            if !result.iter().any(|(n, _)| n == name) {
+                result.push((name.clone(), config.clone()));
             }
         }
 
-        let default = self.default_shell.as_deref();
-
-        if let Some(default_name) = default {
-            if let Some(pos) = shells.iter().position(|(n, _)| n == default_name) {
-                let shell = shells.remove(pos);
-                shells.insert(0, shell);
+        // Backward compat: default_shell moves that shell to front
+        if let Some(default_name) = &self.default_shell {
+            if let Some(pos) = result.iter().position(|(n, _)| n == default_name) {
+                let shell = result.remove(pos);
+                result.insert(0, shell);
             }
         }
 
-        shells
+        result
     }
 }
 
@@ -173,62 +224,96 @@ mod tests {
     fn test_empty_config() {
         let config = ShannonConfig::default();
         let shells = config.shells();
-        assert_eq!(shells.len(), 3);
+        assert_eq!(shells.len(), 4);
         assert_eq!(shells[0].0, "bash");
         assert_eq!(shells[1].0, "nu");
+        assert_eq!(shells[2].0, "fish");
+        assert_eq!(shells[3].0, "zsh");
+    }
+
+    #[test]
+    fn test_toggle_list() {
+        let config: ShannonConfig = toml::from_str(r#"toggle = ["nu", "bash"]"#).unwrap();
+        let shells = config.shells();
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0].0, "nu");
+        assert_eq!(shells[1].0, "bash");
+    }
+
+    #[test]
+    fn test_toggle_unknown_shell() {
+        let config: ShannonConfig =
+            toml::from_str(r#"toggle = ["nu", "nonexistent", "bash"]"#).unwrap();
+        let shells = config.shells();
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0].0, "nu");
+        assert_eq!(shells[1].0, "bash");
+    }
+
+    #[test]
+    fn test_toggle_duplicates() {
+        let config: ShannonConfig =
+            toml::from_str(r#"toggle = ["fish", "bash", "fish"]"#).unwrap();
+        let shells = config.shells();
+        assert_eq!(shells.len(), 3);
+        assert_eq!(shells[0].0, "fish");
+        assert_eq!(shells[1].0, "bash");
         assert_eq!(shells[2].0, "fish");
     }
 
     #[test]
-    fn test_default_shell() {
-        let config = ShannonConfig {
-            default_shell: Some("nu".to_string()),
-            shells: HashMap::new(),
-        };
+    fn test_toggle_with_custom_shell() {
+        let toml_str = r#"
+toggle = ["zsh", "nu"]
+
+[shells.elvish]
+binary = "elvish"
+wrapper = "{{command}}"
+"#;
+        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
         let shells = config.shells();
-        assert_eq!(shells[0].0, "nu");
+        // elvish is defined but not in toggle, so not returned
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0].0, "zsh");
+        assert_eq!(shells[1].0, "nu");
     }
 
+    #[test]
+    fn test_default_shell_backward_compat() {
+        let config: ShannonConfig =
+            toml::from_str(r#"default_shell = "nu""#).unwrap();
+        let shells = config.shells();
+        assert_eq!(shells[0].0, "nu");
+        assert_eq!(shells.len(), 4); // all built-ins, nu first
+    }
 
     #[test]
-    fn test_custom_shell() {
-        let mut shells_map = HashMap::new();
-        shells_map.insert(
-            "zsh".to_string(),
-            ShellConfig {
-                binary: "zsh".to_string(),
-                wrapper: "{{command}}".to_string(),
-                parser: "env".to_string(),
-                highlighter: Some("bash".to_string()),
-                init: None,
-            },
-        );
-        let config = ShannonConfig {
-            default_shell: None,
-            shells: shells_map,
-        };
+    fn test_custom_shell_in_toggle() {
+        let toml_str = r#"
+toggle = ["elvish", "bash"]
+
+[shells.elvish]
+binary = "elvish"
+wrapper = "{{command}}"
+"#;
+        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
         let shells = config.shells();
-        assert_eq!(shells.len(), 4); // 3 built-in + zsh
-        assert!(shells.iter().any(|(n, _)| n == "zsh"));
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0].0, "elvish");
+        assert_eq!(shells[0].1.binary, "elvish");
+        assert_eq!(shells[1].0, "bash");
     }
 
     #[test]
     fn test_override_builtin() {
-        let mut shells_map = HashMap::new();
-        shells_map.insert(
-            "bash".to_string(),
-            ShellConfig {
-                binary: "/custom/bash".to_string(),
-                wrapper: "custom {{command}}".to_string(),
-                parser: "bash".to_string(),
-                highlighter: Some("bash".to_string()),
-                init: None,
-            },
-        );
-        let config = ShannonConfig {
-            default_shell: None,
-            shells: shells_map,
-        };
+        let toml_str = r#"
+[shells.bash]
+binary = "/custom/bash"
+wrapper = "custom {{command}}"
+parser = "bash"
+highlighter = "bash"
+"#;
+        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
         let shells = config.shells();
         assert_eq!(shells[0].1.binary, "/custom/bash");
     }
@@ -253,9 +338,9 @@ mod tests {
     }
 
     #[test]
-    fn test_toml_parse() {
+    fn test_toml_parse_toggle() {
         let toml_str = r#"
-default_shell = "nu"
+toggle = ["nu", "fish"]
 
 [shells.zsh]
 binary = "zsh"
@@ -264,8 +349,7 @@ parser = "env"
 highlighter = "bash"
 "#;
         let config: ShannonConfig = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.default_shell.as_deref(), Some("nu"));
+        assert_eq!(config.toggle.as_deref(), Some(&["nu".to_string(), "fish".to_string()][..]));
         assert!(config.shells.contains_key("zsh"));
-        assert_eq!(config.shells["zsh"].binary, "zsh");
     }
 }

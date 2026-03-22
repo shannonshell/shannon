@@ -270,6 +270,18 @@ fn collect_leaf_styles(
         if let Some(color) = parent_color {
             // Color the entire span of this node
             segments.push((node.start_byte(), node.end_byte(), color));
+        } else if highlighter.grammar == "fish" && node.kind() == "command" {
+            // Fish: color the first child (command name) as BLUE, recurse rest
+            let mut first = true;
+            for child in node.children(&mut node.walk()) {
+                if first && child.kind() == "word" {
+                    segments.push((child.start_byte(), child.end_byte(), BLUE));
+                    first = false;
+                } else {
+                    first = false;
+                    collect_leaf_styles(&child, source, highlighter, segments);
+                }
+            }
         } else {
             // Recurse into children
             for child in node.children(&mut node.walk()) {
