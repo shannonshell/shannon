@@ -84,7 +84,7 @@ fn main() -> io::Result<()> {
     }
 
     // Detect available shells
-    let shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell]
+    let shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell, ShellKind::Fish]
         .into_iter()
         .filter(|s| shell_available(*s))
         .collect();

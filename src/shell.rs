@@ -17,6 +17,7 @@ pub fn config_dir() -> PathBuf {
 pub enum ShellKind {
     Bash,
     Nushell,
+    Fish,
 }
 
 impl ShellKind {
@@ -24,6 +25,7 @@ impl ShellKind {
         match self {
             ShellKind::Bash => "bash",
             ShellKind::Nushell => "nu",
+            ShellKind::Fish => "fish",
         }
     }
 
@@ -31,6 +33,7 @@ impl ShellKind {
         match self {
             ShellKind::Bash => "bash",
             ShellKind::Nushell => "nu",
+            ShellKind::Fish => "fish",
         }
     }
 
@@ -39,6 +42,7 @@ impl ShellKind {
         match self {
             ShellKind::Bash => config_dir.join("bash_history"),
             ShellKind::Nushell => config_dir.join("nu_history"),
+            ShellKind::Fish => config_dir.join("fish_history"),
         }
     }
 }

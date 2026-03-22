@@ -19,6 +19,7 @@ pub fn execute_command(
     let wrapper = match shell {
         ShellKind::Bash => build_bash_wrapper(command, &temp_path),
         ShellKind::Nushell => build_nushell_wrapper(command, &temp_path),
+        ShellKind::Fish => build_fish_wrapper(command, &temp_path),
     };
 
     let status = Command::new(shell.binary())
@@ -39,6 +40,7 @@ pub fn execute_command(
         .and_then(|contents| match shell {
             ShellKind::Bash => parse_bash_env(&contents),
             ShellKind::Nushell => parse_nushell_env(&contents),
+            ShellKind::Fish => parse_fish_env(&contents),
         })
         .map(|(env, cwd)| ShellState {
             env,
@@ -147,6 +149,39 @@ if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") {{ $_
 let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
 $env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{temp_path}'"#
     )
+}
+
+fn build_fish_wrapper(command: &str, temp_path: &str) -> String {
+    format!(
+        r#"{command}
+set __shannon_ec $status
+env > '{temp_path}'
+echo "__SHANNON_CWD="(pwd) >> '{temp_path}'
+echo "__SHANNON_EXIT=$__shannon_ec" >> '{temp_path}'
+exit $__shannon_ec"#
+    )
+}
+
+/// Parse `env` output (KEY=VALUE per line) plus __SHANNON_ markers.
+fn parse_fish_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+    let mut env = HashMap::new();
+    let mut cwd: Option<PathBuf> = None;
+
+    for line in contents.lines() {
+        if let Some(eq_pos) = line.find('=') {
+            let key = &line[..eq_pos];
+            let value = &line[eq_pos + 1..];
+            if key == "__SHANNON_CWD" {
+                cwd = Some(PathBuf::from(value));
+            } else if key == "__SHANNON_EXIT" {
+                // Skip — we use the process exit code directly
+            } else if !key.starts_with("__SHANNON_") {
+                env.insert(key.to_string(), value.to_string());
+            }
+        }
+    }
+
+    Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
 }
 
 /// Parse bash `export -p` output plus our special __SHANNON_ markers.
@@ -387,6 +422,36 @@ __SHANNON_CWD=/"#;
         assert!(wrapper.contains("/tmp/state.env"));
         assert!(wrapper.contains("__SHANNON_CWD"));
         assert!(wrapper.contains("to json"));
+    }
+
+    // --- parse_fish_env ---
+
+    #[test]
+    fn test_parse_fish_env_basic() {
+        let input = "HOME=/Users/ryan\nPATH=/usr/bin:/bin\nTERM=xterm\n__SHANNON_CWD=/tmp\n__SHANNON_EXIT=0";
+        let (env, cwd) = parse_fish_env(input).unwrap();
+        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
+        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
+        assert_eq!(env.get("TERM").unwrap(), "xterm");
+        assert_eq!(cwd, PathBuf::from("/tmp"));
+        assert!(!env.contains_key("__SHANNON_CWD"));
+        assert!(!env.contains_key("__SHANNON_EXIT"));
+    }
+
+    #[test]
+    fn test_parse_fish_env_empty() {
+        let (env, cwd) = parse_fish_env("").unwrap();
+        assert!(env.is_empty());
+        assert_eq!(cwd, PathBuf::from("/"));
+    }
+
+    #[test]
+    fn test_build_fish_wrapper() {
+        let wrapper = build_fish_wrapper("echo hello", "/tmp/state.env");
+        assert!(wrapper.contains("echo hello"));
+        assert!(wrapper.contains("/tmp/state.env"));
+        assert!(wrapper.contains("__SHANNON_CWD"));
+        assert!(wrapper.contains("$status"));
     }
 
     // --- run_startup_script ---

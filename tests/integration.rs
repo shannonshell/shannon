@@ -120,6 +120,53 @@ fn test_nushell_exit_code() {
     assert_ne!(result.last_exit_code, 0);
 }
 
+// --- Fish tests ---
+
+#[test]
+fn test_fish_echo() {
+    if !has_shell(ShellKind::Fish) {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(ShellKind::Fish, "echo hello", &state).unwrap();
+    assert_eq!(result.last_exit_code, 0);
+}
+
+#[test]
+fn test_fish_env_capture() {
+    if !has_shell(ShellKind::Fish) {
+        return;
+    }
+    let state = initial_state();
+    let result =
+        execute_command(ShellKind::Fish, "set -gx FOO test_value_789", &state).unwrap();
+    assert_eq!(result.env.get("FOO").unwrap(), "test_value_789");
+}
+
+#[test]
+fn test_fish_cwd_capture() {
+    if !has_shell(ShellKind::Fish) {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(ShellKind::Fish, "cd /tmp", &state).unwrap();
+    assert!(
+        result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
+        "unexpected cwd: {:?}",
+        result.cwd
+    );
+}
+
+#[test]
+fn test_fish_exit_code() {
+    if !has_shell(ShellKind::Fish) {
+        return;
+    }
+    let state = initial_state();
+    let result = execute_command(ShellKind::Fish, "false", &state).unwrap();
+    assert_ne!(result.last_exit_code, 0);
+}
+
 // --- Cross-shell tests ---
 
 #[test]
@@ -159,5 +206,31 @@ fn test_cwd_bash_to_nushell() {
         nu_state.cwd == PathBuf::from("/tmp") || nu_state.cwd == PathBuf::from("/private/tmp"),
         "unexpected cwd: {:?}",
         nu_state.cwd
+    );
+}
+
+#[test]
+fn test_env_bash_to_fish() {
+    if !has_shell(ShellKind::Bash) || !has_shell(ShellKind::Fish) {
+        return;
+    }
+
+    let state = initial_state();
+
+    // Set env in bash
+    let bash_state =
+        execute_command(ShellKind::Bash, "export CROSS_FISH=hello_from_bash", &state).unwrap();
+    assert_eq!(
+        bash_state.env.get("CROSS_FISH").unwrap(),
+        "hello_from_bash"
+    );
+
+    // Execute in fish with bash's state — env should carry over
+    let fish_state =
+        execute_command(ShellKind::Fish, "echo $CROSS_FISH", &bash_state).unwrap();
+    assert_eq!(fish_state.last_exit_code, 0);
+    assert_eq!(
+        fish_state.env.get("CROSS_FISH").unwrap(),
+        "hello_from_bash"
     );
 }

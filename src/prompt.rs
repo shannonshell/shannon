@@ -69,6 +69,7 @@ impl Prompt for ShannonPrompt {
         match self.shell {
             ShellKind::Bash => Color::Green,
             ShellKind::Nushell => Color::Cyan,
+            ShellKind::Fish => Color::Yellow,
         }
     }
 

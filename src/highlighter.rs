@@ -30,6 +30,7 @@ impl TreeSitterHighlighter {
         let language: Language = match self.shell {
             ShellKind::Bash => tree_sitter_bash::LANGUAGE.into(),
             ShellKind::Nushell => tree_sitter_nu::LANGUAGE.into(),
+            ShellKind::Fish => tree_sitter_fish::language(),
         };
         parser
             .set_language(&language)
@@ -48,6 +49,7 @@ impl TreeSitterHighlighter {
         match self.shell {
             ShellKind::Bash => self.bash_color(node, source),
             ShellKind::Nushell => self.nushell_color(node, source),
+            ShellKind::Fish => self.fish_color(node, source),
         }
     }
 
@@ -119,6 +121,38 @@ impl TreeSitterHighlighter {
 
             // Filesize/duration units
             "filesize_unit" | "duration_unit" => YELLOW,
+
+            _ => FG,
+        }
+    }
+
+    fn fish_color(&self, node: &Node, _source: &str) -> Color {
+        let kind = node.kind();
+        match kind {
+            // Keywords
+            "if" | "else" | "else_if" | "for" | "in" | "while" | "switch" | "case"
+            | "function" | "end" | "begin" | "return" | "and" | "or" | "not" | "break"
+            | "continue" | "set" | "builtin" | "command" | "exec" | "source" => PURPLE,
+
+            // Strings
+            "single_quote_string" | "double_quote_string" | "escape_sequence" => GREEN,
+
+            // Numbers
+            "integer" | "float" => ORANGE,
+
+            // Variables
+            "variable_name" | "variable_expansion" => CYAN,
+            "$" => CYAN,
+
+            // Operators and pipes
+            "|" | ">" | ">>" | "<" | "&" | "&&" | "||" | ";" => OPERATOR,
+            "pipe" | "direction" => OPERATOR,
+
+            // Comments
+            "comment" => GRAY,
+
+            // Glob and home expansion
+            "glob" | "home_dir_expansion" => YELLOW,
 
             _ => FG,
         }
@@ -206,6 +240,20 @@ fn collect_leaf_styles(
                     Some(GREEN)
                 } else if node.kind() == "val_variable" {
                     Some(CYAN)
+                } else {
+                    None
+                }
+            }
+            ShellKind::Fish => {
+                if node.kind() == "double_quote_string"
+                    || node.kind() == "single_quote_string"
+                {
+                    Some(GREEN)
+                } else if node.kind() == "variable_expansion" {
+                    Some(CYAN)
+                } else if node.kind() == "command" {
+                    // First child of a command is the command name
+                    None // let children determine their own colors
                 } else {
                     None
                 }
