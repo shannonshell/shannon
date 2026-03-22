@@ -86,6 +86,19 @@ export PATH="$PATH:$HOME/.cargo/bin"
 This runs once when shannon starts. See
 [Configuration](reference/02-configuration.md) for details.
 
+## Nesting Indicator
+
+If you run shannon inside shannon (e.g. `cargo run` during development), the
+prompt shows extra `>` characters to indicate nesting depth:
+
+```
+[bash] ~/project >       ← normal (depth 1)
+[bash] ~/project >>      ← shannon inside shannon (depth 2)
+[bash] ~/project >>>     ← three deep (depth 3)
+```
+
+This makes it easy to tell which instance you're in.
+
 ## Exiting
 
 - **Ctrl+D** — exit shannon

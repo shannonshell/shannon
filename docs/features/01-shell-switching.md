@@ -6,10 +6,10 @@ cycle between them.
 ## How It Works
 
 Shannon detects which shells are installed on your system at startup. It checks
-for `bash` and `nu` in your PATH. The rotation order is:
+for `bash`, `nu`, and `fish` in your PATH. The rotation order is:
 
 ```
-bash → nushell → bash → ...
+bash → nushell → fish → bash → ...
 ```
 
 If a shell isn't installed, it's skipped. If only one shell is available,
@@ -56,9 +56,9 @@ design — see [Architecture](../02-architecture.md) for why.
 
 Each shell keeps its own:
 
-- **Command history** — up arrow shows history for the active shell only
 - **Syntax highlighting** — colors match the active shell's grammar
-- **Tab completion** — file completion works the same in both shells
+- **Tab completion** — command and file completion works the same in all shells
+- **Command history** — shared across all shells via SQLite
 
 See [History](04-history.md) and [Syntax Highlighting](03-syntax-highlighting.md)
 for details.

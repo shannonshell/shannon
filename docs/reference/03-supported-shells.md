@@ -1,12 +1,11 @@
 # Supported Shells
 
-Shannon currently supports two shells. More can be added.
+Shannon currently supports three shells. More can be added.
 
 ## Bash
 
 - **Binary:** `bash`
 - **Detection:** `bash --version` at startup
-- **History file:** `~/.config/shannon/bash_history`
 - **Highlighting:** tree-sitter-bash grammar
 
 Bash is available on virtually every Unix system. Shannon wraps commands with
@@ -16,7 +15,6 @@ Bash is available on virtually every Unix system. Shannon wraps commands with
 
 - **Binary:** `nu`
 - **Detection:** `nu --version` at startup
-- **History file:** `~/.config/shannon/nu_history`
 - **Highlighting:** tree-sitter-nu grammar
 
 Nushell must be installed separately. Shannon wraps commands with `nu -c` and
@@ -30,6 +28,19 @@ captures state as JSON via `$env | to json`.
   `$env`, but only strings cross the shell boundary.
 - **Output rendering** — nushell's `echo` returns a value rather than
   printing. Shannon's wrapper uses `print` to render output to the terminal.
+
+## Fish
+
+- **Binary:** `fish`
+- **Detection:** `fish --version` at startup
+- **Highlighting:** tree-sitter-fish grammar
+
+Fish must be installed separately (`brew install fish` on macOS). Shannon wraps
+commands with `fish -c` and captures state via the `env` command (standard
+`KEY=VALUE` format).
+
+Fish is also the source of shannon's command-aware completions — see
+[Tab Completion](../features/05-tab-completion.md).
 
 ## Adding a New Shell
 
