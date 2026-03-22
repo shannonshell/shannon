@@ -77,11 +77,11 @@ return values. Less fragile since most commands write to stdout directly.
 
 #### Description
 
-Study the vendored nushell source to understand how the nushell REPL
-auto-prints command results. The REPL does this automatically — `pwd`
-prints its result without explicit `| print`. But `-c` mode doesn't.
-Understanding the mechanism tells us whether we can replicate it in our
-wrapper, or whether we need a fundamentally different approach.
+Study the vendored nushell source to understand how the nushell REPL auto-prints
+command results. The REPL does this automatically — `pwd` prints its result
+without explicit `| print`. But `-c` mode doesn't. Understanding the mechanism
+tells us whether we can replicate it in our wrapper, or whether we need a
+fundamentally different approach.
 
 #### Research tasks
 
@@ -98,8 +98,8 @@ Look in `vendor/nushell/` for the REPL evaluation loop. When the user types
 
 **2. Why doesn't `-c` mode auto-print?**
 
-Compare the `-c` code path to the REPL code path. Look in `src/run.rs` or
-the main binary crate for how `-c` commands are evaluated. Specifically:
+Compare the `-c` code path to the REPL code path. Look in `src/run.rs` or the
+main binary crate for how `-c` commands are evaluated. Specifically:
 
 - Does `-c` mode use the same evaluation pipeline as the REPL?
 - If not, what's different?
@@ -116,8 +116,8 @@ wrapper, `try { vim }` captures its output. Understand:
 
 **4. Can we use nushell's `display_output` hook?**
 
-Nushell has a config option `hooks.display_output` that controls how
-pipeline results are rendered. Check:
+Nushell has a config option `hooks.display_output` that controls how pipeline
+results are rendered. Check:
 
 - What is the default `display_output` hook?
 - Can we set it in our wrapper to force auto-printing?
@@ -125,8 +125,8 @@ pipeline results are rendered. Check:
 
 **5. Test alternative wrapper patterns:**
 
-Try these patterns from the command line and document which ones work for
-both `pwd` (value-returning) and `vim` (interactive):
+Try these patterns from the command line and document which ones work for both
+`pwd` (value-returning) and `vim` (interactive):
 
 ```
 # Pattern A: bare command (no try)
@@ -152,7 +152,7 @@ For each, test with both `pwd` and `vim` (or `less` as a safer alternative).
 1. The nushell REPL auto-print mechanism is documented with source file
    references.
 2. The difference between REPL and `-c` mode is explained.
-3. At least one wrapper pattern is found that works for both value-returning
-   and interactive commands, OR a clear explanation of why no single pattern
-   can work.
+3. At least one wrapper pattern is found that works for both value-returning and
+   interactive commands, OR a clear explanation of why no single pattern can
+   work.
 4. A recommendation is made for how to fix the nushell wrapper.
