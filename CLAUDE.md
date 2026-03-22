@@ -13,25 +13,39 @@ cargo run
 
 ## Architecture
 
-shannon uses reedline (from crates.io) as its line editor. Each command spawns a
-fresh subprocess — there are no persistent shell sessions.
+Shannon uses reedline (from crates.io) as its line editor. Bash, fish, and zsh
+run as subprocesses via wrapper scripts. Nushell is embedded as a library via
+`eval_source()` from the `nu-cli` crate.
 
 ### Source files
 
-- `src/main.rs` — entry point, reedline loop, Shift+Tab shell switching
+- `src/main.rs` — entry point, startup sequence
+- `src/repl.rs` — main REPL loop, shell switching, AI mode, OSC integration
 - `src/lib.rs` — re-exports modules for integration tests
-- `src/shell.rs` — `ShellKind` enum (Bash/Nushell), `ShellState` (env, cwd, exit code)
-- `src/executor.rs` — subprocess spawning, wrapper scripts, env capture parsing
-- `src/prompt.rs` — custom reedline `Prompt` impl showing active shell + cwd
+- `src/config.rs` — TOML config loading, built-in shell definitions, AI config
+- `src/shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
+- `src/executor.rs` — subprocess spawning, wrapper templates, env capture parsing
+- `src/nushell_engine.rs` — embedded nushell via `EngineState` + `eval_source()`
+- `src/prompt.rs` — custom reedline `Prompt` impl, tilde contraction
 - `src/highlighter.rs` — tree-sitter syntax highlighting with Tokyo Night colors
+- `src/completer.rs` — `ShannonCompleter` combining command + file completion
+- `src/completions.rs` — fish completion table (loaded from build-time JSON)
+- `src/ai/` — AI mode: provider (rig-core), prompt builder, sessions, translation
 
 ### How command execution works
 
+**Bash/fish/zsh (wrapper model):**
 1. User types a command
-2. shannon wraps it in a shell-specific script that captures env vars + cwd after execution
-3. Subprocess runs with inherited stdio (output streams directly to terminal)
+2. Shannon wraps it in a shell-specific template that captures env + cwd
+3. Subprocess runs with inherited stdio
 4. After exit, shannon reads captured state from a temp file
-5. State (env vars, cwd, exit code) is injected into the next command's subprocess
+5. State is injected into the next command's subprocess
+
+**Nushell (embedded model):**
+1. User types a command
+2. Shannon calls `eval_source()` directly via the nushell crate API
+3. Output goes directly to the terminal (auto-print, vim, etc. all work)
+4. Shannon reads env vars and cwd from the nushell `Stack` after evaluation
 
 ### Testing
 
@@ -44,24 +58,34 @@ Every new feature must include tests. No feature ships without test coverage.
 
 ### Key design decisions
 
-- **Strings only** — only env vars (strings), cwd, and exit code cross the shell boundary. No shell-internal data structures.
-- **One subprocess per command** — no persistent shell sessions. Type `bash` or `nu` for a full interactive session.
-- **Vendor directory is for reference only** — vendored repos are for reading source code, not for building against. Use crates.io dependencies in Cargo.toml.
-- **Nushell output rendering** — nushell's `echo` returns a Value rather than printing. The wrapper uses try/catch + explicit `print` to render output.
+- **Strings only** — only env vars (strings), cwd, and exit code cross the
+  shell boundary. No shell-internal data structures.
+- **Nushell embedded, others wrapped** — nushell runs natively via crate API
+  for full compatibility. Bash/fish/zsh use subprocess wrappers.
+- **Config-driven shells** — shells are defined in `config.toml` with wrapper
+  templates. Adding a new shell requires no code changes.
+- **Fish completions baked in** — 983 commands parsed from fish completion
+  files at build time, available in all shell modes.
+- **Vendor directory is for reference only** — vendored repos are for reading
+  source code, not for building against. Use crates.io dependencies.
 
 ## Modes
 
-Shannon treats each mode as a "shell" in the Shift+Tab rotation:
+Shannon has two modes, toggled by pressing Enter on an empty line:
 
-- **shannon** (planned) — AI mode. Input goes to a configurable LLM which generates a shell command. User confirms before execution.
-- **bash** — working. Full bash via subprocess wrapper.
-- **nushell** — working. Full nushell via subprocess wrapper.
+- **Normal mode** — commands go to the active shell (bash, nushell, fish, zsh)
+- **AI mode** — input goes to an LLM which generates a shell command. User
+  confirms before execution. Prompt shows `[nu:ai]`.
 
-Adding a new traditional shell means adding a wrapper script builder and env parser in `executor.rs`. The AI mode will be a separate code path that doesn't use wrapper scripts.
+Shell switching (Shift+Tab) works in both modes.
 
 ## Config
 
-History files are stored in `~/.config/shannon/` (per-shell).
+Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
+
+- `config.toml` — shell rotation (`toggle`), custom shells, AI provider/model
+- `env.sh` — bash script for PATH, env vars, API keys (runs once at startup)
+- `history.db` — SQLite command history (shared across all shells and instances)
 
 ## Issues and Experiments
 

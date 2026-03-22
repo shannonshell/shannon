@@ -5,9 +5,9 @@ cycle between them.
 
 ## How It Works
 
-Shannon detects which shells are installed on your system at startup. It checks
-for `bash`, `nu`, `fish`, and `zsh` in your PATH. The default rotation order
-is:
+Shannon detects which shells are available at startup. Nushell is always
+available (it's embedded). Bash, fish, and zsh are detected by checking your
+PATH. The default rotation order is:
 
 ```
 bash → nu → fish → zsh → bash → ...

@@ -3,20 +3,31 @@
 This document explains how shannon works under the hood. It's aimed at someone
 who wants to understand the design, not just use the shell.
 
-## The Subprocess Model
+## Two Execution Models
 
-Shannon spawns a fresh subprocess for every command. There are no persistent
-shell sessions. When you type `ls -la`, shannon runs:
+Shannon uses two different models depending on the shell:
+
+### Nushell: Embedded via Library
+
+Nushell is embedded using the `nu-cli` crate. Commands are evaluated directly
+by nushell's engine via `eval_source()`. There is no subprocess — nushell runs
+inside shannon's process. This means builtins auto-print, interactive programs
+(vim, htop) get direct terminal access, and variables persist across commands.
+
+After each command, shannon reads the resulting env vars and cwd from nushell's
+`Stack` object.
+
+### Bash/Fish/Zsh: Subprocess Wrappers
+
+For other shells, shannon spawns a fresh subprocess for every command:
 
 ```
 <shell> -c '<wrapper script containing ls -la>'
 ```
 
-The subprocess inherits stdio directly — you see output in real time, and
-interactive commands like `vim` or `htop` work normally.
-
-After the subprocess exits, shannon reads the captured state and uses it for
-the next command.
+The subprocess inherits stdio directly — you see output in real time.
+After the subprocess exits, shannon reads the captured state from a temp file
+and uses it for the next command.
 
 ## Wrapper Templates
 
@@ -104,17 +115,17 @@ are internal to their shell. Trying to translate them between shells would be
 fragile and lossy. The strings-only policy keeps the boundary clean and
 predictable.
 
-## Why Not Persistent Sessions?
+## Why Not Persistent Sessions for All Shells?
 
-A persistent shell session (keeping bash running in the background) would avoid
-the wrapper script overhead. But it creates problems:
+Nushell uses a persistent engine (embedded via library). For bash/fish/zsh,
+we use the subprocess-per-command model instead. Why not embed those too?
 
-- **State capture is harder** — you'd need to query the running shell for its
-  env after every command, which is fragile.
-- **Shell switching is complex** — you'd need to manage multiple background
-  processes and multiplex stdio.
-- **Interactive commands** — programs like `vim` need direct terminal access,
-  which is harder to provide through a multiplexer.
+- Nushell exposes a clean Rust crate API (`eval_source`) that makes embedding
+  straightforward.
+- Bash, fish, and zsh don't expose equivalent library APIs. They're designed
+  to run as standalone processes.
+- The subprocess model works well for these shells — the overhead is
+  negligible for interactive use.
 
 The subprocess-per-command model is simpler and more reliable. The overhead of
 spawning a process is negligible for interactive use.
@@ -124,7 +135,7 @@ spawning a process is negligible for interactive use.
 Shannon uses [reedline](https://github.com/nushell/reedline) as its line
 editor. Reedline provides:
 
-- Emacs keybindings
+- Vi keybindings (default)
 - SQLite-backed history with cross-instance sharing
 - Autosuggestions (ghost text from history)
 - Syntax highlighting via the `Highlighter` trait
@@ -134,3 +145,12 @@ editor. Reedline provides:
 Shannon implements custom `Highlighter` and `Completer` traits backed by
 tree-sitter and fish completion files, respectively. The Shift+Tab shell
 switch is a custom keybinding that triggers a host command.
+
+## Terminal Integration
+
+Shannon emits OSC escape sequences to communicate with the terminal emulator:
+
+- **OSC 7** — reports the current working directory after every command. This
+  enables new panes/tabs to open in the same directory.
+- **OSC 2** — sets the window/tab title. Shows `[shell] ~/path` when idle
+  and `[shell] ~/path> command` when running a command.

@@ -13,22 +13,23 @@ be added via [config.toml](02-configuration.md).
 
 Bash is available on virtually every Unix system.
 
-### Nushell
+### Nushell (embedded)
 
-- **Binary:** `nu`
 - **Highlighting:** tree-sitter-nu grammar
-- **Parser:** `nushell` (reads JSON from `$env | to json`)
+- **Execution:** native via `eval_source()` — no subprocess, no wrapper
+- **Always available** — no system `nu` binary required
 
-Nushell must be installed separately.
+Nushell is embedded via the nushell crate API (v0.111). Commands are evaluated
+directly by nushell's engine, not wrapped in `nu -c`. This means:
 
-#### Nushell Quirks
+- Builtins like `pwd` and `ls` auto-print their results
+- Interactive programs like `vim` work correctly
+- Variables and functions persist across commands
+- Full nushell experience, identical to standalone nushell
 
-- **PATH is a list** in nushell. Shannon joins it with `:` (`;` on Windows)
-  when capturing state, so it works correctly in bash.
-- **Non-string env vars** are dropped. Nushell allows structured values in
-  `$env`, but only strings cross the shell boundary.
-- **Output rendering** — nushell's `echo` returns a value rather than
-  printing. Shannon's wrapper uses `print` to render output to the terminal.
+When synchronizing state with other shells, PATH (a list in nushell) is joined
+with `:` (`;` on Windows) and non-string env vars are dropped — only strings
+cross the shell boundary.
 
 ### Fish
 
