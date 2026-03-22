@@ -52,11 +52,6 @@ __shannon_ec=$?
 (export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{{temp_path}}'
 exit $__shannon_ec"#;
 
-const NUSHELL_WRAPPER: &str = r#"{{init}}
-{{command}}
-let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
-$env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{{temp_path}}'"#;
-
 const ENV_WRAPPER: &str = r#"{{init}}
 {{command}}
 __shannon_ec=$?
@@ -86,16 +81,6 @@ fn builtin_shells() -> Vec<(String, ShellConfig)> {
             },
         ),
         (
-            "nu".to_string(),
-            ShellConfig {
-                binary: "nu".to_string(),
-                wrapper: NUSHELL_WRAPPER.to_string(),
-                parser: "nushell".to_string(),
-                highlighter: Some("nushell".to_string()),
-                init: None,
-            },
-        ),
-        (
             "fish".to_string(),
             ShellConfig {
                 binary: "fish".to_string(),
@@ -118,11 +103,26 @@ fn builtin_shells() -> Vec<(String, ShellConfig)> {
     ]
 }
 
-/// Build the full map of available shells (built-in + custom).
+/// Nushell is embedded via crates — no binary, no wrapper needed.
+/// This ShellConfig is a placeholder for the toggle/shell list.
+fn nushell_config() -> ShellConfig {
+    ShellConfig {
+        binary: String::new(), // not used — embedded
+        wrapper: String::new(), // not used — embedded
+        parser: String::new(), // not used — embedded
+        highlighter: Some("nushell".to_string()),
+        init: None,
+    }
+}
+
+/// Build the full map of available shells (built-in + custom + embedded nushell).
 fn all_shells(config: &ShannonConfig) -> HashMap<String, ShellConfig> {
     let mut map = HashMap::new();
 
-    // Built-in defaults
+    // Embedded nushell (always available)
+    map.insert("nu".to_string(), nushell_config());
+
+    // Built-in wrapped shells
     for (name, shell_config) in builtin_shells() {
         map.insert(name, shell_config);
     }
@@ -183,10 +183,11 @@ impl ShannonConfig {
 
         // No toggle list — return all shells in default order
         let mut result = Vec::new();
-        // Built-in shells first, in their defined order
-        for (name, _) in builtin_shells() {
-            if let Some(config) = available.get(&name) {
-                result.push((name, config.clone()));
+        // Default order: bash, nu (embedded), fish, zsh
+        let default_order = ["bash", "nu", "fish", "zsh"];
+        for name in default_order {
+            if let Some(config) = available.get(name) {
+                result.push((name.to_string(), config.clone()));
             }
         }
         // Custom shells after

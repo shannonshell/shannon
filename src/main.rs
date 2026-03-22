@@ -34,7 +34,7 @@ fn main() -> io::Result<()> {
     let all_shells = config.shells();
     let shells = all_shells
         .into_iter()
-        .filter(|(_, cfg)| repl::shell_available(&cfg.binary))
+        .filter(|(name, cfg)| name == "nu" || repl::shell_available(&cfg.binary))
         .collect::<Vec<_>>();
 
     if shells.is_empty() {
@@ -42,12 +42,8 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
-    // Initialize nushell native engine if nushell is available
-    let nushell_engine = if shells.iter().any(|(name, _)| name == "nu") {
-        Some(NushellEngine::new())
-    } else {
-        None
-    };
+    // Initialize nushell native engine (always embedded)
+    let nushell_engine = Some(NushellEngine::new());
 
     // Run the REPL
     repl::run(shells, config.ai, state, depth, nushell_engine)

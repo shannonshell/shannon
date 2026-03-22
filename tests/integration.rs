@@ -3,6 +3,7 @@ use std::process::Command;
 
 use shannon::config::ShellConfig;
 use shannon::executor::execute_command;
+use shannon::nushell_engine::NushellEngine;
 use shannon::shell::ShellState;
 
 fn has_binary(binary: &str) -> bool {
@@ -23,15 +24,6 @@ fn bash_config() -> ShellConfig {
         .shells()
         .into_iter()
         .find(|(name, _)| name == "bash")
-        .unwrap()
-        .1
-}
-
-fn nushell_config() -> ShellConfig {
-    shannon::config::ShannonConfig::default()
-        .shells()
-        .into_iter()
-        .find(|(name, _)| name == "nu")
         .unwrap()
         .1
 }
@@ -105,40 +97,29 @@ fn test_bash_env_persistence() {
     assert_eq!(state3.env.get("PERSIST_TEST").unwrap(), "hello");
 }
 
-// --- Nushell tests ---
+// --- Nushell tests (embedded via NushellEngine) ---
 
 #[test]
 fn test_nushell_echo() {
-    if !has_binary("nu") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&nushell_config(), "print hello", &state).unwrap();
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&initial_state());
+    let result = engine.execute("echo hello");
     assert_eq!(result.last_exit_code, 0);
 }
 
 #[test]
 fn test_nushell_env_capture() {
-    if !has_binary("nu") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(
-        &nushell_config(),
-        r#"$env.FOO = "test_value_456""#,
-        &state,
-    )
-    .unwrap();
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&initial_state());
+    let result = engine.execute(r#"$env.FOO = "test_value_456""#);
     assert_eq!(result.env.get("FOO").unwrap(), "test_value_456");
 }
 
 #[test]
 fn test_nushell_cwd_capture() {
-    if !has_binary("nu") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&nushell_config(), "cd /tmp", &state).unwrap();
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&initial_state());
+    let result = engine.execute("cd /tmp");
     assert!(
         result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
         "unexpected cwd: {:?}",
@@ -147,13 +128,14 @@ fn test_nushell_cwd_capture() {
 }
 
 #[test]
-fn test_nushell_exit_code() {
-    if !has_binary("nu") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&nushell_config(), "exit 1", &state).unwrap();
-    assert_ne!(result.last_exit_code, 0);
+fn test_nushell_state_persistence() {
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&initial_state());
+    let state1 = engine.execute(r#"$env.PERSIST = "hello""#);
+    assert_eq!(state1.env.get("PERSIST").unwrap(), "hello");
+    // Engine persists state across commands (no re-inject needed)
+    let state2 = engine.execute("$env.PERSIST");
+    assert_eq!(state2.last_exit_code, 0);
 }
 
 // --- Fish tests ---
@@ -254,9 +236,7 @@ fn test_zsh_exit_code() {
 
 #[test]
 fn test_env_bash_to_nushell() {
-    if !has_binary("bash") || !has_binary("nu") {
-        return;
-    }
+    assert!(has_binary("bash"), "bash not found");
 
     let state = initial_state();
 
@@ -264,23 +244,26 @@ fn test_env_bash_to_nushell() {
         execute_command(&bash_config(), "export CROSS=hello_from_bash", &state).unwrap();
     assert_eq!(bash_state.env.get("CROSS").unwrap(), "hello_from_bash");
 
-    let nu_state =
-        execute_command(&nushell_config(), "print $env.CROSS", &bash_state).unwrap();
+    // Nushell is embedded — inject bash state into engine
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&bash_state);
+    let nu_state = engine.execute("echo $env.CROSS");
     assert_eq!(nu_state.last_exit_code, 0);
     assert_eq!(nu_state.env.get("CROSS").unwrap(), "hello_from_bash");
 }
 
 #[test]
 fn test_cwd_bash_to_nushell() {
-    if !has_binary("bash") || !has_binary("nu") {
-        return;
-    }
+    assert!(has_binary("bash"), "bash not found");
 
     let state = initial_state();
 
     let bash_state = execute_command(&bash_config(), "cd /tmp", &state).unwrap();
 
-    let nu_state = execute_command(&nushell_config(), "print (pwd)", &bash_state).unwrap();
+    // Nushell is embedded — inject bash state into engine
+    let mut engine = NushellEngine::new();
+    engine.inject_state(&bash_state);
+    let nu_state = engine.execute("pwd");
     assert!(
         nu_state.cwd == PathBuf::from("/tmp") || nu_state.cwd == PathBuf::from("/private/tmp"),
         "unexpected cwd: {:?}",

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use nu_cli::eval_source;
-use nu_protocol::engine::{EngineState, Stack};
+use nu_protocol::engine::{EngineState, Stack, StateWorkingSet};
 use nu_protocol::{PipelineData, Span, Value};
 
 use crate::shell::ShellState;
@@ -15,10 +15,21 @@ pub struct NushellEngine {
 impl NushellEngine {
     pub fn new() -> Self {
         // Initialize engine with all built-in commands
-        let engine_state = EngineState::new();
-        let engine_state = nu_cmd_lang::add_default_context(engine_state);
-        let engine_state = nu_command::add_shell_command_context(engine_state);
-        let engine_state = nu_cli::add_cli_context(engine_state);
+        let mut engine_state = EngineState::new();
+        engine_state = nu_cmd_lang::add_default_context(engine_state);
+        engine_state = nu_command::add_shell_command_context(engine_state);
+        engine_state = nu_cli::add_cli_context(engine_state);
+
+        // Register commands that nushell's binary adds manually (not via add_*_context)
+        let delta = {
+            let mut working_set = StateWorkingSet::new(&engine_state);
+            working_set.add_decl(Box::new(nu_cli::Print));
+            working_set.add_decl(Box::new(nu_cli::NuHighlight));
+            working_set.render()
+        };
+        engine_state
+            .merge_delta(delta)
+            .expect("failed to register nushell commands");
 
         let stack = Stack::new();
         NushellEngine {

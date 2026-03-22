@@ -1,16 +1,16 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 15: Remove nushell wrapper, use embedded-only
 
 ## Goal
 
-Remove all external nushell (`nu` binary) invocations. Nushell is now
-embedded via crates — the system `nu` binary should never be called.
-The embedded version is always available, regardless of whether `nu` is
-installed.
+Remove all external nushell (`nu` binary) invocations. Nushell is now embedded
+via crates — the system `nu` binary should never be called. The embedded version
+is always available, regardless of whether `nu` is installed.
 
 ## Background
 
@@ -19,10 +19,10 @@ code still exists: nushell is listed in `builtin_shells()` with a binary,
 wrapper, and parser. The `shell_available("nu")` check still looks for the
 system binary. This creates two problems:
 
-1. The system `nu` may be a different version than the embedded 0.111.0,
-   causing confusing behavior.
-2. If `nu` isn't installed, nushell doesn't appear in the rotation — even
-   though it's embedded and always works.
+1. The system `nu` may be a different version than the embedded 0.111.0, causing
+   confusing behavior.
+2. If `nu` isn't installed, nushell doesn't appear in the rotation — even though
+   it's embedded and always works.
 
 ## What changes
 
@@ -40,8 +40,8 @@ system binary. This creates two problems:
 
 #### Description
 
-Remove nushell from the wrapper system. Nushell is always embedded and
-always available. No external `nu` binary is ever invoked.
+Remove nushell from the wrapper system. Nushell is always embedded and always
+available. No external `nu` binary is ever invoked.
 
 #### Changes
 
@@ -50,27 +50,27 @@ always available. No external `nu` binary is ever invoked.
 - Remove nushell entry from `builtin_shells()`. Only bash, fish, zsh remain.
 - Remove `NUSHELL_WRAPPER` const.
 - Keep the nushell parser in `executor.rs` (it's still used by the wrapper
-  fallback config — users who override `[shells.nu]` in config.toml could
-  still use it). Actually no — if someone overrides `[shells.nu]` they'd be
-  calling the system binary, which we want to avoid. Remove the nushell
-  parser too.
+  fallback config — users who override `[shells.nu]` in config.toml could still
+  use it). Actually no — if someone overrides `[shells.nu]` they'd be calling
+  the system binary, which we want to avoid. Remove the nushell parser too.
 
 Wait — we should keep the nushell parser. A user might define a custom shell
-that uses JSON env output (nushell-style). The parser is generic enough.
-Keep `parse_nushell_env` in executor.rs but remove the nushell wrapper.
+that uses JSON env output (nushell-style). The parser is generic enough. Keep
+`parse_nushell_env` in executor.rs but remove the nushell wrapper.
 
 **`src/main.rs`**:
 
 - Always create `NushellEngine` (no conditional on "nu" in shell list)
-- After filtering shells by `shell_available()`, insert "nu" into the list
-  (it's always available since it's embedded)
+- After filtering shells by `shell_available()`, insert "nu" into the list (it's
+  always available since it's embedded)
 - Position "nu" according to the toggle list or default order
 
-Actually simpler: the shell list comes from `config.shells()`. We add a
-special "nu" entry that has no binary (or binary = "embedded") and is
-always included. Then `shell_available()` skips it.
+Actually simpler: the shell list comes from `config.shells()`. We add a special
+"nu" entry that has no binary (or binary = "embedded") and is always included.
+Then `shell_available()` skips it.
 
 Simplest approach:
+
 1. `config.shells()` still returns "nu" (hardcoded, not from builtin_shells)
 2. `main.rs` filters by `shell_available()` but skips "nu" (always available)
 3. `repl.rs` already handles "nu" specially in `run_command()`
@@ -78,8 +78,8 @@ Simplest approach:
 **`src/config.rs`** — add "nu" to the shell list separately:
 
 In `shells()`, after building the list from builtins + user config, always
-ensure "nu" is present with a minimal ShellConfig (highlighter only — no
-binary, wrapper, or parser needed since it uses the engine).
+ensure "nu" is present with a minimal ShellConfig (highlighter only — no binary,
+wrapper, or parser needed since it uses the engine).
 
 **`src/main.rs`** — skip `shell_available` for "nu":
 
@@ -104,3 +104,24 @@ let shells = all_shells
 4. Nushell mode works (pwd, ls, vim, env).
 5. `toggle = ["bash"]` excludes nushell from rotation.
 6. Bash/fish/zsh still work via wrappers.
+
+**Result:** Pass
+
+All verification steps confirmed. 76 tests pass (56 unit + 20 integration).
+Nushell wrapper code removed, `NUSHELL_WRAPPER` const deleted, nushell
+removed from `builtin_shells()`. Nushell is always available as an embedded
+shell regardless of system `nu` binary. Integration tests updated to use
+`NushellEngine` directly.
+
+Additional fix: `print` command was not registered by any `add_*_context()`
+function — nushell's binary registers it manually. Added the same manual
+registration to `NushellEngine::new()`.
+
+#### Conclusion
+
+All external nushell invocations removed. Nushell is embedded-only.
+
+## Conclusion
+
+Issue complete. The system `nu` binary is never called. Nushell is always
+available via the embedded engine, regardless of installation status.
