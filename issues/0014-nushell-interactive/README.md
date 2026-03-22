@@ -238,10 +238,10 @@ command means the command is never the last expression. The `try { }` and
 fix is to run commands bare and sacrifice auto-print for nushell builtins.
 
 However, the bare wrapper has a significant UX cost: nushell builtins like
-`pwd`, `ls`, `date` produce no visible output unless piped to `print`. This
-is not how nushell is supposed to work. Additionally, detection-based
-approaches (e.g. using `which` to check if a command is built-in) fail for
-pipelines containing both built-ins and interactive programs.
+`pwd`, `ls`, `date` produce no visible output unless piped to `print`. This is
+not how nushell is supposed to work. Additionally, detection-based approaches
+(e.g. using `which` to check if a command is built-in) fail for pipelines
+containing both built-ins and interactive programs.
 
 The root cause is that nushell's `-c` mode was not designed for our use case.
 This motivates investigating a fundamentally different architecture.
@@ -250,18 +250,18 @@ This motivates investigating a fundamentally different architecture.
 
 #### Description
 
-The wrapper-based approach for nushell has fundamental limitations. Research
-two alternative architectures that could eliminate the problem entirely:
+The wrapper-based approach for nushell has fundamental limitations. Research two
+alternative architectures that could eliminate the problem entirely:
 
 **Option A: Fork nushell.** Create a fork that is nushell at its core, with
-bash/fish/zsh mode added as a "wrapped shell" feature. Since the base shell
-IS nushell, there's no wrapper — auto-print, vim, and everything else works
+bash/fish/zsh mode added as a "wrapped shell" feature. Since the base shell IS
+nushell, there's no wrapper — auto-print, vim, and everything else works
 natively.
 
 **Option B: Use nushell as a library.** Import nushell's crates (`nu-cli`,
-`nu-engine`, `nu-protocol`, `nu-command`) and build a custom binary that
-uses nushell's REPL directly for nushell mode, while keeping our wrapper
-approach for bash/fish/zsh.
+`nu-engine`, `nu-protocol`, `nu-command`) and build a custom binary that uses
+nushell's REPL directly for nushell mode, while keeping our wrapper approach for
+bash/fish/zsh.
 
 Both options would make nushell a first-class citizen rather than a wrapped
 subprocess.
@@ -274,10 +274,10 @@ Study the vendored nushell source to understand its crate structure:
 
 - What crates exist and what do they provide?
 - Which crates would we need to import for a working nushell REPL?
-- Is `nu-cli` designed to be used as a library, or only as part of the
-  nushell binary?
-- Can we create a custom reedline-based REPL that evaluates nushell commands
-  via `nu-engine`?
+- Is `nu-cli` designed to be used as a library, or only as part of the nushell
+  binary?
+- Can we create a custom reedline-based REPL that evaluates nushell commands via
+  `nu-engine`?
 - What is the public API surface of `nu-cli`, `nu-engine`, `nu-protocol`?
 
 **2. Feasibility of Option A (fork):**
@@ -311,13 +311,13 @@ For each option, assess:
 
 **5. Compare and recommend:**
 
-| Dimension | Current (wrapper) | Fork | Library |
-|-----------|------------------|------|---------|
-| Nushell UX | Broken (no auto-print) | Perfect (native) | Perfect (native) |
-| Maintenance | Low | Very high | Medium |
-| Codebase size | Small | Huge | Medium |
-| Bash/fish/zsh | Works (wrapper) | Needs adding | Works (wrapper) |
-| Upstream sync | N/A | Hard (merge conflicts) | Easy (bump version) |
+| Dimension     | Current (wrapper)      | Fork                   | Library             |
+| ------------- | ---------------------- | ---------------------- | ------------------- |
+| Nushell UX    | Broken (no auto-print) | Perfect (native)       | Perfect (native)    |
+| Maintenance   | Low                    | Very high              | Medium              |
+| Codebase size | Small                  | Huge                   | Medium              |
+| Bash/fish/zsh | Works (wrapper)        | Needs adding           | Works (wrapper)     |
+| Upstream sync | N/A                    | Hard (merge conflicts) | Easy (bump version) |
 
 #### Verification
 
@@ -325,3 +325,132 @@ For each option, assess:
 2. Both options are assessed with concrete feasibility analysis.
 3. Impact on every existing feature is documented.
 4. A clear recommendation is made with reasoning.
+
+#### Research findings
+
+**Nushell crate architecture:**
+
+43 workspace crates. The key ones for us:
+
+| Crate         | Size                 | Purpose                                             |
+| ------------- | -------------------- | --------------------------------------------------- |
+| `nu-protocol` | 122 files, 37K lines | Core types: EngineState, Stack, Value, PipelineData |
+| `nu-engine`   | 20 files, 9K lines   | eval_block, eval_expression, env manipulation       |
+| `nu-parser`   | 12 files, 15K lines  | Parse nushell syntax into AST                       |
+| `nu-cli`      | 53 files, 12K lines  | REPL loop, completions, highlighting                |
+| `nu-command`  | 439 files, 88K lines | ALL built-in commands                               |
+| `nu-cmd-lang` | 60 files, 6K lines   | Language constructs (if, for, while)                |
+
+**Critical API for Option B (library):**
+
+Nushell exposes exactly what we need:
+
+```rust
+// Create engine and register commands
+let mut engine_state = EngineState::new();
+add_command_context(&mut engine_state); // registers all builtins
+
+// Create runtime stack
+let mut stack = Stack::new();
+
+// Evaluate a command
+eval_source(&mut engine_state, &mut stack,
+    b"pwd", "shannon", PipelineData::empty(), false);
+
+// Read resulting env vars
+let env = stack.get_env_vars(&engine_state); // HashMap<String, Value>
+let cwd = stack.get_env_var(&engine_state, "PWD");
+```
+
+This means we can:
+
+1. Create an EngineState + Stack once at startup
+2. Evaluate each user command via `eval_source()`
+3. Read env vars and cwd from the Stack after each command
+4. The output goes directly to the terminal (no capture needed!)
+5. Interactive programs (vim) work because `eval_source` uses inherited stdio
+
+**Feasibility of Option A (fork):**
+
+- Codebase: ~200K lines of Rust across 43 crates
+- We'd need to modify the main binary to add shell-switching
+- Every nushell release requires merging — conflict-prone because we're changing
+  core REPL code
+- Maintenance burden: very high. Nushell releases every 3-4 weeks
+- No known forks exist (bad sign — nobody has tried this)
+- Benefit: full control, can change anything
+- Risk: we become a nushell maintainer, not a shannon developer
+
+**Feasibility of Option B (library):**
+
+- Import `nu-cli`, `nu-engine`, `nu-protocol`, `nu-command` as deps
+- Use `eval_source()` for nushell mode instead of `-c` wrapper
+- Keep our reedline instance for input (we already use reedline)
+- Keep our wrapper approach for bash/fish/zsh (unchanged)
+- Dependency cost: ~~200K lines pulled in, larger binary (~~+20MB?)
+- But: no merge conflicts, upstream updates via version bump
+- `eval_source()` returns an exit code and prints output itself
+- Env vars readable from Stack after evaluation
+- EngineState persists across commands (like a real nushell session)
+
+**Impact on existing features:**
+
+| Feature                        | Fork                                           | Library                               |
+| ------------------------------ | ---------------------------------------------- | ------------------------------------- |
+| Wrapper system (bash/fish/zsh) | Must reimplement inside nushell                | Unchanged — only nushell mode changes |
+| config.toml                    | Must integrate with nushell config             | Unchanged                             |
+| Fish completions               | Must integrate with nushell completion system  | Unchanged                             |
+| Syntax highlighting            | Nushell's own (different from our tree-sitter) | Keep tree-sitter OR use nushell's     |
+| History (SQLite)               | Must integrate with nushell history            | Unchanged (shared reedline)           |
+| AI mode                        | Must integrate into nushell REPL               | Unchanged                             |
+| Shell switching                | Must add to nushell (doesn't exist)            | Unchanged                             |
+
+**The decisive difference:** Option B changes ONE thing — how nushell commands
+are evaluated. Everything else stays the same. Option A changes EVERYTHING.
+
+**Comparison:**
+
+| Dimension             | Current (wrapper)                  | Fork                   | Library             |
+| --------------------- | ---------------------------------- | ---------------------- | ------------------- |
+| Nushell UX            | Broken (no auto-print, vim issues) | Perfect                | Perfect             |
+| Bash/fish/zsh         | Works                              | Must reimplement       | Works               |
+| Maintenance           | Low                                | Very high              | Medium              |
+| Binary size           | ~10MB                              | ~30MB+                 | ~30MB+              |
+| Upstream sync         | N/A                                | Hard (merge conflicts) | Easy (version bump) |
+| Implementation effort | Done                               | Months                 | Days to weeks       |
+| Risk                  | Low                                | Very high              | Medium              |
+| All existing features | Work                               | Must rewrite most      | All work unchanged  |
+
+**Recommendation: Option B (library).**
+
+The library approach solves the nushell UX problem completely while preserving
+everything we've built. The implementation is straightforward:
+
+1. Add nushell crates as dependencies
+2. Create a `NushellEngine` struct that holds `EngineState` + `Stack`
+3. Initialize it at startup (register commands, load config)
+4. In the main loop, when active shell is nushell, call `eval_source()` instead
+   of `execute_command()`
+5. After eval, read env vars from Stack and update `ShellState`
+
+The wrapper system stays for bash/fish/zsh. Config.toml stays. Fish completions
+stay. History stays. AI mode stays. Shell switching stays. Only the nushell
+execution path changes.
+
+The binary size increase (~20MB from nushell's command crate) is the main cost.
+This is acceptable for the UX improvement.
+
+**Result:** Pass
+
+Both options thoroughly researched. Option B (library) is clearly recommended.
+
+#### Conclusion
+
+The nushell `-c` wrapper has fundamental UX limitations that cannot be solved
+within the wrapper model. Using nushell as a library (Option B) eliminates all
+issues: auto-print works, vim works, env capture works — because we use
+nushell's own evaluation engine instead of `-c` mode.
+
+The fork approach (Option A) solves the same problem but at catastrophic
+maintenance cost. The library approach achieves the same result while preserving
+our entire existing architecture.
