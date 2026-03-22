@@ -57,6 +57,82 @@ pub fn execute_command(
     Ok(new_state)
 }
 
+/// Run the optional startup script at `~/.config/shannon/config.sh`.
+/// Captures the resulting environment and returns an updated ShellState.
+/// If the file doesn't exist or fails, returns the original state.
+pub fn run_startup_script(state: ShellState) -> ShellState {
+    run_startup_script_from(state, None)
+}
+
+/// Inner implementation that accepts an optional config path override (for testing).
+fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> ShellState {
+    let config_file = config_path.unwrap_or_else(|| {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("~/.config"))
+            .join("shannon/config.sh")
+    });
+
+    if !config_file.exists() {
+        return state;
+    }
+
+    let config_str = config_file.to_string_lossy();
+
+    let temp_file = match tempfile::Builder::new()
+        .prefix("shannon_startup_")
+        .suffix(".env")
+        .tempfile()
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("shannon: failed to create temp file for config.sh: {e}");
+            return state;
+        }
+    };
+    let temp_path = temp_file.path().to_string_lossy().to_string();
+
+    let wrapper = build_bash_wrapper(&format!("source '{config_str}'"), &temp_path);
+
+    let status = Command::new("bash")
+        .args(["-c", &wrapper])
+        .env_clear()
+        .envs(&state.env)
+        .current_dir(&state.cwd)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status();
+
+    match status {
+        Ok(s) if !s.success() => {
+            eprintln!(
+                "shannon: config.sh exited with code {} (continuing with inherited env)",
+                s.code().unwrap_or(-1)
+            );
+            return state;
+        }
+        Err(e) => {
+            eprintln!("shannon: failed to run config.sh: {e}");
+            return state;
+        }
+        _ => {}
+    }
+
+    match std::fs::read_to_string(&temp_path)
+        .ok()
+        .and_then(|contents| parse_bash_env(&contents))
+    {
+        Some((env, _cwd)) => ShellState {
+            env,
+            cwd: state.cwd,
+            last_exit_code: 0,
+        },
+        None => {
+            eprintln!("shannon: failed to parse config.sh output (continuing with inherited env)");
+            state
+        }
+    }
+}
+
 fn build_bash_wrapper(command: &str, temp_path: &str) -> String {
     format!(
         r#"{command}
@@ -313,5 +389,73 @@ __SHANNON_CWD=/"#;
         assert!(wrapper.contains("/tmp/state.env"));
         assert!(wrapper.contains("__SHANNON_CWD"));
         assert!(wrapper.contains("to json"));
+    }
+
+    // --- run_startup_script ---
+
+    fn make_startup_state(dir: &std::path::Path) -> ShellState {
+        let mut env = HashMap::new();
+        env.insert("HOME".to_string(), dir.to_string_lossy().to_string());
+        env.insert("PATH".to_string(), "/usr/bin:/bin".to_string());
+        ShellState {
+            env,
+            cwd: dir.to_path_buf(),
+            last_exit_code: 0,
+        }
+    }
+
+    #[test]
+    fn test_run_startup_script_with_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = dir.path().join("config.sh");
+        std::fs::write(&config, "export SHANNON_TEST=from_config\n").unwrap();
+        let state = make_startup_state(dir.path());
+        let result = run_startup_script_from(state, Some(config));
+        assert_eq!(result.env.get("SHANNON_TEST").unwrap(), "from_config");
+    }
+
+    #[test]
+    fn test_run_startup_script_missing_file() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = dir.path().join("config.sh"); // does not exist
+        let state = make_startup_state(dir.path());
+        let original_env = state.env.clone();
+        let result = run_startup_script_from(state, Some(config));
+        assert_eq!(result.env, original_env);
+    }
+
+    #[test]
+    fn test_run_startup_script_bad_script() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = dir.path().join("config.sh");
+        std::fs::write(&config, "exit 1\n").unwrap();
+        let state = make_startup_state(dir.path());
+        let original_env = state.env.clone();
+        let result = run_startup_script_from(state, Some(config));
+        assert_eq!(result.env, original_env);
+    }
+
+    #[test]
+    fn test_run_startup_script_preserves_existing_env() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = dir.path().join("config.sh");
+        std::fs::write(&config, "export NEW_VAR=hello\n").unwrap();
+        let state = make_startup_state(dir.path());
+        let result = run_startup_script_from(state, Some(config));
+        assert_eq!(result.env.get("NEW_VAR").unwrap(), "hello");
+        assert!(result.env.contains_key("HOME"), "HOME should still exist");
+        assert!(result.env.contains_key("PATH"), "PATH should still exist");
+    }
+
+    #[test]
+    fn test_run_startup_script_path_append() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let config = dir.path().join("config.sh");
+        std::fs::write(&config, "export PATH=\"$PATH:/custom/bin\"\n").unwrap();
+        let state = make_startup_state(dir.path());
+        let result = run_startup_script_from(state, Some(config));
+        let path = result.env.get("PATH").unwrap();
+        assert!(path.contains("/custom/bin"), "PATH should contain /custom/bin, got: {path}");
+        assert!(path.contains("/usr/bin"), "PATH should still contain /usr/bin, got: {path}");
     }
 }

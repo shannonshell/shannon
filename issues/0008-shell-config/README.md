@@ -172,3 +172,169 @@ where configuration responsibility belongs.
 3. Each design option (A through D) has concrete pros/cons based on real
    behavior, not assumptions.
 4. A recommendation is made for which approach to implement in Experiment 2.
+
+#### Results
+
+**1. Shannon's current environment flow:**
+
+- `ShellState::from_current_env()` calls `std::env::vars()`, which captures
+  every env var from the launching process. If shannon is launched from a
+  fully-configured terminal, the initial state is complete.
+- `execute_command()` calls `env_clear()` then `envs(&state.env)`. Sub-shells
+  see ONLY what shannon provides. They never load their own rc files.
+- Tested: the current shell has 58 env vars, and shannon inherits all of them.
+  PATH has 20 entries, matching the launching shell exactly.
+
+This confirms: **shannon owns the environment**. Sub-shells are completely
+dependent on what shannon gives them.
+
+**2. Bash rc file behavior under `-c`:**
+
+Tested and confirmed against vendored bash source (`shell.c:1147`):
+
+| Invocation        | Login files | .bashrc | BASH_ENV |
+| ----------------- | ----------- | ------- | -------- |
+| `bash -c cmd`     | No          | No      | Yes      |
+| `bash -l -c cmd`  | Yes         | No      | Yes      |
+| `bash -i -c cmd`  | No          | Yes     | No       |
+| `bash -il -c cmd` | Yes         | Yes     | No       |
+
+Key finding: **`BASH_ENV` is sourced by `bash -c`**. This is bash's intended
+mechanism for configuring non-interactive shells. Shannon could set `BASH_ENV`
+to point to a user config file, and bash would source it before every command.
+
+`bash -l -c 'export -p'` captures a full login environment in ~5ms. This is fast
+enough to run once at startup.
+
+**3. Nushell rc file behavior under `-c`:**
+
+Tested and confirmed against vendored nushell source (`src/run.rs:35-72`):
+
+| Invocation                 | env.nu       | config.nu | Plugins |
+| -------------------------- | ------------ | --------- | ------- |
+| `nu -c cmd`                | Default only | No        | Yes     |
+| `nu -n -c cmd`             | No           | No        | No      |
+| `nu -l -c cmd`             | Custom       | Custom    | Yes     |
+| `nu --env-config F -c cmd` | Custom F     | No        | Yes     |
+
+Key finding: `nu -c` loads only the **built-in default** env.nu, not the user's
+custom one. The user's `~/.config/nushell/env.nu` is skipped. To load it, use
+`--env-config` or `-l`.
+
+Tested: `nu -c` gives 64 env columns, `nu -n -c` gives 62. The difference is the
+built-in defaults (NU_LIB_DIRS, etc.).
+
+**4. Startup script approach evaluation:**
+
+Tested: `BASH_ENV=/path/to/file bash -c 'export -p'` works — the file is sourced
+and its exports are captured. This is a viable mechanism for per-command config.
+
+However, for a one-time startup capture, `bash -l -c 'export -p'` takes ~5ms and
+gives the full login environment. This could seed `ShellState` at launch.
+
+A `.env` file would be simple KEY=VALUE parsing — trivial to implement in Rust.
+
+**Result:** Pass
+
+#### Conclusion
+
+The environment is shannon's responsibility. Sub-shells see only what shannon
+provides via `env_clear()` + `envs()`. The sub-shells' own rc files are
+irrelevant — they're never loaded under `-c` mode anyway.
+
+**Recommendation for Experiment 2:**
+
+Use a layered approach:
+
+1. **Inherit the launching shell's environment** (current behavior via
+   `from_current_env()`). This handles the common case where shannon is launched
+   from a configured terminal.
+
+2. **Support an optional shannon startup script** at `~/.config/shannon/env.sh`
+   (or `env.nu`, or any supported shell). If this file exists, run it once at
+   startup using the existing wrapper mechanism and merge the resulting env vars
+   into `ShellState`. This handles the case where the user wants extra
+   configuration specific to shannon, or launches shannon from a bare context.
+
+3. **Do NOT source per-shell rc files on every command.** The per-command
+   overhead is unnecessary and risks side effects. Shannon's `env_clear()`
+   design means the sub-shells' rc files can't help anyway — they'd need to be
+   sourced inside the wrapper, adding latency to every keystroke.
+
+The startup script approach (Option D from the background) is the best fit
+because:
+
+- It runs once, not per-command (fast).
+- It uses any shell the user prefers (not locked to bash or nushell).
+- It's optional — users who launch from a configured terminal need nothing.
+- It reuses the existing wrapper/capture mechanism.
+- `BASH_ENV` could optionally be set to this file for bash sub-shells, giving
+  them access to the config without modifying the wrapper.
+
+### Experiment 2: Implement config.sh startup script
+
+#### Description
+
+Add support for an optional `~/.config/shannon/config.sh` that runs once at
+startup via bash. If the file exists, shannon executes it using the existing
+bash wrapper mechanism, captures the resulting environment, and merges it into
+the initial `ShellState`. If the file doesn't exist, behavior is unchanged.
+
+The script is always bash — shannon requires bash, and the primary use case
+is `export PATH="$PATH:/new/path"` which bash handles perfectly. Users who
+want to source their `.bashrc` can write `source ~/.bashrc` in `config.sh`
+as a deliberate choice.
+
+#### Changes
+
+**`src/main.rs`** — after `ShellState::from_current_env()`, call a new
+function to run the startup script:
+
+```rust
+let mut state = ShellState::from_current_env();
+state = run_startup_script(state);
+```
+
+**`src/executor.rs`** — add `pub fn run_startup_script(state: ShellState) -> ShellState`:
+
+1. Build the config path: `dirs::config_dir().join("shannon/config.sh")`.
+2. If the file doesn't exist, return `state` unchanged.
+3. Build a bash wrapper that sources the file: `source '/path/to/config.sh'`.
+   Use the existing `build_bash_wrapper` with the source command as the
+   "user command".
+4. Run it with `Command::new("bash").args(["-c", &wrapper])`, injecting the
+   current `state.env` and `state.cwd` (same pattern as `execute_command`).
+5. Parse the captured env with `parse_bash_env`.
+6. Return the new `ShellState` with merged env vars, preserving the original
+   cwd and exit code 0.
+7. If anything fails (bad script, parse error), print a warning to stderr
+   and return the original state. Shannon should never fail to start because
+   of a broken config.sh.
+
+**`src/executor.rs` tests** — add:
+
+- `test_run_startup_script_with_file` — create a temp dir with a `config.sh`
+  that exports `SHANNON_TEST=from_config`. Verify the returned state contains
+  the new var.
+- `test_run_startup_script_missing_file` — no config.sh exists. Verify state
+  is returned unchanged.
+- `test_run_startup_script_bad_script` — config.sh contains `exit 1`. Verify
+  shannon doesn't crash, returns original state, and prints a warning.
+- `test_run_startup_script_preserves_existing_env` — config.sh exports a new
+  var. Verify existing vars (like HOME) are still present in the result.
+- `test_run_startup_script_path_append` — config.sh does
+  `export PATH="$PATH:/custom/bin"`. Verify the returned PATH contains
+  `/custom/bin`.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes — all new and existing tests green.
+3. Create `~/.config/shannon/config.sh` with
+   `export SHANNON_TEST="it works"`. Run `cargo run`, type
+   `echo $SHANNON_TEST` — prints "it works".
+4. Delete `config.sh`. Run `cargo run` — starts normally, no errors.
+5. Create a broken `config.sh` with `exit 1`. Run `cargo run` — prints a
+   warning, starts normally.
+6. Create `config.sh` with `export PATH="$PATH:/test/path"`. Run `cargo run`,
+   type `echo $PATH` — includes `/test/path`.

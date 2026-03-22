@@ -8,7 +8,7 @@ use reedline::{
 };
 
 use shannon::completer::FileCompleter;
-use shannon::executor::execute_command;
+use shannon::executor::{execute_command, run_startup_script};
 use shannon::highlighter::TreeSitterHighlighter;
 use shannon::prompt::ShannonPrompt;
 use shannon::shell::{ShellKind, ShellState};
@@ -77,7 +77,7 @@ fn main() -> io::Result<()> {
     }
 
     let mut active_shell = shells[0];
-    let mut state = ShellState::from_current_env();
+    let mut state = run_startup_script(ShellState::from_current_env());
     let mut editor = build_editor(active_shell);
 
     loop {
