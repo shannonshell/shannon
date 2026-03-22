@@ -26,59 +26,55 @@ modifying `shell.rs`, `executor.rs`, `highlighter.rs`, `main.rs`, and
 `prompt.rs`. This means users can't add shells (like zsh, elvish, tcsh) without
 recompiling.
 
-### What changes
+### Design
 
-**Rename `config.sh` → `env.sh`** — clearer name. It's an environment setup
-script, not a shannon config file. Shannon should support both names during a
-transition period (check `env.sh` first, fall back to `config.sh`).
+#### No files are generated
 
-**Add `config.toml`** — static configuration for shannon itself. Shell
-definitions use configurable wrapper templates with `{{placeholder}}` syntax:
+Shannon does NOT write config files to disk. Defaults live in the binary.
+If no `config.toml` exists, shannon works exactly as it does today. The user
+only creates files when they want to change something.
+
+This avoids the upgrade problem: when shannon ships a better default wrapper,
+users who haven't customized get the improvement automatically. Users who have
+customized are in control of their own config.
+
+Documentation shows what the defaults look like so users can copy and modify.
+
+#### Two config files, two purposes
+
+| File | Purpose | Format |
+|------|---------|--------|
+| `env.sh` (was `config.sh`) | Environment setup (PATH, API keys) | Bash script |
+| `config.toml` | Shannon settings (shells, defaults) | TOML |
+
+`env.sh` runs once at startup to set up the environment. `config.toml` is
+read once at startup to configure shannon itself. They serve completely
+different purposes and should not be conflated.
+
+Shannon checks `env.sh` first, falls back to `config.sh` for backward
+compatibility.
+
+#### config.toml structure
+
+The config is **partial by default**. The user only specifies what they want
+to change. Everything else uses built-in defaults.
+
+Minimal example — just change the default shell:
+
+```toml
+default_shell = "nu"
+```
+
+Full example — add zsh and customize:
 
 ```toml
 default_shell = "nu"
 
-[shells.bash]
-binary = "bash"
-init = "shells/bash/init.sh"
-wrapper = """
-{{init}}
-{{command}}
-__shannon_ec=$?
-(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{{temp_path}}'
-exit $__shannon_ec
-"""
-parser = "bash"
-
-[shells.nu]
-binary = "nu"
-init = "shells/nu/init.nu"
-wrapper = """
-{{init}}
-let __shannon_out = (try { {{command}} } catch { |e| $e.rendered | print -e; null })
-if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") { $__shannon_out | print }
-let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
-$env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{{temp_path}}'
-"""
-parser = "nushell"
-
-[shells.fish]
-binary = "fish"
-init = "shells/fish/init.fish"
-wrapper = """
-{{init}}
-{{command}}
-set __shannon_ec $status
-env > '{{temp_path}}'
-echo "__SHANNON_CWD="(pwd) >> '{{temp_path}}'
-echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
-exit $__shannon_ec
-"""
-parser = "env"
-
 [shells.zsh]
 binary = "zsh"
 init = "shells/zsh/init.zsh"
+highlighter = "bash"
+parser = "env"
 wrapper = """
 {{init}}
 {{command}}
@@ -88,13 +84,14 @@ echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
 echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
 exit $__shannon_ec
 """
-parser = "env"
 ```
 
-### Wrapper templates
+This adds zsh to the rotation alongside the built-in shells. To override a
+built-in shell's wrapper, redefine its section (e.g. `[shells.bash]`).
 
-Each shell defines its own wrapper script as a TOML string with three
-placeholders:
+#### Wrapper templates
+
+Each shell's wrapper is a string with three placeholders:
 
 | Placeholder | Replaced with |
 |-------------|---------------|
@@ -102,18 +99,15 @@ placeholders:
 | `{{temp_path}}` | Path to the temp file for env capture |
 | `{{init}}` | Contents of the init script (or empty) |
 
-The wrapper is responsible for:
-1. Running the init script (if any)
-2. Running the user's command
-3. Capturing environment variables, cwd, and exit code to the temp file
+The wrapper is responsible for running the command, capturing env/cwd/exit
+code to the temp file. The user can see exactly what runs.
 
-This makes each shell's behavior explicit and transparent. The user can see
-exactly what runs and modify it if needed.
+Built-in defaults match what's currently hardcoded in `executor.rs`.
 
-### Per-shell init scripts
+#### Per-shell init scripts
 
-Optional scripts that run before each command inside the wrapper. These are
-external files so editors can highlight them with the correct syntax:
+Optional scripts that run before each command inside the wrapper. External
+files with the correct extension so editors highlight them:
 
 ```
 ~/.config/shannon/shells/bash/init.sh
@@ -122,9 +116,9 @@ external files so editors can highlight them with the correct syntax:
 ~/.config/shannon/shells/zsh/init.zsh
 ```
 
-The `init` field in config.toml is a path relative to the config directory.
-If the file doesn't exist or the field is omitted, `{{init}}` expands to
-nothing.
+The `init` field is a path relative to the config directory. If the file
+doesn't exist or the field is omitted, `{{init}}` expands to nothing. No
+error.
 
 Use cases:
 - Load nushell standard library: `use std *`
@@ -132,49 +126,47 @@ Use cases:
 - Define fish abbreviations
 - Set up shell-specific aliases
 
-### Env parsers
+#### Env parsers
 
-The `parser` field tells shannon how to read the temp file. Three parsers
-cover all cases:
+The `parser` field tells shannon how to read the temp file:
 
 | Parser | Format | Used by |
 |--------|--------|---------|
 | `bash` | `declare -x KEY="VALUE"` lines + `__SHANNON_*` markers | bash |
 | `nushell` | JSON object from `$env \| to json` | nushell |
-| `env` | `KEY=VALUE` lines (from `env` command) + `__SHANNON_*` markers | fish, zsh, and any POSIX shell |
+| `env` | `KEY=VALUE` lines (from `env` command) + `__SHANNON_*` markers | fish, zsh, any POSIX shell |
 
 The `env` parser is the generic default. Most new shells will use it.
 
-### Syntax highlighting
+#### Syntax highlighting
 
-Tree-sitter grammars are compile-time dependencies — they can't be added via
-config. Shannon ships grammars for bash, nushell, and fish. For other shells,
-a `highlighter` field maps to a built-in grammar:
+Tree-sitter grammars are compile-time dependencies. Shannon ships grammars for
+bash, nushell, and fish. The `highlighter` field maps a shell to a built-in
+grammar:
 
 ```toml
 [shells.zsh]
 highlighter = "bash"  # use bash grammar for zsh (close enough)
 ```
 
-If omitted, no highlighting (plain text). Valid values: `bash`, `nushell`,
-`fish`, or omitted for none.
+Valid values: `bash`, `nushell`, `fish`. If omitted, no highlighting (plain
+text input). The shell still works — it just doesn't have colored input.
 
-### Shell colors
+#### Error handling
 
-Currently each shell has a hardcoded prompt color (bash=green, nushell=cyan,
-fish=yellow). Options:
+| Situation | Behavior |
+|-----------|----------|
+| No `config.toml` | Built-in defaults (current behavior) |
+| Bad TOML syntax | Error message, exit |
+| Shell missing `binary` | Error, skip that shell |
+| Shell missing `wrapper` | Error, skip that shell |
+| Shell binary not installed | Silently skip |
+| Init file missing | Silent, `{{init}}` is empty |
+| Init file has errors | Command fails, user sees the error |
+| Wrapper produces unparseable output | Fall back to previous state |
+| No shells available | Error message, exit |
 
-1. **Drop per-shell colors** — use a single prompt color for all shells. The
-   `[shell_name]` text already identifies which shell is active.
-2. **Make colors configurable in TOML** — `color = "green"` per shell.
-3. **Auto-assign colors** — cycle through a palette based on shell order.
-
-Decision can be made during implementation.
-
-### Config file location
-
-`~/.config/shannon/config.toml` — same directory as `env.sh` and `history.db`.
-Respects `XDG_CONFIG_HOME`.
+Principle: config errors are loud, runtime errors are graceful.
 
 ### What TOML replaces
 
@@ -185,11 +177,12 @@ Respects `XDG_CONFIG_HOME`.
 | Hardcoded prompt colors in `prompt.rs` | Either dropped or configurable |
 | Per-shell wrapper functions in `executor.rs` | Wrapper templates in config.toml |
 | No per-shell init scripts | `init` field + external files |
+| `config.sh` name | `env.sh` (with `config.sh` fallback) |
 
 ### Migration
 
-- `config.sh` continues to work (checked as fallback if `env.sh` doesn't exist)
+- `config.sh` continues to work (checked as fallback if `env.sh` doesn't
+  exist)
 - `SHANNON_DEFAULT_SHELL` env var continues to work (overridden by config.toml
   if both are set)
-- If no config.toml exists, shannon uses built-in defaults matching current
-  behavior (bash, nushell, fish with their current wrappers)
+- If no config.toml exists, built-in defaults match current behavior exactly
