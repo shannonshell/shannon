@@ -9,57 +9,69 @@ Shannon spawns a fresh subprocess for every command. There are no persistent
 shell sessions. When you type `ls -la`, shannon runs:
 
 ```
-bash -c '<wrapper script containing ls -la>'
+<shell> -c '<wrapper script containing ls -la>'
 ```
 
 The subprocess inherits stdio directly — you see output in real time, and
 interactive commands like `vim` or `htop` work normally.
 
-After the subprocess exits, shannon reads the captured state and uses it for the
-next command.
+After the subprocess exits, shannon reads the captured state and uses it for
+the next command.
 
-## Wrapper Scripts
+## Wrapper Templates
 
-Shannon doesn't run your command directly. It wraps it in a script that captures
-state after execution.
+Shannon doesn't run your command directly. It wraps it in a script that
+captures state after execution. Each shell has its own wrapper template
+defined in the built-in defaults or in `config.toml`. Templates use
+`{{placeholder}}` syntax:
 
-### Bash Wrapper
+| Placeholder | Replaced with |
+|-------------|---------------|
+| `{{command}}` | The user's command |
+| `{{temp_path}}` | Path to the temp file for env capture |
+| `{{init}}` | Contents of the per-shell init script (or empty) |
+
+### Bash Wrapper (built-in default)
 
 ```bash
-<your command>
+{{init}}
+{{command}}
 __shannon_ec=$?
-(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '/tmp/shannon_XXXX.env'
+(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{{temp_path}}'
 exit $__shannon_ec
 ```
 
-1. Run the user's command.
-2. Save the exit code.
-3. Dump all exported variables (`export -p`), the cwd, and the exit code to a
-   temp file.
-4. Exit with the original exit code.
+### Fish/Zsh Wrapper (generic POSIX pattern)
 
-### Nushell Wrapper
-
-```nushell
-let __shannon_out = (try { <your command> } catch { |e| $e.rendered | print -e; null })
-if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") { $__shannon_out | print }
-let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) { $env.LAST_EXIT_CODE } else { 0 })
-$env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '/tmp/shannon_XXXX.env'
+```
+{{init}}
+{{command}}
+__shannon_ec=$?
+env > '{{temp_path}}'
+echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
+echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
+exit $__shannon_ec
 ```
 
-1. Run the user's command inside try/catch (nushell errors are exceptions).
-2. Print the result explicitly (nushell's `echo` returns a value, it doesn't
-   print).
-3. Capture the entire `$env` as JSON, including cwd and exit code markers.
+Most POSIX shells can use this pattern. The `env` command outputs `KEY=VALUE`
+lines, which shannon's generic `env` parser reads.
+
+### Nushell Wrapper (special case)
+
+Nushell has unique syntax and captures env as JSON via `$env | to json`. See
+the built-in default in `src/config.rs`.
 
 ## State Capture and Parsing
 
-After the subprocess exits, shannon reads the temp file and parses it:
+After the subprocess exits, shannon reads the temp file using the parser
+specified for that shell:
 
-- **Bash:** parses `declare -x KEY="VALUE"` lines, unescaping quotes and
-  backslashes.
-- **Nushell:** parses JSON. List values (like PATH) are joined with `:`.
-  Non-string values are dropped.
+- **`bash` parser:** reads `declare -x KEY="VALUE"` lines, unescaping quotes
+  and backslashes.
+- **`nushell` parser:** reads JSON. List values (like PATH) are joined with
+  `:`. Non-string values are dropped.
+- **`env` parser:** reads `KEY=VALUE` lines from the `env` command. Used by
+  fish, zsh, and any POSIX shell.
 
 Special markers (`__SHANNON_CWD`, `__SHANNON_EXIT`) are extracted and removed
 from the env map. The resulting state — env vars, cwd, exit code — is stored
@@ -67,6 +79,17 @@ and injected into the next subprocess.
 
 If parsing fails, the previous state is preserved. Shannon doesn't crash on a
 bad parse — it degrades gracefully.
+
+## Configuration
+
+Shannon has two configuration files with distinct purposes:
+
+- **`env.sh`** — a bash script that runs once at startup to set up PATH, env
+  vars, and API keys. This is for importing your existing environment.
+- **`config.toml`** — static settings for shannon itself: default shell, custom
+  shell definitions, wrapper templates, init scripts.
+
+Neither file is required. Without them, shannon uses built-in defaults.
 
 ## The Strings-Only Boundary
 
@@ -102,11 +125,12 @@ Shannon uses [reedline](https://github.com/nushell/reedline) as its line
 editor. Reedline provides:
 
 - Emacs keybindings
-- File-backed history with reverse search
+- SQLite-backed history with cross-instance sharing
+- Autosuggestions (ghost text from history)
 - Syntax highlighting via the `Highlighter` trait
 - Tab completion via the `Completer` trait and menus
 - Bracketed paste mode
 
 Shannon implements custom `Highlighter` and `Completer` traits backed by
-tree-sitter and filesystem traversal, respectively. The Shift+Tab shell switch
-is a custom keybinding that triggers a host command.
+tree-sitter and fish completion files, respectively. The Shift+Tab shell
+switch is a custom keybinding that triggers a host command.

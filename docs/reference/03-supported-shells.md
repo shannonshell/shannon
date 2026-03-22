@@ -1,26 +1,27 @@
 # Supported Shells
 
-Shannon currently supports three shells. More can be added.
+Shannon ships with built-in support for three shells. Any additional shell can
+be added via [config.toml](02-configuration.md).
 
-## Bash
+## Built-in Shells
+
+### Bash
 
 - **Binary:** `bash`
-- **Detection:** `bash --version` at startup
 - **Highlighting:** tree-sitter-bash grammar
+- **Parser:** `bash` (reads `declare -x` output)
 
-Bash is available on virtually every Unix system. Shannon wraps commands with
-`bash -c` and captures state via `export -p`.
+Bash is available on virtually every Unix system.
 
-## Nushell
+### Nushell
 
 - **Binary:** `nu`
-- **Detection:** `nu --version` at startup
 - **Highlighting:** tree-sitter-nu grammar
+- **Parser:** `nushell` (reads JSON from `$env | to json`)
 
-Nushell must be installed separately. Shannon wraps commands with `nu -c` and
-captures state as JSON via `$env | to json`.
+Nushell must be installed separately.
 
-### Nushell Quirks
+#### Nushell Quirks
 
 - **PATH is a list** in nushell. Shannon joins it with `:` (`;` on Windows)
   when capturing state, so it works correctly in bash.
@@ -29,28 +30,53 @@ captures state as JSON via `$env | to json`.
 - **Output rendering** — nushell's `echo` returns a value rather than
   printing. Shannon's wrapper uses `print` to render output to the terminal.
 
-## Fish
+### Fish
 
 - **Binary:** `fish`
-- **Detection:** `fish --version` at startup
 - **Highlighting:** tree-sitter-fish grammar
+- **Parser:** `env` (reads `KEY=VALUE` output)
 
-Fish must be installed separately (`brew install fish` on macOS). Shannon wraps
-commands with `fish -c` and captures state via the `env` command (standard
-`KEY=VALUE` format).
+Fish must be installed separately (`brew install fish` on macOS).
 
 Fish is also the source of shannon's command-aware completions — see
 [Tab Completion](../features/05-tab-completion.md).
 
-## Adding a New Shell
+## Adding a Custom Shell
 
-Adding a shell requires changes in four files:
+Any shell that supports `-c` for command execution can be added via
+`config.toml`. No code changes or recompilation needed.
 
-1. **`src/shell.rs`** — add a variant to `ShellKind`, implement `display_name`,
-   `binary`, and `history_file`.
-2. **`src/executor.rs`** — add a wrapper script builder (like
-   `build_bash_wrapper`) that runs the command and captures env vars, cwd, and
-   exit code to a temp file. Add a parser for the captured output.
-3. **`src/highlighter.rs`** — add a color mapping function and a tree-sitter
-   grammar dependency (if one exists).
-4. **`src/main.rs`** — add the shell to the detection list.
+Example — adding zsh:
+
+```toml
+[shells.zsh]
+binary = "zsh"
+highlighter = "bash"
+parser = "env"
+wrapper = """
+{{init}}
+{{command}}
+__shannon_ec=$?
+env > '{{temp_path}}'
+echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
+echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
+exit $__shannon_ec
+"""
+```
+
+The wrapper template captures the environment after each command. The `env`
+parser reads standard `KEY=VALUE` output, which works for most POSIX shells.
+Setting `highlighter = "bash"` uses the bash grammar for syntax highlighting,
+which is close enough for zsh.
+
+See [Configuration](02-configuration.md) for all config options.
+
+## Shell Detection
+
+Shannon checks each shell's binary at startup using `<binary> --version`. If
+the binary isn't found in PATH, the shell is silently skipped. If no shells
+are available, shannon exits with an error.
+
+Shells appear in the Shift+Tab rotation in this order: built-in shells first
+(bash, nushell, fish), then custom shells in config.toml order. The
+`default_shell` setting moves the preferred shell to the front.
