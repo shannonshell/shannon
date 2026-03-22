@@ -260,3 +260,239 @@ reasoning. The output should be a clear architecture proposal covering:
 2. Every open question above has a proposed answer with reasoning.
 3. The architecture proposal is concrete enough to implement in experiment 2.
 4. MVP scope is clearly defined — what's in, what's deferred.
+
+#### Research findings
+
+**Summary of studied repos:**
+
+| Repo     | Stack      | Prompt                             | History                | Compaction                           | Tools                          | Confirmation                         |
+| -------- | ---------- | ---------------------------------- | ---------------------- | ------------------------------------ | ------------------------------ | ------------------------------------ |
+| Codex    | Rust + TS  | Template files, per-model variants | JSONL on disk          | LLM-driven summary                   | shell, patch, web search, MCP  | 3 modes: suggest/auto-edit/full-auto |
+| OpenCode | TypeScript | Dynamic, plugin-hookable           | SQLite via Drizzle ORM | Prune tool output, then LLM summary  | Skills (SKILL.md), agent modes | Agent-mode permissions               |
+| Pi       | TypeScript | Static, simple composition         | JSONL on disk          | Prune + LLM summary, manual /compact | read, bash, edit, write        | None (extension-based)               |
+
+**Key patterns across all three:**
+
+1. **Conversation history on disk** — all three persist chat history (JSONL or
+   SQLite). None use memory-only.
+2. **Two-stage compaction** — prune tool outputs first (cheap), then LLM
+   summarization (expensive). Triggered by context overflow.
+3. **System prompt = template + context** — all inject shell/cwd/OS info into
+   the system prompt alongside static instructions.
+4. **Streaming** — all three stream responses. Even for short responses, it
+   provides visual feedback that something is happening.
+5. **Provider abstraction** — all support multiple providers via a common
+   interface (though the abstraction complexity varies hugely).
+6. **Tools are optional for MVP** — Pi's simplest mode is just conversation with
+   no tools. Codex and OpenCode add tools incrementally.
+
+**Anthropic Messages API (minimal call):**
+
+```
+POST https://api.anthropic.com/v1/messages
+Headers:
+  x-api-key: <key>
+  anthropic-version: 2023-06-01
+  content-type: application/json
+
+Body:
+{
+  "model": "claude-sonnet-4-20250514",
+  "max_tokens": 1024,
+  "system": "You are a shell command translator...",
+  "messages": [
+    { "role": "user", "content": "list rust files modified today" }
+  ]
+}
+
+Response:
+{
+  "content": [{ "type": "text", "text": "fd --extension rs --changed-within 1d" }],
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 42, "output_tokens": 15 }
+}
+```
+
+That's it for MVP — one HTTP POST, parse the text content.
+
+#### Architecture proposal for shannon
+
+**Answers to all 22 open questions:**
+
+1. **Execute through normal path?** Yes. AI suggests a command, user confirms,
+   it goes through `execute_command` with the active shell's config.
+
+2. **Single or multiple commands?** Single command for MVP. The LLM is
+   instructed to output exactly one command.
+
+3. **Auto-retry on failure?** No for MVP. User sees the error and can ask again.
+   Later: optionally feed the error back to the LLM.
+
+4. **Context sent?** Shell name, cwd, OS (from `std::env::consts::OS`). Enough
+   for good command generation.
+
+5. **Directory listing?** No for MVP. Privacy concern and performance cost.
+   Defer to later.
+
+6. **Command history in context?** No for MVP. May contain secrets. Defer to
+   opt-in later.
+
+7. **Conversational or independent?** Conversational within a session. The AI
+   remembers what you asked before so you can say "now sort those by date."
+
+8. **When does conversation reset?** When you exit AI mode (Enter on empty
+   line). Each AI mode activation starts fresh. This is simple and predictable.
+
+9. **Chat log storage?** In-memory only for MVP. The conversation resets when
+   you exit AI mode, so there's nothing to persist. The actual commands that run
+   are recorded in history.db via reedline. Later: persist chat sessions to
+   disk.
+
+10. **Compaction?** Not needed for MVP. Conversations are short (a few questions
+    per AI mode activation). If someone has a very long session, the LLM will
+    hit context limits and we can handle that later.
+
+11. **Per-shell chat history?** No. One conversation per AI mode activation,
+    regardless of shell. The shell only affects the system prompt.
+
+12. **Multiple providers?** Use OpenAI-compatible API format for MVP. This
+    covers Anthropic (via their Messages API), OpenAI, and local models
+    (Ollama). But for true MVP simplicity, start with Anthropic's native
+    Messages API only — it's one HTTP POST. Add OpenAI-compatible later.
+
+13. **Minimum config?** Just the API key (in env.sh). Model and provider can
+    have sensible defaults:
+    ```toml
+    [ai]
+    provider = "anthropic"
+    model = "claude-sonnet-4-20250514"
+    ```
+
+14. **Anthropic native or OpenAI-compatible?** Anthropic native for MVP. The API
+    is simple (one POST endpoint) and we already have the API key in env.sh.
+    OpenAI-compatible is more universal but adds complexity.
+
+15. **Tools for MVP?** None. Just command generation. The LLM receives a
+    question, outputs a command. No file reading, no web search.
+
+16. **Future tools?** File read (for context), man page lookup, web search.
+    These would use Anthropic's tool_use feature.
+
+17. **Privacy?** MVP sends: system prompt (static), shell name, cwd, and the
+    user's question. No history, no directory listing, no file contents. The
+    user explicitly opts in by entering AI mode and typing a question.
+
+18. **Opt-in levels?** Not for MVP. Just the minimal context. Later: config
+    options for including history, directory listing, etc.
+
+19. **Edit flow?** Yes — pre-fill reedline input with the suggested command. The
+    user can edit it, then press Enter to run. This reuses existing
+    infrastructure.
+
+20. **API errors?** Print the error and return to AI mode prompt. "shannon: AI
+    error: <message>". User can try again. Missing API key: print a helpful
+    message about setting it in env.sh.
+
+21. **Loading indicator?** Print "Thinking..." while waiting. Simple `eprint!`
+    before the API call, cleared when the response arrives.
+
+22. **MVP scope:** Anthropic-only, single question → single command,
+    conversational within one AI mode activation, in-memory chat log, no tools,
+    no directory listing, no history context. Config: provider + model +
+    api_key_env in config.toml. UX: Enter on empty → AI mode, type question →
+    see command → Enter/Esc/e.
+
+**Config.toml schema:**
+
+```toml
+[ai]
+provider = "anthropic"           # only option for MVP
+model = "claude-sonnet-4-20250514"  # default model
+api_key_env = "ANTHROPIC_API_KEY"   # env var name for the key
+```
+
+**System prompt (draft):**
+
+```
+You are a shell command translator. The user describes what they want to do
+in plain English. You respond with exactly one shell command — nothing else.
+No explanation, no markdown, no code fences. Just the command.
+
+The user is in a {shell_name} shell on {os} in the directory {cwd}.
+
+If the request is ambiguous, pick the most common interpretation.
+If you truly cannot generate a command, respond with: # unable to generate command
+```
+
+**HTTP dependency:** `ureq` (synchronous, minimal) or `reqwest` (async,
+heavier). For MVP, `ureq` is simpler — we don't need async for a single blocking
+API call. The user waits for the response anyway.
+
+#### Revised decisions: building for the full agent
+
+The MVP is a command translator, but shannon will eventually become a full
+coding agent. This affects infrastructure decisions — we should build the
+foundation right even if MVP only uses a fraction of it.
+
+**Revised answers:**
+
+- **Q9 (Chat storage):** Disk, not in-memory. Use JSONL files per session
+  in `~/.config/shannon/sessions/`. JSONL is the format Codex and Pi
+  converged on — append-only, simple, one JSON object per line. Each AI
+  mode activation creates a new session file. This is simpler than adding
+  a table to history.db and avoids coupling the chat system to reedline.
+
+- **Q12 (Provider abstraction):** Define a `Provider` trait from day one.
+  MVP implements `AnthropicProvider` only. The trait handles: send messages,
+  parse response, extract command text. Adding OpenAI-compatible later
+  means implementing the trait, not refactoring the call site.
+
+- **Q7/Q8 (Conversation model):** Session-aware from the start. Each AI
+  mode activation creates a session with a UUID. Messages are appended to
+  the session's JSONL file. For MVP, the conversation resets when you exit
+  AI mode (new session next time). But the infrastructure supports resuming
+  sessions later.
+
+- **System prompt:** Composable from sections, not a static string. A
+  `PromptBuilder` that concatenates: base instructions → shell context →
+  tool descriptions (empty for MVP) → project context (empty for MVP).
+  Adding tools or project context later means adding a section, not
+  rewriting the prompt.
+
+- **API call structure:** Use the full Messages API format with the `tools`
+  field (empty array for MVP). This means the response parsing already
+  handles `tool_use` content blocks even though none will appear yet.
+
+**What doesn't change:**
+
+- MVP scope: single question → single command, Anthropic only, no tools
+- Activation: Enter on empty line
+- Confirmation: Enter/Esc/e
+- Config: `[ai]` section in config.toml
+- HTTP client: `ureq` (synchronous, simple)
+
+**Revised module structure:**
+
+```
+src/
+├── ai/
+│   ├── mod.rs          ← re-exports
+│   ├── provider.rs     ← Provider trait + AnthropicProvider
+│   ├── prompt.rs       ← PromptBuilder (composable system prompt)
+│   ├── session.rs      ← Session (JSONL read/write, message history)
+│   └── translate.rs    ← translate_command() — orchestrates the AI call
+├── config.rs           ← [ai] section added
+└── main.rs             ← AI mode toggle, confirmation UX
+```
+
+**Result:** Pass
+
+All three repos analyzed, all 22 questions answered, architecture revised
+for full agent trajectory.
+
+#### Conclusion
+
+The research is complete. MVP is a command translator, but the infrastructure
+is designed for a full coding agent: Provider trait, disk-backed sessions,
+composable prompts, Messages API with tools support. The scope is intentionally
+narrow (one API call, no tools) but the foundation scales.
