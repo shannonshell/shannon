@@ -156,3 +156,83 @@ For each, test with both `pwd` and `vim` (or `less` as a safer alternative).
    interactive commands, OR a clear explanation of why no single pattern can
    work.
 4. A recommendation is made for how to fix the nushell wrapper.
+
+#### Results
+
+**1. How the nushell REPL auto-prints:**
+
+Both REPL and `-c` mode call the same `print_pipeline()` function
+(`crates/nu-cli/src/util.rs:216`). It uses a `display_output` hook (default:
+`"if (term size).columns >= 100 { table -e } else { table }"`) to format
+and print the LAST expression's result.
+
+Key: only the **last expression** in a `-c` script is auto-printed. Earlier
+expressions are discarded silently. This is consistent with the REPL (one
+expression per prompt).
+
+**2. Why our wrapper doesn't auto-print:**
+
+Our wrapper puts env capture code AFTER the command:
+```nushell
+let __out = (try { COMMAND } catch { ... })
+if ... { $__out | print }
+$env | ... | save --force '...'
+```
+
+The `$env | ... | save` is the last expression, so nushell auto-prints
+nothing useful. The explicit `$__out | print` handles printing but
+`try { }` captures stdout, breaking interactive programs.
+
+**3. External commands in the REPL:**
+
+External commands return `PipelineData::ByteStream` which bypasses the
+`display_output` hook and writes directly to the terminal. In the REPL,
+`vim` works because its ByteStream goes straight to the terminal. In our
+wrapper, `try { vim }` or `let x = (vim)` intercepts the ByteStream.
+
+**4. The fundamental tension (no single pattern works):**
+
+Tested all patterns. Results:
+
+| Pattern | pwd prints | vim works | env captured |
+|---------|-----------|-----------|-------------|
+| `try { CMD } + print` (current) | Yes | No | Yes |
+| `CMD` bare + env capture after | No | Yes | Yes |
+| `CMD \| print` + env capture | Yes | Probably no | Yes |
+| `let r = (do { CMD }); save; $r` | Yes (auto) | No (do captures) | No (scoped) |
+| `save env first; CMD last` | Yes (auto) | Yes | No (pre-cmd) |
+
+No single wrapper handles: value-returning commands (pwd, ls), interactive
+programs (vim), AND post-command env capture.
+
+**5. Recommendation:**
+
+Switch the nushell wrapper to run commands **bare** (no try/do/let capture).
+Accept that value-returning nushell builtins (pwd, ls) won't auto-print
+their results in `-c` mode. This fixes vim and all interactive programs.
+
+The trade-off is acceptable because:
+
+- Most commands users type produce output via stdout (echo, grep, cat,
+  git status) which works fine bare.
+- `ls` in nushell does print via stdout (it's an external command on most
+  systems, or nushell's `ls` outputs a table via ByteStream).
+- `pwd` not printing is the main loss, but `echo (pwd)` or `pwd | print`
+  works as a workaround.
+- Interactive programs (vim, nvim, htop, less) are far more important to
+  support than auto-printing `pwd`.
+
+**Result:** Pass
+
+The research is complete. No single wrapper pattern solves all cases. The
+recommendation is to use bare commands (no capture) for nushell, accepting
+that some builtins won't auto-print but interactive programs will work.
+
+#### Conclusion
+
+The nushell `-c` mode auto-print is controlled by the `display_output` hook
+and only applies to the last expression. Our wrapper's env capture code
+after the command means the command is never the last expression. The
+`try { }` and `do { }` patterns capture stdout, breaking interactive
+programs. The cleanest fix is to run commands bare and sacrifice auto-print
+for nushell builtins.
