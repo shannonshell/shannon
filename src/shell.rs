@@ -1,6 +1,18 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Returns the shannon config directory, respecting XDG_CONFIG_HOME.
+/// Falls back to ~/.config/shannon.
+pub fn config_dir() -> PathBuf {
+    let base = match std::env::var("XDG_CONFIG_HOME") {
+        Ok(val) if !val.is_empty() => PathBuf::from(val),
+        _ => dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".config"),
+    };
+    base.join("shannon")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShellKind {
     Bash,
@@ -23,9 +35,7 @@ impl ShellKind {
     }
 
     pub fn history_file(&self) -> PathBuf {
-        let config_dir = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("shannon");
+        let config_dir = config_dir();
         match self {
             ShellKind::Bash => config_dir.join("bash_history"),
             ShellKind::Nushell => config_dir.join("nu_history"),

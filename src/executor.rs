@@ -67,9 +67,7 @@ pub fn run_startup_script(state: ShellState) -> ShellState {
 /// Inner implementation that accepts an optional config path override (for testing).
 fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> ShellState {
     let config_file = config_path.unwrap_or_else(|| {
-        dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
-            .join("shannon/config.sh")
+        crate::shell::config_dir().join("config.sh")
     });
 
     if !config_file.exists() {
