@@ -101,3 +101,74 @@ Nushell's REPL implements all of these via `run_shell_integration_osc2`,
 - Path is tilde-contracted for OSC 2 (display) but absolute for OSC 7
   (machine-readable)
 - All controlled by `config.shell_integration.osc2` etc. toggles
+
+## Experiments
+
+### Experiment 1: Emit OSC 2 and OSC 7
+
+#### Description
+
+Add OSC 2 (title) and OSC 7 (cwd) to the REPL loop. These are the two
+most impactful sequences — they fix the broken new-pane-cwd and missing
+title. Defer OSC 133 (prompt markers) to a later experiment since reedline
+may already handle parts of it.
+
+#### Changes
+
+**`src/repl.rs`** — add helper functions and emit calls:
+
+`emit_osc7(cwd: &Path)`:
+- Get hostname from `$HOSTNAME` env var, fall back to "localhost"
+- Percent-encode the path (just encode control chars and spaces)
+- Print `\x1b]7;file://{hostname}{path}\x1b\\` to stderr
+
+`emit_osc2_idle(shell_name: &str, cwd: &Path)`:
+- Tilde-contract the cwd
+- Print `\x1b]2;[{shell_name}] {contracted_path}\x07` to stderr
+
+`emit_osc2_command(shell_name: &str, cwd: &Path, command: &str)`:
+- Tilde-contract the cwd
+- Extract first word of command (the binary name)
+- Print `\x1b]2;[{shell_name}] {contracted_path}> {binary}\x07` to stderr
+
+Emit points in the REPL loop:
+
+1. **Before each prompt** (top of loop): `emit_osc2_idle` + `emit_osc7`
+2. **Before executing a command** (after user presses Enter, before
+   `run_command`): `emit_osc2_command`
+3. **After command completes** (after `run_command` returns): `emit_osc7`
+   (cwd may have changed)
+
+For AI mode: emit `emit_osc2_command` before the AI-suggested command runs,
+not when the user types the question.
+
+**Tilde contraction:** Extract the existing tilde contraction logic from
+`ShannonPrompt` into a standalone function in `prompt.rs` so it can be
+reused by both the prompt and OSC emission.
+
+#### What about nushell mode?
+
+When running nushell commands via `eval_source`, nushell might emit its own
+OSC sequences if its shell_integration config is enabled. For now, we emit
+ours regardless — double-emitting OSC 7 is harmless (terminal just gets the
+cwd twice). If it becomes a problem, we can disable nushell's internal
+shell integration.
+
+#### Tests
+
+No automated tests — OSC sequences are terminal-level and can't be verified
+without a terminal emulator. Manual verification only.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes (no regressions).
+3. Run shannon in ghostty:
+   - Tab title shows `[nu] ~/project` (not blank/ghost icon).
+   - Run `git status` — title changes to `[nu] ~/project> git`.
+   - After command finishes — title returns to `[nu] ~/project`.
+4. Run shannon in ghostty or wezterm:
+   - `cd /tmp` in shannon.
+   - Open a new pane/split — it opens in `/tmp` (not home dir).
+5. Switch shells — title updates to `[bash] ~/project` etc.
+6. AI mode — title shows command only when executing, not the question.
