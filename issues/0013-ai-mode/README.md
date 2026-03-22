@@ -504,73 +504,78 @@ Wire up the complete AI mode flow: toggle → question → API call → command 
 confirm → execute. Smallest vertical slice that proves the concept. No
 streaming, no edit mode, no tools.
 
+#### Library choice: rig-core
+
+Researched four multi-provider Rust LLM crates:
+
+| Crate | Recent downloads | Providers | Maturity |
+|-------|-----------------|-----------|----------|
+| `rig-core` | 222K | 20+ (Anthropic, OpenAI, Ollama, Gemini...) | Stable, 6K GitHub stars |
+| `async-openai` | 1.9M | OpenAI only | Very mature, but single-provider |
+| `genai` | 46K | 10+ | Beta (0.6.0-beta) |
+| `llm` | 17K | 15+ | Smaller community |
+
+**Decision: `rig-core`** — largest multi-provider crate, first-class Anthropic
+support, agent/tool abstractions that align with our full-agent roadmap,
+actively maintained. Requires tokio (async), which we'll need for streaming
+later anyway.
+
 #### Changes
 
-**`Cargo.toml`** — add `ureq = "3"` for HTTP calls.
+**`Cargo.toml`** — add dependencies:
 
-**`src/ai/mod.rs`** (new) — re-exports the ai submodules.
-
-**`src/ai/provider.rs`** (new):
-
-```rust
-pub trait Provider {
-    fn send(&self, messages: &[Message], system: &str) -> Result<String, AiError>;
-}
+```toml
+rig-core = { version = "0.33", default-features = false, features = ["reqwest-rustls"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1", features = ["v4"] }
 ```
 
-`AnthropicProvider` struct:
-
-- Holds: model name, API key
-- `send()` makes a POST to `https://api.anthropic.com/v1/messages`
-- Headers: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type`
-- Body: `{ model, system, messages, max_tokens: 1024, tools: [] }`
-- Parses response: extracts first `text` content block
-- Returns the text or an `AiError`
-
-`AiError` enum: `NoApiKey`, `HttpError(String)`, `ParseError(String)`,
-`NoResponse`.
+**`src/ai/mod.rs`** (new) — re-exports.
 
 **`src/ai/prompt.rs`** (new):
 
-`PromptBuilder` with sections:
+`PromptBuilder` with composable sections:
 
 - `base()` — static instructions ("You are a shell command translator...")
 - `context(shell_name, cwd, os)` — runtime context
 - `build()` → concatenated string
 
-For MVP, just base + context. Later: tools, project context, etc.
+For MVP, just base + context. Later: tools section, project context, etc.
 
 **`src/ai/session.rs`** (new):
 
-`Session` struct:
+`Session` struct holding conversation messages and writing JSONL to disk:
 
-- `id: String` (UUID)
-- `messages: Vec<Message>` (in-memory list)
-- `session_dir: PathBuf` (`~/.config/shannon/sessions/`)
-
-`Message` struct: `{ role: "user"|"assistant", content: String }`
+- `id: String` (UUID v4)
+- `messages: Vec<(String, String)>` — (role, content) pairs
+- `session_dir: PathBuf`
 
 Methods:
+- `Session::new()` — creates session with UUID, ensures session dir exists
+- `add_message(&mut self, role, content)` — appends to in-memory list
+- `save(&self)` — writes full message list to `{session_dir}/{id}.jsonl`
+- `history_for_prompt(&self) -> Vec<rig ChatMessage>` — converts to rig's
+  message format for the API call
 
-- `Session::new()` — creates new session with UUID
-- `add_user(&mut self, text: &str)` — appends user message
-- `add_assistant(&mut self, text: &str)` — appends assistant message
-- `save(&self)` — writes all messages to JSONL file
-- `messages_for_api(&self) -> Vec<Message>` — returns the message list
-
-The JSONL file is written after each exchange (append). File path:
-`~/.config/shannon/sessions/{uuid}.jsonl`
+JSONL format: `{"role":"user","content":"..."}\n` per line.
 
 **`src/ai/translate.rs`** (new):
 
-`translate_command(provider, session, prompt, question) -> Result<String>`:
+`translate_command(config, session, shell_name, cwd, question) -> Result<String>`:
 
 1. Add user message to session
 2. Build system prompt via PromptBuilder
-3. Call `provider.send(session.messages_for_api(), system_prompt)`
-4. Add assistant response to session
-5. Save session to disk
-6. Return the command text
+3. Create rig-core Anthropic client from API key
+4. Build a chat completion request with system prompt + session messages
+5. Send request, get response text
+6. Strip any markdown code fences or explanation from response
+7. Add assistant response to session
+8. Save session to disk
+9. Return the command text
+
+Uses `tokio::runtime::Runtime::new().block_on()` to run the async rig-core
+call from our synchronous main loop. This is fine for MVP — one blocking
+call while the user waits.
 
 **`src/config.rs`** — add `[ai]` section:
 
@@ -588,19 +593,20 @@ Add `pub ai: AiConfig` to `ShannonConfig` (with `#[serde(default)]`).
 **`src/main.rs`** — AI mode integration:
 
 Add `ai_mode: bool` state variable (starts false).
+Add `ai_session: Option<Session>` (None when not in AI mode).
 
 In the main loop, when `Signal::Success(line)` and line is empty/whitespace:
 
-- If not in AI mode → set `ai_mode = true`, rebuild prompt, continue
-- If in AI mode → set `ai_mode = false`, continue
+- If not in AI mode → set `ai_mode = true`, create new Session, continue
+- If in AI mode → set `ai_mode = false`, drop session, continue
 
 When in AI mode and line is non-empty:
 
 1. Print "Thinking..."
 2. Call `translate_command(...)` with the line as the question
 3. If error → print error, continue in AI mode
-4. Print the suggested command: `→ {command}`
-5. Print `[Enter] run  [Esc] cancel`
+4. Print the suggested command: `  → {command}`
+5. Print `  [Enter] run  [Esc] cancel`
 6. Read a single key from stdin (crossterm raw mode):
    - Enter → run the command via `execute_command` with active shell
    - Esc → cancel, return to AI mode prompt
@@ -609,8 +615,7 @@ When in AI mode and line is non-empty:
 **`src/prompt.rs`** — update prompt display:
 
 When `ai_mode` is true, render `[nu:ai]` instead of `[nu]`. Add `ai_mode:
-bool`
-field to `ShannonPrompt`.
+bool` field to `ShannonPrompt`.
 
 **`src/lib.rs`** — add `pub mod ai;`
 
@@ -618,7 +623,7 @@ field to `ShannonPrompt`.
 
 - Streaming (print tokens as they arrive)
 - Edit mode (`e` to edit the suggested command)
-- Multiple providers
+- Multiple providers (rig-core supports them, we just wire one for MVP)
 - Tools
 - Compaction
 - Config validation (missing API key detected at call time, not startup)
