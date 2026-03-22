@@ -207,3 +207,164 @@ Fish shell support is complete. The wrapper uses the standard `env` command
 for environment capture (simpler than bash or nushell). Tree-sitter-fish
 provides syntax highlighting. Fish joins the rotation as bash → nushell →
 fish. Ready to tackle fish completions in Experiment 2.
+
+### Experiment 2: Adopt fish completions for command-aware tab completion
+
+#### Description
+
+Copy fish's 1,055 completion files into the repo, parse them at build time
+into a static lookup table, and integrate that table into shannon's completer
+so that Tab shows subcommands and flags for known commands in any shell mode.
+
+This has three pieces:
+
+1. **Copy script** — reproducible way to pull completions from vendored fish
+2. **Parser** — Rust build script that reads `.fish` files and generates a
+   compiled-in data structure
+3. **Completer integration** — replace `FileCompleter` with a
+   `ShannonCompleter` that checks command completions first, falls back to
+   file completion
+
+#### Data model
+
+The parsed completion data for each command:
+
+```rust
+struct CommandSpec {
+    /// Subcommands available when no subcommand has been typed yet
+    subcommands: Vec<CompletionEntry>,
+    /// Global flags (available regardless of subcommand)
+    global_flags: Vec<FlagEntry>,
+    /// Flags specific to a subcommand
+    subcommand_flags: HashMap<String, Vec<FlagEntry>>,
+    /// Whether to suppress file completion for this command
+    no_file: bool,
+}
+
+struct CompletionEntry {
+    name: String,
+    description: String,
+}
+
+struct FlagEntry {
+    short: Option<char>,      // -m
+    long: Option<String>,     // --message
+    description: String,
+    takes_arg: bool,          // from -r (requires parameter)
+}
+```
+
+The full table is `HashMap<String, CommandSpec>` — keyed by command name.
+
+#### Parsing strategy
+
+Parse each `complete` statement extracting these flags:
+
+| Fish flag | Meaning | How we use it |
+|-----------|---------|---------------|
+| `-c CMD` | Command name | Key in the HashMap |
+| `-a ARGS` | Argument/subcommand values | `subcommands` if no `-n` or `-n __fish_use_subcommand` |
+| `-s C` | Short option | `FlagEntry.short` |
+| `-l NAME` | Long option | `FlagEntry.long` |
+| `-d DESC` | Description | `description` field |
+| `-f` | No file completion | `no_file = true` |
+| `-r` | Requires parameter | `FlagEntry.takes_arg = true` |
+| `-x` | Exclusive (= `-r -f`) | Both `takes_arg` and `no_file` |
+| `-n COND` | Condition | Determines context (see below) |
+
+Condition handling:
+
+- No `-n` → global (applies always)
+- `-n __fish_use_subcommand` or `-n '__fish_use_subcommand'` → this is a
+  subcommand definition, goes in `subcommands`
+- `-n '__fish_seen_subcommand_from X Y Z'` → these flags are specific to
+  subcommands X, Y, Z, go in `subcommand_flags`
+- Any other `-n` → skip (tool-specific conditions we can't evaluate)
+
+This gives us 74% coverage per the earlier research.
+
+#### Changes
+
+**`scripts/update-completions.sh`** (new):
+
+Copies `vendor/fish/share/completions/*.fish` to `completions/` in the repo
+root. Simple `cp` with a file count summary. The `completions/` directory is
+checked into git so builds work without the vendor directory.
+
+**`completions/`** (new directory):
+
+1,055 `.fish` files, checked into git. Updated by running the script.
+
+**`build.rs`** (new):
+
+Rust build script that:
+
+1. Reads all `.fish` files from `completions/`
+2. Parses each `complete` statement using a simple line-by-line parser
+3. Builds the `HashMap<String, CommandSpec>` in memory
+4. Serializes to JSON and writes to `OUT_DIR/completions.json`
+5. Emits `cargo:rerun-if-changed=completions/`
+
+The parser is a function that tokenizes a `complete` line into flags. Fish's
+`complete` command uses standard POSIX-style options, so parsing is
+straightforward: split on whitespace, handle quoted strings, extract flag
+values.
+
+**`src/completions.rs`** (new module):
+
+- `CompletionTable` struct wrapping the deserialized data
+- `CompletionTable::load()` — deserializes from the embedded JSON
+  (`include_str!(concat!(env!("OUT_DIR"), "/completions.json"))`)
+- `CompletionTable::complete_command(cmd, args) -> Vec<Suggestion>` — given a
+  command name and the arguments typed so far, returns matching completions
+- Implements the "needs subcommand" / "seen subcommand from" logic:
+  - If no non-flag arg after the command → return subcommands
+  - If a subcommand is identified → return that subcommand's flags +
+    global flags
+  - Filter by prefix of the word being completed
+
+**`src/completer.rs`** — replace `FileCompleter` with `ShannonCompleter`:
+
+- Holds a `CompletionTable` and delegates to it for command-aware completions
+- Logic in `complete()`:
+  1. Parse the line to identify: command name, arguments so far, current word
+  2. If on the first word (command position) → file completion only
+  3. If the command is in the completion table → delegate to
+     `CompletionTable::complete_command`
+  4. If the table returns results → return those
+  5. Otherwise → fall back to file/directory completion
+- File completion logic stays unchanged (moved into a helper method)
+
+**`src/lib.rs`** — add `pub mod completions;`
+
+**`src/main.rs`** — no changes needed (completer is already wired in)
+
+#### Tests
+
+**`src/completions.rs`** tests:
+
+- `test_load_table` — table loads, contains `git`
+- `test_git_subcommands` — `git` has subcommands `commit`, `push`, `pull`,
+  etc.
+- `test_git_commit_flags` — `git commit` has `--message`/`-m`,
+  `--amend`, etc.
+- `test_unknown_command` — returns empty for unknown commands
+- `test_prefix_filter` — typing `com` filters to `commit`
+
+**`src/completer.rs`** tests (update existing):
+
+- `test_command_completion_git` — line `"git "` → subcommands
+- `test_command_completion_git_commit_flags` — line `"git commit --"` → flags
+- `test_file_completion_fallback` — line `"cat "` → file completions (cat has
+  no interesting subcommands)
+
+#### Verification
+
+1. `scripts/update-completions.sh` copies files successfully.
+2. `cargo build` succeeds — build.rs parses all 1,055 files.
+3. `cargo test` passes — completion table loads, git completions work.
+4. `cargo run`, type `git ` then Tab → subcommands appear (commit, push, pull,
+   etc.).
+5. Type `git commit --` then Tab → flags appear (--message, --amend, etc.).
+6. Type `cat ` then Tab → file completion (fallback).
+7. Works in all shell modes (bash, nushell, fish).
