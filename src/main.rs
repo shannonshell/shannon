@@ -1,17 +1,19 @@
 use std::io;
 use std::process::Command;
 
+use chrono::Utc;
 use crossterm::event::{KeyCode, KeyModifiers};
+use nu_ansi_term::{Color, Style};
 use reedline::{
-    default_emacs_keybindings, ColumnarMenu, Emacs, FileBackedHistory, MenuBuilder, Reedline,
-    ReedlineEvent, ReedlineMenu, Signal,
+    default_emacs_keybindings, ColumnarMenu, DefaultHinter, EditCommand, Emacs, HistorySessionId,
+    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, SqliteBackedHistory,
 };
 
 use shannon::completer::FileCompleter;
 use shannon::executor::{execute_command, run_startup_script};
 use shannon::highlighter::TreeSitterHighlighter;
 use shannon::prompt::ShannonPrompt;
-use shannon::shell::{ShellKind, ShellState};
+use shannon::shell::{self, ShellKind, ShellState};
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
 
@@ -24,7 +26,7 @@ fn shell_available(shell: ShellKind) -> bool {
         .is_ok()
 }
 
-fn build_editor(shell: ShellKind) -> Reedline {
+fn build_editor(shell: ShellKind, session_id: Option<HistorySessionId>) -> Reedline {
     let mut keybindings = default_emacs_keybindings();
     keybindings.add_binding(
         KeyModifiers::SHIFT,
@@ -39,26 +41,34 @@ fn build_editor(shell: ShellKind) -> Reedline {
             ReedlineEvent::MenuNext,
         ]),
     );
+    keybindings.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Right,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::HistoryHintComplete,
+            ReedlineEvent::Edit(vec![EditCommand::MoveRight { select: false }]),
+        ]),
+    );
     let edit_mode = Box::new(Emacs::new(keybindings));
 
-    let history_file = shell.history_file();
-    if let Some(parent) = history_file.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let history =
-        FileBackedHistory::with_file(10000, history_file).expect("failed to create history file");
+    let history_db = shell::history_db();
+    let history = SqliteBackedHistory::with_file(history_db, session_id, Some(Utc::now()))
+        .expect("failed to create history database");
 
     let highlighter = TreeSitterHighlighter::new(shell);
 
+    let hinter = DefaultHinter::default()
+        .with_style(Style::new().fg(Color::Rgb(86, 95, 137))); // Tokyo Night muted #565f89
+
     let completer = Box::new(FileCompleter::new());
-    let completion_menu = Box::new(
-        ColumnarMenu::default().with_name("completion_menu"),
-    );
+    let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
     Reedline::create()
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
+        .with_history_session_id(session_id)
         .with_highlighter(Box::new(highlighter))
+        .with_hinter(Box::new(hinter))
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .use_bracketed_paste(true)
@@ -84,8 +94,11 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
+    // Create a session ID once — shared across shell switches
+    let session_id = Reedline::create_history_session_id();
+
     let mut active_shell = shells[0];
-    let mut editor = build_editor(active_shell);
+    let mut editor = build_editor(active_shell, session_id);
 
     loop {
         let prompt = ShannonPrompt {
@@ -98,9 +111,10 @@ fn main() -> io::Result<()> {
             Ok(Signal::Success(line)) => {
                 if line == SWITCH_COMMAND {
                     // Cycle to next available shell
-                    let current_idx = shells.iter().position(|s| *s == active_shell).unwrap_or(0);
+                    let current_idx =
+                        shells.iter().position(|s| *s == active_shell).unwrap_or(0);
                     active_shell = shells[(current_idx + 1) % shells.len()];
-                    editor = build_editor(active_shell);
+                    editor = build_editor(active_shell, session_id);
                     continue;
                 }
 
@@ -112,6 +126,14 @@ fn main() -> io::Result<()> {
                 if line == "exit" {
                     break;
                 }
+
+                // Update history entry with timestamp and cwd before execution
+                let cwd = state.cwd.to_string_lossy().to_string();
+                let _ = editor.update_last_command_context(&|mut c| {
+                    c.start_timestamp = Some(Utc::now());
+                    c.cwd = Some(cwd.clone());
+                    c
+                });
 
                 match execute_command(active_shell, line, &state) {
                     Ok(new_state) => {

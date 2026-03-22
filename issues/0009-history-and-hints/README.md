@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 9: SQLite history and autosuggestions
@@ -185,3 +186,30 @@ from reedline. Add `chrono::Utc`. Remove `FileBackedHistory`.
 7. `~/.config/shannon/history.db` exists and is a valid SQLite database.
 8. `cargo test` passes — no regressions. (History tests in integration.rs
    may need adjustment if they relied on file-backed history.)
+
+**Result:** Pass
+
+All verification steps confirmed. One additional fix was needed: reedline's
+`submit_buffer` saves history entries with `start_timestamp: None`. The
+cross-session filter uses `start_timestamp < :session_timestamp`, which fails
+on NULL. Fixed by calling `editor.update_last_command_context()` after each
+command to set `start_timestamp` and `cwd` — the same approach nushell uses.
+
+41 tests pass, no regressions.
+
+#### Conclusion
+
+SQLite history and autosuggestions are working. Ghost text appears as you type,
+powered by history with cross-session sharing. Right arrow accepts the hint.
+Ctrl+R searches across all sessions. History persists across restarts in a
+single shared `history.db`.
+
+## Conclusion
+
+Issue complete. Shannon now has SQLite-backed history with autosuggestions.
+Key files:
+
+- `Cargo.toml` — reedline `sqlite` feature enabled, `chrono` added
+- `src/shell.rs` — `history_db()` returns shared database path
+- `src/main.rs` — `SqliteBackedHistory`, `DefaultHinter`, session ID,
+  `update_last_command_context` for timestamps

@@ -43,6 +43,11 @@ impl ShellKind {
     }
 }
 
+/// Returns the path to the shared SQLite history database.
+pub fn history_db() -> PathBuf {
+    config_dir().join("history.db")
+}
+
 pub struct ShellState {
     pub env: HashMap<String, String>,
     pub cwd: PathBuf,
