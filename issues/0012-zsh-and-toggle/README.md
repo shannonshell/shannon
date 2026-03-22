@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 12: Add zsh as built-in default and toggle list
@@ -141,3 +142,28 @@ remove `default_shell`. Small, focused changes to config.rs and main.rs.
 5. Shift+Tab cycles through the toggle list in order.
 6. Zsh works: commands execute, env captured, syntax highlighted (via bash
    grammar).
+
+**Result:** Pass
+
+All verification steps confirmed. 66 tests pass (46 unit + 20 integration).
+Zsh is a built-in default with 4 integration tests. Toggle list controls the
+rotation with 6 config tests covering all cases including duplicates and
+unknown shells. Fish command highlighting also fixed (commands now show in
+blue).
+
+#### Conclusion
+
+Zsh support and toggle list are complete. Four built-in shells (bash, nu,
+fish, zsh) with a configurable rotation via `toggle` in config.toml.
+`default_shell` is deprecated but still works as backward compat.
+
+## Conclusion
+
+Issue complete. Shannon now has four built-in shells and a `toggle` config
+option that controls the Shift+Tab rotation.
+
+Key changes:
+- `src/config.rs` — zsh built-in, `toggle` field, backward compat for
+  `default_shell`
+- `src/highlighter.rs` — fish command names now colored blue
+- `tests/integration.rs` — 4 zsh integration tests
