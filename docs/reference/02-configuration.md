@@ -41,6 +41,21 @@ The script is always executed by bash — shannon requires bash, and the primary
 use case (setting PATH and env vars) works perfectly in bash. If the script
 fails, shannon prints a warning and continues with the inherited environment.
 
+## Shannon Environment Variables
+
+Shannon reads these env vars from `config.sh` (or the inherited environment):
+
+| Variable | Values | Default | Purpose |
+|----------|--------|---------|---------|
+| `SHANNON_DEFAULT_SHELL` | `bash`, `nu`, `nushell`, `fish` | `bash` | Which shell to start in |
+| `SHANNON_DEPTH` | (set automatically) | — | Nesting depth, shown as `>>` in prompt |
+
+Example in `config.sh`:
+
+```bash
+export SHANNON_DEFAULT_SHELL="nu"
+```
+
 ## History Database (history.db)
 
 Command history is stored in a SQLite database shared across all shells and
