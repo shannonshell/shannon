@@ -14,8 +14,7 @@ should share history, with the current instance's commands preferred.
 ## Background
 
 Shannon currently uses `FileBackedHistory` — per-shell plain text files
-(`bash_history`, `nu_history`) with 10k entry limits. This has several
-problems:
+(`bash_history`, `nu_history`) with 10k entry limits. This has several problems:
 
 1. **No autosuggestions** — users coming from fish or nushell expect ghost text
    that completes commands as they type.
@@ -60,15 +59,15 @@ Reedline already has everything needed:
   session started. This prevents partially-typed commands from another window
   from leaking into autosuggestions.
 
-This means: as you type `gi...`, if you typed `git status` in this session,
-you see that first. If not, you see `git status` from any other session.
-Ctrl+R works the same way — searches all sessions.
+This means: as you type `gi...`, if you typed `git status` in this session, you
+see that first. If not, you see `git status` from any other session. Ctrl+R
+works the same way — searches all sessions.
 
 ### Design decisions
 
 - **One shared database** — `~/.config/shannon/history.db` instead of per-shell
-  text files. All shells share the same history. A command typed in bash
-  appears in nushell's history and vice versa.
+  text files. All shells share the same history. A command typed in bash appears
+  in nushell's history and vice versa.
 - **Session ID** — generated at startup (e.g. process ID or timestamp).
 - **Ghost text style** — Tokyo Night muted color (`#565f89`), matching the
   comment color from syntax highlighting.
@@ -79,6 +78,6 @@ Ctrl+R works the same way — searches all sessions.
 
 ### Migration
 
-The old `bash_history` and `nu_history` files can be left in place — they
-won't conflict. Users who want to import old history can do so manually, but
-it's not required for the initial implementation.
+The old `bash_history` and `nu_history` files can be left in place — they won't
+conflict. Users who want to import old history can do so manually, but it's not
+required for the initial implementation.
