@@ -74,7 +74,7 @@ struct ParsedComplete {
     long: Option<String>,
     args: Option<String>,
     description: String,
-    no_file: bool,
+    _no_file: bool,
     takes_arg: bool,
     condition: Condition,
 }
@@ -97,7 +97,7 @@ fn parse_complete_line(line: &str) -> Option<ParsedComplete> {
     let mut long = None;
     let mut args = None;
     let mut description = String::new();
-    let mut no_file = false;
+    let mut _no_file = false;
     let mut takes_arg = false;
     let mut condition = Condition::None;
 
@@ -148,13 +148,13 @@ fn parse_complete_line(line: &str) -> Option<ParsedComplete> {
                 }
             }
             "-f" | "--no-files" => {
-                no_file = true;
+                _no_file = true;
             }
             "-r" | "--require-parameter" => {
                 takes_arg = true;
             }
             "-x" | "--exclusive" => {
-                no_file = true;
+                _no_file = true;
                 takes_arg = true;
             }
             "-F" | "--force-files" => {}
@@ -186,7 +186,7 @@ fn parse_complete_line(line: &str) -> Option<ParsedComplete> {
         long,
         args,
         description,
-        no_file,
+        _no_file,
         takes_arg,
         condition,
     })
