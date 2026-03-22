@@ -454,3 +454,158 @@ nushell's own evaluation engine instead of `-c` mode.
 The fork approach (Option A) solves the same problem but at catastrophic
 maintenance cost. The library approach achieves the same result while preserving
 our entire existing architecture.
+
+Version check: both shannon and nushell use reedline 0.46.0. No conflict.
+
+### Experiment 3: Use nushell as a library for native evaluation
+
+#### Description
+
+Replace the nushell `-c` wrapper with direct evaluation via nushell's crate
+API. When the active shell is "nu", commands are evaluated by
+`nu-cli::eval_source()` instead of spawning a subprocess. This fixes
+auto-print, vim, and all other `-c` mode limitations.
+
+Bash, fish, and zsh continue to use the wrapper approach (unchanged).
+
+#### Changes
+
+**`Cargo.toml`** — add nushell crate dependencies:
+
+```toml
+nu-cli = { path = "vendor/nushell/crates/nu-cli", features = ["os"] }
+nu-engine = { path = "vendor/nushell/crates/nu-engine", features = ["os"] }
+nu-protocol = { path = "vendor/nushell/crates/nu-protocol", features = ["os"] }
+nu-command = { path = "vendor/nushell/crates/nu-command", features = ["os"] }
+nu-cmd-lang = { path = "vendor/nushell/crates/nu-cmd-lang" }
+nu-cmd-base = { path = "vendor/nushell/crates/nu-cmd-base" }
+nu-parser = { path = "vendor/nushell/crates/nu-parser" }
+nu-utils = { path = "vendor/nushell/crates/nu-utils" }
+```
+
+Use path dependencies to the vendored nushell (not crates.io) so we control
+the exact version and avoid resolution conflicts.
+
+**`src/nushell_engine.rs`** (new module):
+
+`NushellEngine` struct holding nushell's evaluation state:
+
+```rust
+pub struct NushellEngine {
+    engine_state: EngineState,
+    stack: Stack,
+}
+```
+
+Methods:
+
+- `NushellEngine::new() -> Self`:
+  1. Create `EngineState::new()`
+  2. Register commands: call `nu_command::add_context()` and
+     `nu_cmd_lang::create_default_context()` to add all builtins
+  3. Create `Stack::new()`
+  4. Return the engine
+
+- `inject_state(&mut self, state: &ShellState)`:
+  1. Set cwd via `stack.set_cwd()`
+  2. Inject env vars from `ShellState` into the Stack:
+     `stack.add_env_var(key, Value::string(value))`
+  3. This syncs shannon's state into nushell before each command
+
+- `execute(&mut self, command: &str) -> (ShellState, i32)`:
+  1. Call `eval_source(&mut self.engine_state, &mut self.stack,
+     command.as_bytes(), "shannon", PipelineData::empty(), false)`
+  2. Read exit code from return value
+  3. Read env vars from `stack.get_env_vars(&engine_state)` — convert
+     from `Value` to `String` (join lists with `:` for PATH, skip
+     non-string values)
+  4. Read cwd from `stack.get_env_var(&engine_state, "PWD")`
+  5. Build and return new `ShellState`
+
+- `capture_state(&self) -> ShellState`:
+  Helper that reads current env vars and cwd from the Stack.
+
+**`src/repl.rs`** — update the main loop:
+
+When the active shell is "nu" and a command is entered:
+
+```rust
+if shells[active_idx].0 == "nu" {
+    // Use native nushell evaluation
+    nushell_engine.inject_state(&state);
+    let (new_state, exit_code) = nushell_engine.execute(line);
+    state = new_state;
+    state.last_exit_code = exit_code;
+} else {
+    // Use wrapper for bash/fish/zsh
+    match execute_command(&shells[active_idx].1, line, &state) { ... }
+}
+```
+
+The `NushellEngine` is created once at startup and persists for the
+session. This means nushell variables, functions, and aliases defined by
+the user persist across commands (like a real nushell session).
+
+When switching shells (Shift+Tab), the state is synced:
+- Switching FROM nushell: read state from engine, update `ShellState`
+- Switching TO nushell: inject `ShellState` into engine
+
+**`src/main.rs`** — initialize `NushellEngine`:
+
+Create the engine in `main()` after config is loaded, pass it to `repl::run()`.
+Only create it if nushell is in the shell list (avoid the startup cost if
+nushell isn't used).
+
+**`src/lib.rs`** — add `pub mod nushell_engine;`
+
+#### What doesn't change
+
+- Wrapper system for bash/fish/zsh — completely unchanged
+- config.toml — unchanged (nushell still listed as a built-in shell, but
+  its `wrapper` field is ignored when the native engine is used)
+- Fish completions — unchanged
+- Syntax highlighting — unchanged (tree-sitter-nu still used)
+- History — unchanged (shared SQLite via reedline)
+- AI mode — unchanged
+- Shell switching — unchanged (just the state sync mechanism differs)
+
+#### Risks
+
+- **Compilation time** — nushell's crates are large. First build will be
+  slow. Incremental builds should be fast since we rarely change nushell.
+- **Binary size** — expect +20-30MB from nu-command (88K lines, 439 files).
+- **API stability** — nushell's crate APIs aren't guaranteed stable. Future
+  updates may require adjustments. Pinning to vendored version mitigates
+  this.
+- **Feature flags** — nushell crates have many feature flags. Getting the
+  right combination may take trial and error.
+
+#### Tests
+
+**`src/nushell_engine.rs`** tests:
+
+- `test_nushell_engine_pwd` — evaluate `pwd`, verify cwd in result
+- `test_nushell_engine_env_set` — evaluate `$env.FOO = "bar"`, verify env
+- `test_nushell_engine_cd` — evaluate `cd /tmp`, verify cwd changes
+- `test_nushell_engine_exit_code` — evaluate `error make {msg: "fail"}`,
+  verify nonzero exit code
+- `test_nushell_engine_state_persistence` — set var, evaluate again,
+  verify var persists
+
+**`tests/integration.rs`** — nushell tests should pass unchanged (they
+construct `ShellConfig` and call `execute_command`, which still works).
+Add new tests that use `NushellEngine` directly.
+
+#### Verification
+
+1. `cargo build` succeeds (nushell crates compile).
+2. `cargo test` passes — all existing tests green, new engine tests pass.
+3. Run shannon, switch to nushell mode:
+   - `pwd` auto-prints its result.
+   - `ls` shows a table.
+   - `vim test.txt` opens vim normally, Esc + `:q` exits cleanly.
+   - `$env.FOO = "bar"` then `echo $FOO` prints "bar".
+   - `cd /tmp` then Shift+Tab to bash, `pwd` shows `/tmp` (state synced).
+4. Bash/fish/zsh still work via wrappers (no regressions).
+5. AI mode works in nushell (command executes via native engine).
+6. History works (commands recorded in SQLite).
