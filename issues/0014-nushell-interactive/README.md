@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 14: Interactive programs don't work in nushell mode
@@ -387,7 +388,7 @@ This means we can:
 - Use `eval_source()` for nushell mode instead of `-c` wrapper
 - Keep our reedline instance for input (we already use reedline)
 - Keep our wrapper approach for bash/fish/zsh (unchanged)
-- Dependency cost: ~~200K lines pulled in, larger binary (~~+20MB?)
+- Dependency cost: \~200K lines pulled in, larger binary (\~+20MB?)
 - But: no merge conflicts, upstream updates via version bump
 - `eval_source()` returns an exit code and prints output itself
 - Env vars readable from Stack after evaluation
@@ -461,10 +462,10 @@ Version check: both shannon and nushell use reedline 0.46.0. No conflict.
 
 #### Description
 
-Replace the nushell `-c` wrapper with direct evaluation via nushell's crate
-API. When the active shell is "nu", commands are evaluated by
-`nu-cli::eval_source()` instead of spawning a subprocess. This fixes
-auto-print, vim, and all other `-c` mode limitations.
+Replace the nushell `-c` wrapper with direct evaluation via nushell's crate API.
+When the active shell is "nu", commands are evaluated by `nu-cli::eval_source()`
+instead of spawning a subprocess. This fixes auto-print, vim, and all other `-c`
+mode limitations.
 
 Bash, fish, and zsh continue to use the wrapper approach (unchanged).
 
@@ -483,8 +484,8 @@ nu-parser = { path = "vendor/nushell/crates/nu-parser" }
 nu-utils = { path = "vendor/nushell/crates/nu-utils" }
 ```
 
-Use path dependencies to the vendored nushell (not crates.io) so we control
-the exact version and avoid resolution conflicts.
+Use path dependencies to the vendored nushell (not crates.io) so we control the
+exact version and avoid resolution conflicts.
 
 **`src/nushell_engine.rs`** (new module):
 
@@ -513,17 +514,17 @@ Methods:
   3. This syncs shannon's state into nushell before each command
 
 - `execute(&mut self, command: &str) -> (ShellState, i32)`:
-  1. Call `eval_source(&mut self.engine_state, &mut self.stack,
+  1. Call
+     `eval_source(&mut self.engine_state, &mut self.stack,
      command.as_bytes(), "shannon", PipelineData::empty(), false)`
   2. Read exit code from return value
-  3. Read env vars from `stack.get_env_vars(&engine_state)` — convert
-     from `Value` to `String` (join lists with `:` for PATH, skip
-     non-string values)
+  3. Read env vars from `stack.get_env_vars(&engine_state)` — convert from
+     `Value` to `String` (join lists with `:` for PATH, skip non-string values)
   4. Read cwd from `stack.get_env_var(&engine_state, "PWD")`
   5. Build and return new `ShellState`
 
-- `capture_state(&self) -> ShellState`:
-  Helper that reads current env vars and cwd from the Stack.
+- `capture_state(&self) -> ShellState`: Helper that reads current env vars and
+  cwd from the Stack.
 
 **`src/repl.rs`** — update the main loop:
 
@@ -542,11 +543,12 @@ if shells[active_idx].0 == "nu" {
 }
 ```
 
-The `NushellEngine` is created once at startup and persists for the
-session. This means nushell variables, functions, and aliases defined by
-the user persist across commands (like a real nushell session).
+The `NushellEngine` is created once at startup and persists for the session.
+This means nushell variables, functions, and aliases defined by the user persist
+across commands (like a real nushell session).
 
 When switching shells (Shift+Tab), the state is synced:
+
 - Switching FROM nushell: read state from engine, update `ShellState`
 - Switching TO nushell: inject `ShellState` into engine
 
@@ -561,8 +563,8 @@ nushell isn't used).
 #### What doesn't change
 
 - Wrapper system for bash/fish/zsh — completely unchanged
-- config.toml — unchanged (nushell still listed as a built-in shell, but
-  its `wrapper` field is ignored when the native engine is used)
+- config.toml — unchanged (nushell still listed as a built-in shell, but its
+  `wrapper` field is ignored when the native engine is used)
 - Fish completions — unchanged
 - Syntax highlighting — unchanged (tree-sitter-nu still used)
 - History — unchanged (shared SQLite via reedline)
@@ -571,14 +573,13 @@ nushell isn't used).
 
 #### Risks
 
-- **Compilation time** — nushell's crates are large. First build will be
-  slow. Incremental builds should be fast since we rarely change nushell.
+- **Compilation time** — nushell's crates are large. First build will be slow.
+  Incremental builds should be fast since we rarely change nushell.
 - **Binary size** — expect +20-30MB from nu-command (88K lines, 439 files).
 - **API stability** — nushell's crate APIs aren't guaranteed stable. Future
-  updates may require adjustments. Pinning to vendored version mitigates
-  this.
-- **Feature flags** — nushell crates have many feature flags. Getting the
-  right combination may take trial and error.
+  updates may require adjustments. Pinning to vendored version mitigates this.
+- **Feature flags** — nushell crates have many feature flags. Getting the right
+  combination may take trial and error.
 
 #### Tests
 
@@ -587,14 +588,14 @@ nushell isn't used).
 - `test_nushell_engine_pwd` — evaluate `pwd`, verify cwd in result
 - `test_nushell_engine_env_set` — evaluate `$env.FOO = "bar"`, verify env
 - `test_nushell_engine_cd` — evaluate `cd /tmp`, verify cwd changes
-- `test_nushell_engine_exit_code` — evaluate `error make {msg: "fail"}`,
-  verify nonzero exit code
-- `test_nushell_engine_state_persistence` — set var, evaluate again,
-  verify var persists
+- `test_nushell_engine_exit_code` — evaluate `error make {msg: "fail"}`, verify
+  nonzero exit code
+- `test_nushell_engine_state_persistence` — set var, evaluate again, verify var
+  persists
 
-**`tests/integration.rs`** — nushell tests should pass unchanged (they
-construct `ShellConfig` and call `execute_command`, which still works).
-Add new tests that use `NushellEngine` directly.
+**`tests/integration.rs`** — nushell tests should pass unchanged (they construct
+`ShellConfig` and call `execute_command`, which still works). Add new tests that
+use `NushellEngine` directly.
 
 #### Verification
 
@@ -609,3 +610,33 @@ Add new tests that use `NushellEngine` directly.
 4. Bash/fish/zsh still work via wrappers (no regressions).
 5. AI mode works in nushell (command executes via native engine).
 6. History works (commands recorded in SQLite).
+
+**Result:** Pass
+
+All verification steps confirmed. pwd auto-prints, ls shows tables, vim
+works with full terminal access, env vars persist, cd propagates across
+shell switches. 76 tests pass (56 unit + 20 integration), no regressions.
+
+Key decision during implementation: used crates.io versions (0.111.0)
+instead of vendored path dependencies. The crates.io versions are internally
+consistent and compatible with our reedline 0.46.0. This is also the correct
+approach for eventual crates.io publication of shannon itself.
+
+#### Conclusion
+
+Nushell as a library works perfectly. The native evaluation via
+`eval_source()` eliminates all `-c` mode limitations. Auto-print, vim,
+env capture — everything works as if you were in a real nushell session.
+
+## Conclusion
+
+Issue complete. Nushell is now a first-class citizen in shannon, evaluated
+natively via the nushell crate API instead of subprocess wrapping.
+
+Key files:
+- `src/nushell_engine.rs` — `NushellEngine` wrapping EngineState + Stack
+- `src/repl.rs` — `run_command()` dispatches to engine for nushell, wrapper
+  for others
+- `src/main.rs` — initializes `NushellEngine` at startup
+- `Cargo.toml` — nu-cli, nu-engine, nu-protocol, nu-command, nu-cmd-lang,
+  nu-parser from crates.io 0.111

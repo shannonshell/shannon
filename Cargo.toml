@@ -21,6 +21,14 @@ tree-sitter-bash = "0.23"
 tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }
 tree-sitter-fish = "3.6"
 
+# Nushell as a library (native evaluation, no -c wrapper)
+nu-cli = { version = "0.111", default-features = false }
+nu-engine = { version = "0.111", features = ["os"] }
+nu-protocol = { version = "0.111", features = ["os"] }
+nu-command = { version = "0.111", default-features = false, features = ["os"] }
+nu-cmd-lang = { version = "0.111" }
+nu-parser = { version = "0.111" }
+
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"

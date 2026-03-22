@@ -4,6 +4,7 @@ pub mod completions;
 pub mod config;
 pub mod executor;
 pub mod highlighter;
+pub mod nushell_engine;
 pub mod prompt;
 pub mod repl;
 pub mod shell;

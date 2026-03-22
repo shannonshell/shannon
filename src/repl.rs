@@ -18,6 +18,7 @@ use crate::completer::ShannonCompleter;
 use crate::config::{AiConfig, ShellConfig};
 use crate::executor::execute_command;
 use crate::highlighter::TreeSitterHighlighter;
+use crate::nushell_engine::NushellEngine;
 use crate::prompt::ShannonPrompt;
 use crate::shell::{self, ShellState};
 
@@ -111,12 +112,39 @@ fn read_confirmation() -> io::Result<KeyCode> {
     result
 }
 
+/// Execute a command using the nushell engine (for "nu") or wrapper (for others).
+fn run_command(
+    shell: &(String, ShellConfig),
+    command: &str,
+    state: &mut ShellState,
+    nushell_engine: &mut Option<NushellEngine>,
+) {
+    if shell.0 == "nu" {
+        if let Some(ref mut engine) = nushell_engine {
+            engine.inject_state(state);
+            *state = engine.execute(command);
+            return;
+        }
+    }
+    // Wrapper path for bash/fish/zsh (and fallback for nu without engine)
+    match execute_command(&shell.1, command, state) {
+        Ok(new_state) => {
+            *state = new_state;
+        }
+        Err(e) => {
+            eprintln!("shannon: {e}");
+            state.last_exit_code = 1;
+        }
+    }
+}
+
 /// Run the main read-eval-print loop.
 pub fn run(
     shells: Vec<(String, ShellConfig)>,
     ai_config: AiConfig,
     mut state: ShellState,
     depth: u32,
+    mut nushell_engine: Option<NushellEngine>,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
 
@@ -182,19 +210,12 @@ pub fn run(
                                 KeyCode::Enter => {
                                     eprintln!(); // newline after confirmation
                                     // Run the command through the active shell
-                                    match execute_command(
-                                        &shells[active_idx].1,
+                                    run_command(
+                                        &shells[active_idx],
                                         &command,
-                                        &state,
-                                    ) {
-                                        Ok(new_state) => {
-                                            state = new_state;
-                                        }
-                                        Err(e) => {
-                                            eprintln!("shannon: {e}");
-                                            state.last_exit_code = 1;
-                                        }
-                                    }
+                                        &mut state,
+                                        &mut nushell_engine,
+                                    );
 
                                     // Exit AI mode after execution
                                     ai_mode = false;
@@ -225,15 +246,12 @@ pub fn run(
                         c
                     });
 
-                    match execute_command(&shells[active_idx].1, line, &state) {
-                        Ok(new_state) => {
-                            state = new_state;
-                        }
-                        Err(e) => {
-                            eprintln!("shannon: {e}");
-                            state.last_exit_code = 1;
-                        }
-                    }
+                    run_command(
+                        &shells[active_idx],
+                        line,
+                        &mut state,
+                        &mut nushell_engine,
+                    );
                 }
             }
             Ok(Signal::CtrlD) => break,

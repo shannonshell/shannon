@@ -2,6 +2,7 @@ use std::io;
 
 use shannon::config::ShannonConfig;
 use shannon::executor::run_startup_script;
+use shannon::nushell_engine::NushellEngine;
 use shannon::repl;
 use shannon::shell::ShellState;
 
@@ -41,6 +42,13 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
+    // Initialize nushell native engine if nushell is available
+    let nushell_engine = if shells.iter().any(|(name, _)| name == "nu") {
+        Some(NushellEngine::new())
+    } else {
+        None
+    };
+
     // Run the REPL
-    repl::run(shells, config.ai, state, depth)
+    repl::run(shells, config.ai, state, depth, nushell_engine)
 }
