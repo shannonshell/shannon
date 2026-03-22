@@ -5,8 +5,9 @@ use chrono::Utc;
 use crossterm::event::{KeyCode, KeyModifiers};
 use nu_ansi_term::{Color, Style};
 use reedline::{
-    default_emacs_keybindings, ColumnarMenu, DefaultHinter, EditCommand, Emacs, HistorySessionId,
-    MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal, SqliteBackedHistory,
+    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultHinter,
+    EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal,
+    SqliteBackedHistory, Vi,
 };
 
 use shannon::completer::ShannonCompleter;
@@ -31,21 +32,28 @@ fn build_editor(
     shell_config: &ShellConfig,
     session_id: Option<HistorySessionId>,
 ) -> Reedline {
-    let mut keybindings = default_emacs_keybindings();
-    keybindings.add_binding(
-        KeyModifiers::SHIFT,
-        KeyCode::BackTab,
-        ReedlineEvent::ExecuteHostCommand(SWITCH_COMMAND.into()),
-    );
-    keybindings.add_binding(
-        KeyModifiers::NONE,
-        KeyCode::Tab,
-        ReedlineEvent::UntilFound(vec![
-            ReedlineEvent::Menu("completion_menu".to_string()),
-            ReedlineEvent::MenuNext,
-        ]),
-    );
-    keybindings.add_binding(
+    let mut insert_keybindings = default_vi_insert_keybindings();
+    let mut normal_keybindings = default_vi_normal_keybindings();
+
+    // Add shannon-specific bindings to both modes
+    for kb in [&mut insert_keybindings, &mut normal_keybindings] {
+        kb.add_binding(
+            KeyModifiers::SHIFT,
+            KeyCode::BackTab,
+            ReedlineEvent::ExecuteHostCommand(SWITCH_COMMAND.into()),
+        );
+        kb.add_binding(
+            KeyModifiers::NONE,
+            KeyCode::Tab,
+            ReedlineEvent::UntilFound(vec![
+                ReedlineEvent::Menu("completion_menu".to_string()),
+                ReedlineEvent::MenuNext,
+            ]),
+        );
+    }
+
+    // Right arrow accepts hint in insert mode only
+    insert_keybindings.add_binding(
         KeyModifiers::NONE,
         KeyCode::Right,
         ReedlineEvent::UntilFound(vec![
@@ -53,7 +61,8 @@ fn build_editor(
             ReedlineEvent::Edit(vec![EditCommand::MoveRight { select: false }]),
         ]),
     );
-    let edit_mode = Box::new(Emacs::new(keybindings));
+
+    let edit_mode = Box::new(Vi::new(insert_keybindings, normal_keybindings));
 
     let history_db = shell::history_db();
     let history = SqliteBackedHistory::with_file(history_db, session_id, Some(Utc::now()))
