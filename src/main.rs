@@ -65,6 +65,14 @@ fn build_editor(shell: ShellKind) -> Reedline {
 }
 
 fn main() -> io::Result<()> {
+    // Run startup script first so PATH is complete before shell detection
+    let mut state = run_startup_script(ShellState::from_current_env());
+
+    // Update process PATH so shell_available() can find binaries
+    if let Some(path) = state.env.get("PATH") {
+        std::env::set_var("PATH", path);
+    }
+
     // Detect available shells
     let shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell]
         .into_iter()
@@ -77,7 +85,6 @@ fn main() -> io::Result<()> {
     }
 
     let mut active_shell = shells[0];
-    let mut state = run_startup_script(ShellState::from_current_env());
     let mut editor = build_editor(active_shell);
 
     loop {
