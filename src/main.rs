@@ -96,14 +96,30 @@ fn main() -> io::Result<()> {
     }
 
     // Detect available shells
-    let shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell, ShellKind::Fish]
+    let mut shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell, ShellKind::Fish]
         .into_iter()
         .filter(|s| shell_available(*s))
         .collect();
 
     if shells.is_empty() {
-        eprintln!("shannon: no supported shells found (looked for bash, nu)");
+        eprintln!("shannon: no supported shells found (looked for bash, nu, fish)");
         std::process::exit(1);
+    }
+
+    // SHANNON_DEFAULT_SHELL moves the preferred shell to the front
+    if let Some(default) = state.env.get("SHANNON_DEFAULT_SHELL") {
+        let preferred = match default.as_str() {
+            "bash" => Some(ShellKind::Bash),
+            "nu" | "nushell" => Some(ShellKind::Nushell),
+            "fish" => Some(ShellKind::Fish),
+            _ => None,
+        };
+        if let Some(shell) = preferred {
+            if let Some(pos) = shells.iter().position(|s| *s == shell) {
+                shells.remove(pos);
+                shells.insert(0, shell);
+            }
+        }
     }
 
     // Create a session ID once — shared across shell switches
