@@ -163,8 +163,8 @@ For each, test with both `pwd` and `vim` (or `less` as a safer alternative).
 
 Both REPL and `-c` mode call the same `print_pipeline()` function
 (`crates/nu-cli/src/util.rs:216`). It uses a `display_output` hook (default:
-`"if (term size).columns >= 100 { table -e } else { table }"`) to format
-and print the LAST expression's result.
+`"if (term size).columns >= 100 { table -e } else { table }"`) to format and
+print the LAST expression's result.
 
 Key: only the **last expression** in a `-c` script is auto-printed. Earlier
 expressions are discarded silently. This is consistent with the REPL (one
@@ -173,34 +173,35 @@ expression per prompt).
 **2. Why our wrapper doesn't auto-print:**
 
 Our wrapper puts env capture code AFTER the command:
+
 ```nushell
 let __out = (try { COMMAND } catch { ... })
 if ... { $__out | print }
 $env | ... | save --force '...'
 ```
 
-The `$env | ... | save` is the last expression, so nushell auto-prints
-nothing useful. The explicit `$__out | print` handles printing but
-`try { }` captures stdout, breaking interactive programs.
+The `$env | ... | save` is the last expression, so nushell auto-prints nothing
+useful. The explicit `$__out | print` handles printing but `try { }` captures
+stdout, breaking interactive programs.
 
 **3. External commands in the REPL:**
 
 External commands return `PipelineData::ByteStream` which bypasses the
-`display_output` hook and writes directly to the terminal. In the REPL,
-`vim` works because its ByteStream goes straight to the terminal. In our
-wrapper, `try { vim }` or `let x = (vim)` intercepts the ByteStream.
+`display_output` hook and writes directly to the terminal. In the REPL, `vim`
+works because its ByteStream goes straight to the terminal. In our wrapper,
+`try { vim }` or `let x = (vim)` intercepts the ByteStream.
 
 **4. The fundamental tension (no single pattern works):**
 
 Tested all patterns. Results:
 
-| Pattern | pwd prints | vim works | env captured |
-|---------|-----------|-----------|-------------|
-| `try { CMD } + print` (current) | Yes | No | Yes |
-| `CMD` bare + env capture after | No | Yes | Yes |
-| `CMD \| print` + env capture | Yes | Probably no | Yes |
-| `let r = (do { CMD }); save; $r` | Yes (auto) | No (do captures) | No (scoped) |
-| `save env first; CMD last` | Yes (auto) | Yes | No (pre-cmd) |
+| Pattern                          | pwd prints | vim works        | env captured |
+| -------------------------------- | ---------- | ---------------- | ------------ |
+| `try { CMD } + print` (current)  | Yes        | No               | Yes          |
+| `CMD` bare + env capture after   | No         | Yes              | Yes          |
+| `CMD \| print` + env capture     | Yes        | Probably no      | Yes          |
+| `let r = (do { CMD }); save; $r` | Yes (auto) | No (do captures) | No (scoped)  |
+| `save env first; CMD last`       | Yes (auto) | Yes              | No (pre-cmd) |
 
 No single wrapper handles: value-returning commands (pwd, ls), interactive
 programs (vim), AND post-command env capture.
@@ -208,31 +209,119 @@ programs (vim), AND post-command env capture.
 **5. Recommendation:**
 
 Switch the nushell wrapper to run commands **bare** (no try/do/let capture).
-Accept that value-returning nushell builtins (pwd, ls) won't auto-print
-their results in `-c` mode. This fixes vim and all interactive programs.
+Accept that value-returning nushell builtins (pwd, ls) won't auto-print their
+results in `-c` mode. This fixes vim and all interactive programs.
 
 The trade-off is acceptable because:
 
-- Most commands users type produce output via stdout (echo, grep, cat,
-  git status) which works fine bare.
+- Most commands users type produce output via stdout (echo, grep, cat, git
+  status) which works fine bare.
 - `ls` in nushell does print via stdout (it's an external command on most
   systems, or nushell's `ls` outputs a table via ByteStream).
-- `pwd` not printing is the main loss, but `echo (pwd)` or `pwd | print`
-  works as a workaround.
-- Interactive programs (vim, nvim, htop, less) are far more important to
-  support than auto-printing `pwd`.
+- `pwd` not printing is the main loss, but `echo (pwd)` or `pwd | print` works
+  as a workaround.
+- Interactive programs (vim, nvim, htop, less) are far more important to support
+  than auto-printing `pwd`.
 
 **Result:** Pass
 
 The research is complete. No single wrapper pattern solves all cases. The
-recommendation is to use bare commands (no capture) for nushell, accepting
-that some builtins won't auto-print but interactive programs will work.
+recommendation is to use bare commands (no capture) for nushell, accepting that
+some builtins won't auto-print but interactive programs will work.
 
 #### Conclusion
 
-The nushell `-c` mode auto-print is controlled by the `display_output` hook
-and only applies to the last expression. Our wrapper's env capture code
-after the command means the command is never the last expression. The
-`try { }` and `do { }` patterns capture stdout, breaking interactive
-programs. The cleanest fix is to run commands bare and sacrifice auto-print
-for nushell builtins.
+The nushell `-c` mode auto-print is controlled by the `display_output` hook and
+only applies to the last expression. Our wrapper's env capture code after the
+command means the command is never the last expression. The `try { }` and
+`do { }` patterns capture stdout, breaking interactive programs. The cleanest
+fix is to run commands bare and sacrifice auto-print for nushell builtins.
+
+However, the bare wrapper has a significant UX cost: nushell builtins like
+`pwd`, `ls`, `date` produce no visible output unless piped to `print`. This
+is not how nushell is supposed to work. Additionally, detection-based
+approaches (e.g. using `which` to check if a command is built-in) fail for
+pipelines containing both built-ins and interactive programs.
+
+The root cause is that nushell's `-c` mode was not designed for our use case.
+This motivates investigating a fundamentally different architecture.
+
+### Experiment 2: Research alternative architectures
+
+#### Description
+
+The wrapper-based approach for nushell has fundamental limitations. Research
+two alternative architectures that could eliminate the problem entirely:
+
+**Option A: Fork nushell.** Create a fork that is nushell at its core, with
+bash/fish/zsh mode added as a "wrapped shell" feature. Since the base shell
+IS nushell, there's no wrapper — auto-print, vim, and everything else works
+natively.
+
+**Option B: Use nushell as a library.** Import nushell's crates (`nu-cli`,
+`nu-engine`, `nu-protocol`, `nu-command`) and build a custom binary that
+uses nushell's REPL directly for nushell mode, while keeping our wrapper
+approach for bash/fish/zsh.
+
+Both options would make nushell a first-class citizen rather than a wrapped
+subprocess.
+
+#### Research tasks
+
+**1. Nushell crate architecture:**
+
+Study the vendored nushell source to understand its crate structure:
+
+- What crates exist and what do they provide?
+- Which crates would we need to import for a working nushell REPL?
+- Is `nu-cli` designed to be used as a library, or only as part of the
+  nushell binary?
+- Can we create a custom reedline-based REPL that evaluates nushell commands
+  via `nu-engine`?
+- What is the public API surface of `nu-cli`, `nu-engine`, `nu-protocol`?
+
+**2. Feasibility of Option A (fork):**
+
+- How large is the nushell codebase? How many crates, how many lines?
+- What would we need to modify to add bash mode?
+- How hard is it to stay in sync with upstream nushell releases?
+- What's the maintenance burden?
+- Are there precedents for nushell forks?
+
+**3. Feasibility of Option B (library):**
+
+- Can we instantiate a nushell `EngineState` and evaluate commands without
+  running nushell's full REPL?
+- Can we capture the resulting env state after evaluation (like our wrapper
+  does, but via the Rust API)?
+- Can we share reedline between our shell and nushell's evaluation engine?
+- What about nushell's config system — can we initialize it programmatically?
+- Does nushell expose hooks for command-not-found (useful for AI mode)?
+
+**4. Impact on current architecture:**
+
+For each option, assess:
+
+- What happens to our existing wrapper system for bash/fish/zsh?
+- What happens to config.toml and the shell config system?
+- What happens to our completions (fish-based)?
+- What happens to syntax highlighting?
+- What happens to AI mode?
+- What happens to history (SQLite)?
+
+**5. Compare and recommend:**
+
+| Dimension | Current (wrapper) | Fork | Library |
+|-----------|------------------|------|---------|
+| Nushell UX | Broken (no auto-print) | Perfect (native) | Perfect (native) |
+| Maintenance | Low | Very high | Medium |
+| Codebase size | Small | Huge | Medium |
+| Bash/fish/zsh | Works (wrapper) | Needs adding | Works (wrapper) |
+| Upstream sync | N/A | Hard (merge conflicts) | Easy (bump version) |
+
+#### Verification
+
+1. Nushell's crate architecture is documented with public API details.
+2. Both options are assessed with concrete feasibility analysis.
+3. Impact on every existing feature is documented.
+4. A clear recommendation is made with reasoning.
