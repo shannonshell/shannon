@@ -134,19 +134,18 @@ without the user's explicit approval.
 
 **Execution model:**
 
-1. When the AI suggests a command and the user confirms, does it go through
-   the normal `execute_command` path? (Assumed yes.)
+1. When the AI suggests a command and the user confirms, does it go through the
+   normal `execute_command` path? (Assumed yes.)
 2. Single command only, or can the AI suggest multiple commands?
-3. If a command fails, does the AI see the error and suggest a fix, or does
-   the user ask again manually?
+3. If a command fails, does the AI see the error and suggest a fix, or does the
+   user ask again manually?
 
 **System prompt:**
 
 4. What context do we send? Shell name, cwd, OS — what else?
 5. Do we include directory listing of cwd? Helps quality but has
    privacy/performance cost.
-6. Do we include recent command history? Useful context but may contain
-   secrets.
+6. Do we include recent command history? Useful context but may contain secrets.
 
 **Conversation:**
 
@@ -154,8 +153,7 @@ without the user's explicit approval.
    session?
 8. If conversational, when does the conversation reset? Exiting AI mode?
    Switching shells? Closing the terminal?
-9. Where is the chat log stored? Memory only? Disk? Can we reuse
-   history.db?
+9. Where is the chat log stored? Memory only? Disk? Can we reuse history.db?
 
 **Chat management:**
 
@@ -167,38 +165,37 @@ without the user's explicit approval.
 12. How do we handle multiple providers? User picks provider + model in
     config.toml.
 13. What's the minimum config needed? Just an API key?
-14. Do we use the Anthropic API directly, or an OpenAI-compatible endpoint
-    that covers most providers?
+14. Do we use the Anthropic API directly, or an OpenAI-compatible endpoint that
+    covers most providers?
 
 **Tools:**
 
 15. What tools does the AI need for MVP? Probably none — just command
     generation.
-16. What tools would be useful later? File reading, web search, man page
-    lookup?
+16. What tools would be useful later? File reading, web search, man page lookup?
 
 **Privacy:**
 
-17. What information does the AI have access to? Cwd and shell name are
-    safe. Shell history may contain secrets. Directory listings may reveal
-    project structure.
-18. Should there be opt-in levels? Minimal (shell + cwd only) vs full
-    (history + directory listing)?
+17. What information does the AI have access to? Cwd and shell name are safe.
+    Shell history may contain secrets. Directory listings may reveal project
+    structure.
+18. Should there be opt-in levels? Minimal (shell + cwd only) vs full (history +
+    directory listing)?
 
 **UX details:**
 
-19. The "edit" flow — when user presses "e", do we pre-fill reedline input
-    with the suggested command?
-20. What happens when the API is down, the key is missing, or the call
-    times out?
+19. The "edit" flow — when user presses "e", do we pre-fill reedline input with
+    the suggested command?
+20. What happens when the API is down, the key is missing, or the call times
+    out?
 21. Should we show a spinner/loading indicator while waiting for the LLM?
 
 **MVP scope:**
 
 22. What's the absolute minimum that's useful? Proposed: single provider
-    (Anthropic), single question → single command, no conversation memory,
-    no tools, no directory listing. Send question + shell name + cwd to
-    Claude, get a command back, confirm and run.
+    (Anthropic), single question → single command, no conversation memory, no
+    tools, no directory listing. Send question + shell name + cwd to Claude, get
+    a command back, confirm and run.
 
 ## Experiments
 
@@ -245,8 +242,8 @@ architecture decisions before writing any AI code.
 
 **5. Answer architecture questions for shannon:**
 
-Based on the research, propose answers to all open questions above. Document
-the reasoning. The output should be a clear architecture proposal covering:
+Based on the research, propose answers to all open questions above. Document the
+reasoning. The output should be a clear architecture proposal covering:
 
 - API call structure (endpoint, headers, request body)
 - System prompt design
