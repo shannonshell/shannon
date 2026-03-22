@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-22"
+closed = "2026-03-22"
 +++
 
 # Issue 8: Shell configuration (rc files)
@@ -338,3 +339,45 @@ state = run_startup_script(state);
    warning, starts normally.
 6. Create `config.sh` with `export PATH="$PATH:/test/path"`. Run `cargo run`,
    type `echo $PATH` — includes `/test/path`.
+
+**Result:** Pass
+
+All verification steps confirmed. Two additional fixes were needed during
+implementation:
+
+1. **Config dir path:** `dirs::config_dir()` returns `~/Library/Application
+   Support` on macOS, but CLI tools use `~/.config`. Fixed by adding a
+   `config_dir()` helper in `shell.rs` that checks `XDG_CONFIG_HOME` first,
+   falls back to `~/.config/shannon`.
+
+2. **Shell detection order:** Shell detection happened before the startup
+   script ran, so `nu` wasn't found when shannon was launched from a bare
+   context. Fixed by running `config.sh` first, updating the process PATH,
+   then detecting shells.
+
+41 tests pass (5 new startup script tests + 25 existing unit + 11 integration).
+
+#### Conclusion
+
+`config.sh` works end-to-end. Users can set PATH, env vars, and API keys in
+`~/.config/shannon/config.sh`. The script runs once at startup via bash,
+env is captured and used for all sub-shell commands. Shell detection uses the
+updated PATH.
+
+## Conclusion
+
+Issue complete. Shannon's environment is configured via an optional bash
+startup script at `~/.config/shannon/config.sh`. Key decisions:
+
+- **Shannon owns the environment** — sub-shells see only what shannon gives
+  them via `env_clear()`.
+- **Always bash** — the startup script is always sourced by bash. The `.sh`
+  extension makes this clear. Bash is always available.
+- **Runs once at startup** — not per-command. Fast and side-effect-free.
+- **Optional** — users who launch from a configured terminal need nothing.
+- **XDG-aware** — respects `XDG_CONFIG_HOME`, falls back to `~/.config`.
+
+Key files:
+- `src/executor.rs` — `run_startup_script()` and 5 tests
+- `src/shell.rs` — `config_dir()` helper
+- `src/main.rs` — startup order: config.sh → PATH update → shell detection
