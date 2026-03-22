@@ -30,10 +30,10 @@ function HomePage() {
 
       <div className="mt-6">
         <Link
-          to="/docs"
+          to="/docs/getting-started"
           className="text-primary hover:text-accent"
         >
-          {">"} [Read the docs]
+          {">"} [Get started]
         </Link>
       </div>
     </section>
