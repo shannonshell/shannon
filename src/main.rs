@@ -78,6 +78,18 @@ fn main() -> io::Result<()> {
     // Run startup script first so PATH is complete before shell detection
     let mut state = run_startup_script(ShellState::from_current_env());
 
+    // Track nesting depth for nested shannon instances
+    let depth: u32 = state
+        .env
+        .get("SHANNON_DEPTH")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+        + 1;
+    state
+        .env
+        .insert("SHANNON_DEPTH".to_string(), depth.to_string());
+    std::env::set_var("SHANNON_DEPTH", depth.to_string());
+
     // Update process PATH so shell_available() can find binaries
     if let Some(path) = state.env.get("PATH") {
         std::env::set_var("PATH", path);
@@ -105,6 +117,7 @@ fn main() -> io::Result<()> {
             shell: active_shell,
             cwd: state.cwd.clone(),
             last_exit_code: state.last_exit_code,
+            depth,
         };
 
         match editor.read_line(&prompt) {

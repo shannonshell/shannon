@@ -10,6 +10,7 @@ pub struct ShannonPrompt {
     pub shell: ShellKind,
     pub cwd: PathBuf,
     pub last_exit_code: i32,
+    pub depth: u32,
 }
 
 impl ShannonPrompt {
@@ -40,10 +41,15 @@ impl Prompt for ShannonPrompt {
     }
 
     fn render_prompt_indicator(&self, _prompt_mode: PromptEditMode) -> Cow<'_, str> {
-        if self.last_exit_code != 0 {
-            Cow::Borrowed(" ! ")
+        let depth_prefix = if self.depth > 1 {
+            ">".repeat((self.depth - 1) as usize)
         } else {
-            Cow::Borrowed(" > ")
+            String::new()
+        };
+        if self.last_exit_code != 0 {
+            Cow::Owned(format!(" {depth_prefix}! "))
+        } else {
+            Cow::Owned(format!(" {depth_prefix}> "))
         }
     }
 
