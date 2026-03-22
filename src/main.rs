@@ -10,15 +10,16 @@ use reedline::{
 };
 
 use shannon::completer::ShannonCompleter;
+use shannon::config::{ShannonConfig, ShellConfig};
 use shannon::executor::{execute_command, run_startup_script};
 use shannon::highlighter::TreeSitterHighlighter;
 use shannon::prompt::ShannonPrompt;
-use shannon::shell::{self, ShellKind, ShellState};
+use shannon::shell::{self, ShellState};
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
 
-fn shell_available(shell: ShellKind) -> bool {
-    Command::new(shell.binary())
+fn shell_available(binary: &str) -> bool {
+    Command::new(binary)
         .arg("--version")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -26,7 +27,10 @@ fn shell_available(shell: ShellKind) -> bool {
         .is_ok()
 }
 
-fn build_editor(shell: ShellKind, session_id: Option<HistorySessionId>) -> Reedline {
+fn build_editor(
+    shell_config: &ShellConfig,
+    session_id: Option<HistorySessionId>,
+) -> Reedline {
     let mut keybindings = default_emacs_keybindings();
     keybindings.add_binding(
         KeyModifiers::SHIFT,
@@ -55,7 +59,7 @@ fn build_editor(shell: ShellKind, session_id: Option<HistorySessionId>) -> Reedl
     let history = SqliteBackedHistory::with_file(history_db, session_id, Some(Utc::now()))
         .expect("failed to create history database");
 
-    let highlighter = TreeSitterHighlighter::new(shell);
+    let highlighter = TreeSitterHighlighter::new(shell_config.highlighter.as_deref());
 
     let hinter = DefaultHinter::default()
         .with_style(Style::new().fg(Color::Rgb(86, 95, 137))); // Tokyo Night muted #565f89
@@ -75,7 +79,10 @@ fn build_editor(shell: ShellKind, session_id: Option<HistorySessionId>) -> Reedl
 }
 
 fn main() -> io::Result<()> {
-    // Run startup script first so PATH is complete before shell detection
+    // Load config.toml (or use built-in defaults)
+    let config = ShannonConfig::load();
+
+    // Run env script first so PATH is complete before shell detection
     let mut state = run_startup_script(ShellState::from_current_env());
 
     // Track nesting depth for nested shannon instances
@@ -95,42 +102,28 @@ fn main() -> io::Result<()> {
         std::env::set_var("PATH", path);
     }
 
-    // Detect available shells
-    let mut shells: Vec<ShellKind> = [ShellKind::Bash, ShellKind::Nushell, ShellKind::Fish]
+    // Get ordered shell list from config, filter to installed shells
+    let env_default = state.env.get("SHANNON_DEFAULT_SHELL").map(|s| s.as_str());
+    let all_shells = config.shells(env_default);
+    let shells: Vec<(String, ShellConfig)> = all_shells
         .into_iter()
-        .filter(|s| shell_available(*s))
+        .filter(|(_, cfg)| shell_available(&cfg.binary))
         .collect();
 
     if shells.is_empty() {
-        eprintln!("shannon: no supported shells found (looked for bash, nu, fish)");
+        eprintln!("shannon: no supported shells found");
         std::process::exit(1);
-    }
-
-    // SHANNON_DEFAULT_SHELL moves the preferred shell to the front
-    if let Some(default) = state.env.get("SHANNON_DEFAULT_SHELL") {
-        let preferred = match default.as_str() {
-            "bash" => Some(ShellKind::Bash),
-            "nu" | "nushell" => Some(ShellKind::Nushell),
-            "fish" => Some(ShellKind::Fish),
-            _ => None,
-        };
-        if let Some(shell) = preferred {
-            if let Some(pos) = shells.iter().position(|s| *s == shell) {
-                shells.remove(pos);
-                shells.insert(0, shell);
-            }
-        }
     }
 
     // Create a session ID once — shared across shell switches
     let session_id = Reedline::create_history_session_id();
 
-    let mut active_shell = shells[0];
-    let mut editor = build_editor(active_shell, session_id);
+    let mut active_idx = 0;
+    let mut editor = build_editor(&shells[active_idx].1, session_id);
 
     loop {
         let prompt = ShannonPrompt {
-            shell: active_shell,
+            shell_name: shells[active_idx].0.clone(),
             cwd: state.cwd.clone(),
             last_exit_code: state.last_exit_code,
             depth,
@@ -140,10 +133,8 @@ fn main() -> io::Result<()> {
             Ok(Signal::Success(line)) => {
                 if line == SWITCH_COMMAND {
                     // Cycle to next available shell
-                    let current_idx =
-                        shells.iter().position(|s| *s == active_shell).unwrap_or(0);
-                    active_shell = shells[(current_idx + 1) % shells.len()];
-                    editor = build_editor(active_shell, session_id);
+                    active_idx = (active_idx + 1) % shells.len();
+                    editor = build_editor(&shells[active_idx].1, session_id);
                     continue;
                 }
 
@@ -164,7 +155,7 @@ fn main() -> io::Result<()> {
                     c
                 });
 
-                match execute_command(active_shell, line, &state) {
+                match execute_command(&shells[active_idx].1, line, &state) {
                     Ok(new_state) => {
                         state = new_state;
                     }

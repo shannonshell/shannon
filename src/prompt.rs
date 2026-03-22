@@ -4,10 +4,8 @@ use std::path::PathBuf;
 use crossterm::style::Color;
 use reedline::{Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus};
 
-use crate::shell::ShellKind;
-
 pub struct ShannonPrompt {
-    pub shell: ShellKind,
+    pub shell_name: String,
     pub cwd: PathBuf,
     pub last_exit_code: i32,
     pub depth: u32,
@@ -31,7 +29,7 @@ impl Prompt for ShannonPrompt {
     fn render_prompt_left(&self) -> Cow<'_, str> {
         Cow::Owned(format!(
             "[{}] {}",
-            self.shell.display_name(),
+            self.shell_name,
             self.tilde_contract()
         ))
     }
@@ -72,11 +70,7 @@ impl Prompt for ShannonPrompt {
     }
 
     fn get_prompt_color(&self) -> Color {
-        match self.shell {
-            ShellKind::Bash => Color::Green,
-            ShellKind::Nushell => Color::Cyan,
-            ShellKind::Fish => Color::Yellow,
-        }
+        Color::Cyan
     }
 
     fn get_indicator_color(&self) -> Color {

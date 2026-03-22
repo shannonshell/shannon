@@ -2,8 +2,6 @@ use nu_ansi_term::{Color, Style};
 use reedline::{Highlighter, StyledText};
 use tree_sitter::{Language, Node, Parser};
 
-use crate::shell::ShellKind;
-
 // Tokyo Night color palette
 const PURPLE: Color = Color::Rgb(187, 154, 247); // #bb9af7 — keywords
 const BLUE: Color = Color::Rgb(122, 162, 247); // #7aa2f7 — commands
@@ -17,25 +15,28 @@ const FG: Color = Color::Rgb(169, 177, 214); // #a9b1d6 — default foreground
 const OPERATOR: Color = Color::Rgb(137, 221, 255); // #89ddff — operators/pipes
 
 pub struct TreeSitterHighlighter {
-    shell: ShellKind,
+    grammar: String,
 }
 
 impl TreeSitterHighlighter {
-    pub fn new(shell: ShellKind) -> Self {
-        TreeSitterHighlighter { shell }
+    pub fn new(highlighter: Option<&str>) -> Self {
+        TreeSitterHighlighter {
+            grammar: highlighter.unwrap_or("").to_string(),
+        }
     }
 
-    fn make_parser(&self) -> Parser {
-        let mut parser = Parser::new();
-        let language: Language = match self.shell {
-            ShellKind::Bash => tree_sitter_bash::LANGUAGE.into(),
-            ShellKind::Nushell => tree_sitter_nu::LANGUAGE.into(),
-            ShellKind::Fish => tree_sitter_fish::language(),
+    fn make_parser(&self) -> Option<Parser> {
+        let language: Language = match self.grammar.as_str() {
+            "bash" => tree_sitter_bash::LANGUAGE.into(),
+            "nushell" => tree_sitter_nu::LANGUAGE.into(),
+            "fish" => tree_sitter_fish::language(),
+            _ => return None,
         };
+        let mut parser = Parser::new();
         parser
             .set_language(&language)
             .expect("failed to set language");
-        parser
+        Some(parser)
     }
 
     fn style_for_node(&self, node: &Node, source: &str) -> Color {
@@ -46,10 +47,11 @@ impl TreeSitterHighlighter {
             return RED;
         }
 
-        match self.shell {
-            ShellKind::Bash => self.bash_color(node, source),
-            ShellKind::Nushell => self.nushell_color(node, source),
-            ShellKind::Fish => self.fish_color(node, source),
+        match self.grammar.as_str() {
+            "bash" => self.bash_color(node, source),
+            "nushell" => self.nushell_color(node, source),
+            "fish" => self.fish_color(node, source),
+            _ => FG,
         }
     }
 
@@ -167,7 +169,14 @@ impl Highlighter for TreeSitterHighlighter {
             return styled;
         }
 
-        let mut parser = self.make_parser();
+        let mut parser = match self.make_parser() {
+            Some(p) => p,
+            None => {
+                // No grammar — return unstyled
+                styled.push((Style::new().fg(FG), line.to_string()));
+                return styled;
+            }
+        };
 
         let tree = match parser.parse(line, None) {
             Some(tree) => tree,
@@ -223,8 +232,8 @@ fn collect_leaf_styles(
     } else {
         // For named parent nodes that map to a color (like command_name),
         // color all their children with the parent's color
-        let parent_color = match highlighter.shell {
-            ShellKind::Bash => {
+        let parent_color = match highlighter.grammar.as_str() {
+            "bash" => {
                 if node.kind() == "command_name" {
                     Some(BLUE)
                 } else if node.kind() == "simple_expansion" || node.kind() == "expansion" {
@@ -235,7 +244,7 @@ fn collect_leaf_styles(
                     None
                 }
             }
-            ShellKind::Nushell => {
+            "nushell" => {
                 if node.kind() == "val_string" {
                     Some(GREEN)
                 } else if node.kind() == "val_variable" {
@@ -244,20 +253,18 @@ fn collect_leaf_styles(
                     None
                 }
             }
-            ShellKind::Fish => {
+            "fish" => {
                 if node.kind() == "double_quote_string"
                     || node.kind() == "single_quote_string"
                 {
                     Some(GREEN)
                 } else if node.kind() == "variable_expansion" {
                     Some(CYAN)
-                } else if node.kind() == "command" {
-                    // First child of a command is the command name
-                    None // let children determine their own colors
                 } else {
                     None
                 }
             }
+            _ => None,
         };
 
         if let Some(color) = parent_color {

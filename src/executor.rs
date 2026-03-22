@@ -3,10 +3,11 @@ use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::shell::{ShellKind, ShellState};
+use crate::config::{expand_wrapper, read_init_file, ShellConfig};
+use crate::shell::ShellState;
 
 pub fn execute_command(
-    shell: ShellKind,
+    shell_config: &ShellConfig,
     command: &str,
     state: &ShellState,
 ) -> io::Result<ShellState> {
@@ -16,13 +17,10 @@ pub fn execute_command(
         .tempfile()?;
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
-    let wrapper = match shell {
-        ShellKind::Bash => build_bash_wrapper(command, &temp_path),
-        ShellKind::Nushell => build_nushell_wrapper(command, &temp_path),
-        ShellKind::Fish => build_fish_wrapper(command, &temp_path),
-    };
+    let init_content = read_init_file(shell_config.init.as_deref());
+    let wrapper = expand_wrapper(&shell_config.wrapper, command, &temp_path, &init_content);
 
-    let status = Command::new(shell.binary())
+    let status = Command::new(&shell_config.binary)
         .args(["-c", &wrapper])
         .env_clear()
         .envs(&state.env)
@@ -37,11 +35,7 @@ pub fn execute_command(
     // Try to read captured state; fall back to previous state on failure
     let new_state = std::fs::read_to_string(&temp_path)
         .ok()
-        .and_then(|contents| match shell {
-            ShellKind::Bash => parse_bash_env(&contents),
-            ShellKind::Nushell => parse_nushell_env(&contents),
-            ShellKind::Fish => parse_fish_env(&contents),
-        })
+        .and_then(|contents| parse_output(&shell_config.parser, &contents))
         .map(|(env, cwd)| ShellState {
             env,
             cwd,
@@ -59,7 +53,16 @@ pub fn execute_command(
     Ok(new_state)
 }
 
-/// Run the optional startup script at `~/.config/shannon/config.sh`.
+/// Dispatch to the correct parser based on the parser name.
+fn parse_output(parser: &str, contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+    match parser {
+        "bash" => parse_bash_env(contents),
+        "nushell" => parse_nushell_env(contents),
+        _ => parse_env(contents),
+    }
+}
+
+/// Run the optional startup script at env.sh (or config.sh fallback).
 /// Captures the resulting environment and returns an updated ShellState.
 /// If the file doesn't exist or fails, returns the original state.
 pub fn run_startup_script(state: ShellState) -> ShellState {
@@ -69,7 +72,13 @@ pub fn run_startup_script(state: ShellState) -> ShellState {
 /// Inner implementation that accepts an optional config path override (for testing).
 fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> ShellState {
     let config_file = config_path.unwrap_or_else(|| {
-        crate::shell::config_dir().join("config.sh")
+        let dir = crate::shell::config_dir();
+        let env_sh = dir.join("env.sh");
+        if env_sh.exists() {
+            env_sh
+        } else {
+            dir.join("config.sh") // backward compatibility
+        }
     });
 
     if !config_file.exists() {
@@ -85,13 +94,16 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
     {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("shannon: failed to create temp file for config.sh: {e}");
+            eprintln!("shannon: failed to create temp file for env script: {e}");
             return state;
         }
     };
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
-    let wrapper = build_bash_wrapper(&format!("source '{config_str}'"), &temp_path);
+    // Use the bash wrapper template directly for the startup script
+    let wrapper = format!(
+        "source '{config_str}'\n__shannon_ec=$?\n(export -p; echo \"__SHANNON_CWD=$(pwd)\"; echo \"__SHANNON_EXIT=$__shannon_ec\") > '{temp_path}'\nexit $__shannon_ec"
+    );
 
     let status = Command::new("bash")
         .args(["-c", &wrapper])
@@ -105,13 +117,13 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
     match status {
         Ok(s) if !s.success() => {
             eprintln!(
-                "shannon: config.sh exited with code {} (continuing with inherited env)",
+                "shannon: env script exited with code {} (continuing with inherited env)",
                 s.code().unwrap_or(-1)
             );
             return state;
         }
         Err(e) => {
-            eprintln!("shannon: failed to run config.sh: {e}");
+            eprintln!("shannon: failed to run env script: {e}");
             return state;
         }
         _ => {}
@@ -127,43 +139,15 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
             last_exit_code: 0,
         },
         None => {
-            eprintln!("shannon: failed to parse config.sh output (continuing with inherited env)");
+            eprintln!("shannon: failed to parse env script output (continuing with inherited env)");
             state
         }
     }
 }
 
-fn build_bash_wrapper(command: &str, temp_path: &str) -> String {
-    format!(
-        r#"{command}
-__shannon_ec=$?
-(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{temp_path}'
-exit $__shannon_ec"#
-    )
-}
-
-fn build_nushell_wrapper(command: &str, temp_path: &str) -> String {
-    format!(
-        r#"let __shannon_out = (try {{ {command} }} catch {{ |e| $e.rendered | print -e; null }})
-if ($__shannon_out != null) and (($__shannon_out | describe) != "nothing") {{ $__shannon_out | print }}
-let shannon_exit = (if ($env | get -o LAST_EXIT_CODE | is-not-empty) {{ $env.LAST_EXIT_CODE }} else {{ 0 }})
-$env | reject config? | insert __SHANNON_CWD (pwd) | insert __SHANNON_EXIT ($shannon_exit | into string) | to json --serialize | save --force '{temp_path}'"#
-    )
-}
-
-fn build_fish_wrapper(command: &str, temp_path: &str) -> String {
-    format!(
-        r#"{command}
-set __shannon_ec $status
-env > '{temp_path}'
-echo "__SHANNON_CWD="(pwd) >> '{temp_path}'
-echo "__SHANNON_EXIT=$__shannon_ec" >> '{temp_path}'
-exit $__shannon_ec"#
-    )
-}
-
 /// Parse `env` output (KEY=VALUE per line) plus __SHANNON_ markers.
-fn parse_fish_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+/// This is the generic parser used by fish, zsh, and any POSIX shell.
+pub fn parse_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
     let mut env = HashMap::new();
     let mut cwd: Option<PathBuf> = None;
 
@@ -190,15 +174,12 @@ fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> 
     let mut cwd: Option<PathBuf> = None;
 
     for line in contents.lines() {
-        // Lines from `export -p` look like: declare -x KEY="VALUE"
-        // or: declare -x KEY (no value)
-        // Our markers look like: __SHANNON_CWD=/some/path
         if let Some(rest) = line.strip_prefix("declare -x ") {
             if let Some((key, value)) = parse_declare_line(rest) {
                 if key == "__SHANNON_CWD" {
                     cwd = Some(PathBuf::from(&value));
                 } else if key == "__SHANNON_EXIT" {
-                    // Skip — we use the process exit code directly
+                    // Skip
                 } else {
                     env.insert(key, value);
                 }
@@ -218,7 +199,6 @@ fn parse_declare_line(s: &str) -> Option<(String, String)> {
     if let Some(eq_pos) = s.find('=') {
         let key = s[..eq_pos].to_string();
         let raw_value = &s[eq_pos + 1..];
-        // Strip surrounding quotes if present
         let value =
             if raw_value.starts_with('"') && raw_value.ends_with('"') && raw_value.len() >= 2 {
                 unescape_bash_value(&raw_value[1..raw_value.len() - 1])
@@ -227,7 +207,6 @@ fn parse_declare_line(s: &str) -> Option<(String, String)> {
             };
         Some((key, value))
     } else {
-        // Exported but no value — skip
         None
     }
 }
@@ -243,7 +222,7 @@ fn unescape_bash_value(s: &str) -> String {
                 Some('\\') => result.push('\\'),
                 Some('$') => result.push('$'),
                 Some('`') => result.push('`'),
-                Some('\n') => {} // line continuation
+                Some('\n') => {}
                 Some(other) => {
                     result.push('\\');
                     result.push(other);
@@ -275,7 +254,6 @@ fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf
         } else if let Some(s) = value.as_str() {
             env.insert(key.clone(), s.to_string());
         } else if let Some(arr) = value.as_array() {
-            // Nushell stores PATH (and similar) as a list — join with path separator
             let all_strings = arr.iter().all(|v| v.is_string());
             if all_strings {
                 let joined = arr
@@ -286,7 +264,6 @@ fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf
                 env.insert(key.clone(), joined);
             }
         }
-        // Other non-string values are silently dropped (strings-only policy)
     }
 
     Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
@@ -404,32 +381,12 @@ __SHANNON_CWD=/"#;
         assert!(parse_nushell_env("").is_none());
     }
 
-    // --- build wrappers ---
+    // --- parse_env (generic KEY=VALUE) ---
 
     #[test]
-    fn test_build_bash_wrapper() {
-        let wrapper = build_bash_wrapper("echo hello", "/tmp/state.env");
-        assert!(wrapper.contains("echo hello"));
-        assert!(wrapper.contains("/tmp/state.env"));
-        assert!(wrapper.contains("export -p"));
-        assert!(wrapper.contains("__SHANNON_CWD"));
-    }
-
-    #[test]
-    fn test_build_nushell_wrapper() {
-        let wrapper = build_nushell_wrapper("echo hello", "/tmp/state.env");
-        assert!(wrapper.contains("echo hello"));
-        assert!(wrapper.contains("/tmp/state.env"));
-        assert!(wrapper.contains("__SHANNON_CWD"));
-        assert!(wrapper.contains("to json"));
-    }
-
-    // --- parse_fish_env ---
-
-    #[test]
-    fn test_parse_fish_env_basic() {
+    fn test_parse_env_basic() {
         let input = "HOME=/Users/ryan\nPATH=/usr/bin:/bin\nTERM=xterm\n__SHANNON_CWD=/tmp\n__SHANNON_EXIT=0";
-        let (env, cwd) = parse_fish_env(input).unwrap();
+        let (env, cwd) = parse_env(input).unwrap();
         assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
         assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
         assert_eq!(env.get("TERM").unwrap(), "xterm");
@@ -439,19 +396,10 @@ __SHANNON_CWD=/"#;
     }
 
     #[test]
-    fn test_parse_fish_env_empty() {
-        let (env, cwd) = parse_fish_env("").unwrap();
+    fn test_parse_env_empty() {
+        let (env, cwd) = parse_env("").unwrap();
         assert!(env.is_empty());
         assert_eq!(cwd, PathBuf::from("/"));
-    }
-
-    #[test]
-    fn test_build_fish_wrapper() {
-        let wrapper = build_fish_wrapper("echo hello", "/tmp/state.env");
-        assert!(wrapper.contains("echo hello"));
-        assert!(wrapper.contains("/tmp/state.env"));
-        assert!(wrapper.contains("__SHANNON_CWD"));
-        assert!(wrapper.contains("$status"));
     }
 
     // --- run_startup_script ---
@@ -480,7 +428,7 @@ __SHANNON_CWD=/"#;
     #[test]
     fn test_run_startup_script_missing_file() {
         let dir = tempfile::TempDir::new().unwrap();
-        let config = dir.path().join("config.sh"); // does not exist
+        let config = dir.path().join("config.sh");
         let state = make_startup_state(dir.path());
         let original_env = state.env.clone();
         let result = run_startup_script_from(state, Some(config));
