@@ -6,14 +6,18 @@ cycle between them.
 ## How It Works
 
 Shannon detects which shells are installed on your system at startup. It checks
-for `bash`, `nu`, and `fish` in your PATH. The rotation order is:
+for `bash`, `nu`, `fish`, and `zsh` in your PATH. The default rotation order
+is:
 
 ```
-bash → nushell → fish → bash → ...
+bash → nu → fish → zsh → bash → ...
 ```
 
 If a shell isn't installed, it's skipped. If only one shell is available,
 Shift+Tab has no effect.
+
+You can customize which shells appear and their order with the `toggle` option
+in `config.toml`. See [Configuration](../reference/02-configuration.md).
 
 ## Switching in Action
 

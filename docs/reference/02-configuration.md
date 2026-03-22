@@ -5,11 +5,11 @@ Shannon stores its files in `~/.config/shannon/`. The config directory respects
 
 ## Files
 
-| File           | Purpose                                        |
-| -------------- | ---------------------------------------------- |
-| `config.toml`  | Shannon settings — default shell, custom shells |
-| `env.sh`       | Environment setup — PATH, env vars, API keys   |
-| `history.db`   | SQLite database storing all command history     |
+| File          | Purpose                                          |
+| ------------- | ------------------------------------------------ |
+| `config.toml` | Shannon settings — shell rotation, custom shells |
+| `env.sh`      | Environment setup — PATH, env vars, API keys     |
+| `history.db`  | SQLite database storing all command history       |
 
 None of these files are required. Shannon works out of the box with no
 configuration.
@@ -20,10 +20,30 @@ configuration.
 defaults are used. You only need to create it when you want to change
 something.
 
-### Change the default shell
+### Shell rotation (toggle)
+
+Control which shells appear in the Shift+Tab rotation and their order. The
+first shell in the list is the default:
 
 ```toml
-default_shell = "nu"
+toggle = ["nu", "bash"]
+```
+
+This gives you nushell as default with bash as the only other option. Without
+a toggle list, all installed built-in shells are available: bash, nu, fish,
+zsh.
+
+More examples:
+
+```toml
+# Just nushell — no shell switching
+toggle = ["nu"]
+
+# Reorder: fish first, then bash
+toggle = ["fish", "bash"]
+
+# All four, nushell first
+toggle = ["nu", "bash", "fish", "zsh"]
 ```
 
 ### Add a custom shell
@@ -31,8 +51,10 @@ default_shell = "nu"
 Add any shell that supports `-c` for command execution:
 
 ```toml
-[shells.zsh]
-binary = "zsh"
+toggle = ["nu", "bash", "elvish"]
+
+[shells.elvish]
+binary = "elvish"
 highlighter = "bash"
 parser = "env"
 wrapper = """
@@ -46,28 +68,28 @@ exit $__shannon_ec
 """
 ```
 
-This adds zsh to the Shift+Tab rotation alongside the built-in shells.
+Custom shells must be included in the `toggle` list to appear in the rotation.
 
 ### Shell config fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `binary` | Yes | Path or name of the shell binary |
-| `wrapper` | Yes | Wrapper template (see below) |
-| `parser` | No | Output parser: `bash`, `nushell`, or `env` (default: `env`) |
-| `highlighter` | No | Syntax highlighting: `bash`, `nushell`, `fish`, or omitted |
-| `init` | No | Path to init script, relative to config dir |
+| Field         | Required | Description                                                 |
+| ------------- | -------- | ----------------------------------------------------------- |
+| `binary`      | Yes      | Path or name of the shell binary                            |
+| `wrapper`     | Yes      | Wrapper template (see below)                                |
+| `parser`      | No       | Output parser: `bash`, `nushell`, or `env` (default: `env`) |
+| `highlighter` | No       | Syntax highlighting: `bash`, `nushell`, `fish`, or omitted  |
+| `init`        | No       | Path to init script, relative to config dir                 |
 
 ### Wrapper templates
 
 The wrapper is a script that runs the user's command and captures the
 resulting environment. It uses three placeholders:
 
-| Placeholder | Replaced with |
-|-------------|---------------|
-| `{{command}}` | The user's command |
-| `{{temp_path}}` | Path to the temp file for env capture |
-| `{{init}}` | Contents of the init script (or empty) |
+| Placeholder     | Replaced with                          |
+| --------------- | -------------------------------------- |
+| `{{command}}`   | The user's command                     |
+| `{{temp_path}}` | Path to the temp file for env capture  |
+| `{{init}}`      | Contents of the init script (or empty) |
 
 ### Per-shell init scripts
 
@@ -130,14 +152,9 @@ and continues with the inherited environment.
 
 ## Shannon Environment Variables
 
-Shannon recognizes these env vars (from `env.sh` or the inherited environment):
-
-| Variable | Values | Default | Purpose |
-|----------|--------|---------|---------|
-| `SHANNON_DEFAULT_SHELL` | `bash`, `nu`, `fish`, etc. | `bash` | Fallback if no config.toml |
-| `SHANNON_DEPTH` | (set automatically) | — | Nesting depth, shown as `>>` in prompt |
-
-`config.toml`'s `default_shell` takes precedence over the env var.
+| Variable         | Purpose                                              |
+| ---------------- | ---------------------------------------------------- |
+| `SHANNON_DEPTH`  | Set automatically — nesting depth, shown as `>>` in prompt |
 
 ## History Database (history.db)
 

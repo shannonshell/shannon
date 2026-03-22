@@ -25,11 +25,11 @@ captures state after execution. Each shell has its own wrapper template
 defined in the built-in defaults or in `config.toml`. Templates use
 `{{placeholder}}` syntax:
 
-| Placeholder | Replaced with |
-|-------------|---------------|
-| `{{command}}` | The user's command |
-| `{{temp_path}}` | Path to the temp file for env capture |
-| `{{init}}` | Contents of the per-shell init script (or empty) |
+| Placeholder     | Replaced with                                    |
+| --------------- | ------------------------------------------------ |
+| `{{command}}`   | The user's command                               |
+| `{{temp_path}}` | Path to the temp file for env capture            |
+| `{{init}}`      | Contents of the per-shell init script (or empty) |
 
 ### Bash Wrapper (built-in default)
 
