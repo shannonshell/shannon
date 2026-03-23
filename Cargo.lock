@@ -4022,6 +4022,7 @@ dependencies = [
 name = "shannon"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "chrono",
  "crossterm",
  "dirs",
@@ -4042,7 +4043,7 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-fish",
- "tree-sitter-nu",
+ "tree-sitter-language",
  "uuid",
 ]
 
@@ -4726,15 +4727,6 @@ name = "tree-sitter-language"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
-
-[[package]]
-name = "tree-sitter-nu"
-version = "0.0.1"
-source = "git+https://github.com/nushell/tree-sitter-nu#696d257f6b652edb50878a783b30ad7833dec49e"
-dependencies = [
- "cc",
- "tree-sitter-language",
-]
 
 [[package]]
 name = "tree_magic_mini"

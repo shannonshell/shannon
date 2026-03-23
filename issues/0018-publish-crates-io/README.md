@@ -8,28 +8,28 @@ opened = "2026-03-23"
 ## Goal
 
 Publish shannon to crates.io as `shannonshell` so users can install it with
-`cargo install shannonshell`. Set up a versioning process with git tags and
-a release script.
+`cargo install shannonshell`. Set up a versioning process with git tags and a
+release script.
 
 ## Background
 
-The crate name `shannon` is taken on crates.io. We'll use `shannonshell` as
-the crate name, but the binary is still called `shannon`.
+The crate name `shannon` is taken on crates.io. We'll use `shannonshell` as the
+crate name, but the binary is still called `shannon`.
 
 ### tree-sitter-nu: vendor inline
 
 `tree-sitter-nu` is not on crates.io. Rather than publishing it as a separate
 crate, we vendor it directly into our project. The C parser source and Rust
 bindings live in `tree-sitter-nu/` in our repo. Our `build.rs` compiles the C
-source via the `cc` crate. No separate package, no workspace — just one crate
-to publish.
+source via the `cc` crate. No separate package, no workspace — just one crate to
+publish.
 
 ### What needs to happen
 
 **1. Vendor tree-sitter-nu into the project:**
 
-- Copy source from `vendor/tree-sitter-nu/` into `tree-sitter-nu/` in the
-  repo root (or `src/tree_sitter_nu/` — wherever makes sense)
+- Copy source from `vendor/tree-sitter-nu/` into `tree-sitter-nu/` in the repo
+  root (or `src/tree_sitter_nu/` — wherever makes sense)
 - Include the C source files (`src/parser.c`, `src/scanner.c`, headers)
 - Include the Rust bindings (`bindings/rust/lib.rs`, `bindings/rust/build.rs`)
 - Add `cc` as a build dependency
@@ -121,9 +121,8 @@ path = "src/main.rs"
 
 ### Simplification
 
-No workspace needed. One crate (`shannonshell`), one publish. The
-tree-sitter-nu grammar is vendored inline — compiled by our build.rs, no
-separate package.
+No workspace needed. One crate (`shannonshell`), one publish. The tree-sitter-nu
+grammar is vendored inline — compiled by our build.rs, no separate package.
 
 ## Experiments
 
@@ -132,9 +131,10 @@ separate package.
 #### Description
 
 Copy tree-sitter-nu source into our repo, compile the C parser via build.rs
-+ cc, expose the language function from a Rust module, and remove the git
-dependency. Shannon must still build and run with nushell syntax highlighting
-working.
+
+- cc, expose the language function from a Rust module, and remove the git
+  dependency. Shannon must still build and run with nushell syntax highlighting
+  working.
 
 #### Changes
 
@@ -161,10 +161,11 @@ tree-sitter.json, examples, etc.
 
 **`Cargo.toml`** — update dependencies:
 
-- Remove: `tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }`
+- Remove:
+  `tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }`
 - Add: `cc = "1"` to `[build-dependencies]`
-- Add: `tree-sitter-language = "0.1"` to `[dependencies]` (the vendored
-  lib.rs depends on this)
+- Add: `tree-sitter-language = "0.1"` to `[dependencies]` (the vendored lib.rs
+  depends on this)
 
 **`build.rs`** — add C compilation:
 
@@ -185,8 +186,8 @@ fn build_tree_sitter_nu() {
 
 **`src/tree_sitter_nu.rs`** (new module):
 
-Re-export the language function from the vendored bindings. Or simpler:
-inline the binding code (it's ~10 lines):
+Re-export the language function from the vendored bindings. Or simpler: inline
+the binding code (it's ~10 lines):
 
 ```rust
 use tree_sitter_language::LanguageFn;
@@ -214,3 +215,15 @@ Add `pub mod tree_sitter_nu;`
 4. Type `if`, `let`, `def` — keywords are colored.
 5. Type `"hello"` — string is colored.
 6. No git dependency on tree-sitter-nu remains in Cargo.toml or Cargo.lock.
+
+**Result:** Pass
+
+All verification steps confirmed. 88 tests pass. C parser compiles via cc,
+links correctly, nushell syntax highlighting works. No git dependency remains
+in Cargo.toml. The tree-sitter-nu crates.io blocker is resolved.
+
+#### Conclusion
+
+tree-sitter-nu is vendored inline. The git dependency is gone. Shannon can
+now be published to crates.io without dependency issues. Ready for
+experiment 2 (Cargo.toml metadata, release script, dry-run publish).

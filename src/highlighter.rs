@@ -43,7 +43,7 @@ impl TreeSitterHighlighter {
     fn make_parser(&self) -> Option<Parser> {
         let language: Language = match self.grammar.as_str() {
             "bash" => tree_sitter_bash::LANGUAGE.into(),
-            "nushell" => tree_sitter_nu::LANGUAGE.into(),
+            "nushell" => crate::tree_sitter_nu::LANGUAGE.into(),
             "fish" => tree_sitter_fish::language(),
             _ => return None,
         };

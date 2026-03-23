@@ -10,6 +10,20 @@ fn main() {
 
     // --- Themes ---
     build_themes(&out_dir);
+
+    // --- tree-sitter-nu (vendored C parser) ---
+    build_tree_sitter_nu();
+}
+
+fn build_tree_sitter_nu() {
+    let dir = Path::new("tree-sitter-nu/src");
+    println!("cargo:rerun-if-changed=tree-sitter-nu/src/");
+    cc::Build::new()
+        .include(dir)
+        .file(dir.join("parser.c"))
+        .file(dir.join("scanner.c"))
+        .warnings(false)
+        .compile("tree_sitter_nu");
 }
 
 fn build_completions(out_dir: &str) {
