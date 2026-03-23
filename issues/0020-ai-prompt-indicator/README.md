@@ -61,9 +61,9 @@ Users can override: `ai_badge = "yellow --reverse"` in config.toml.
 
 #### Description
 
-Add a highlighted `AI` badge at the start of the prompt in AI mode. Use
-embedded ANSI codes in `render_prompt_left()` since reedline's Prompt trait
-only supports a single foreground color. Add `ai_badge` to the theme system.
+Add a highlighted `AI` badge at the start of the prompt in AI mode. Use embedded
+ANSI codes in `render_prompt_left()` since reedline's Prompt trait only supports
+a single foreground color. Add `ai_badge` to the theme system.
 
 #### Changes
 
@@ -71,13 +71,13 @@ only supports a single foreground color. Add `ai_badge` to the theme system.
 
 Add `pub ai_badge: nu_ansi_term::Style` to Theme struct.
 
-Default: `Style::new().fg(Color::Black).on(Color::Magenta)` — black text
-on magenta background. Uses ANSI colors so it adapts to the terminal theme.
+Default: `Style::new().fg(Color::Black).on(Color::Magenta)` — black text on
+magenta background. Uses ANSI colors so it adapts to the terminal theme.
 
 In `Theme::from_config`, apply override if `config.ai_badge` is set.
 
-In `apply_named_theme`, no fish theme maps to this (fish has no AI mode),
-so the default always applies unless user overrides.
+In `apply_named_theme`, no fish theme maps to this (fish has no AI mode), so the
+default always applies unless user overrides.
 
 **`shannon/src/config.rs`**:
 
@@ -107,10 +107,9 @@ if self.ai_mode {
 }
 ```
 
-The `Style::paint()` produces ANSI escape codes inline. Reedline renders
-them as-is. After the badge, reedline applies `get_prompt_color()` to
-the rest of the prompt text, so the `[nu] ~/project` part stays in the
-normal prompt color.
+The `Style::paint()` produces ANSI escape codes inline. Reedline renders them
+as-is. After the badge, reedline applies `get_prompt_color()` to the rest of the
+prompt text, so the `[nu] ~/project` part stays in the normal prompt color.
 
 **`shannon/src/repl.rs`**:
 
@@ -125,8 +124,8 @@ ai_badge_style: theme.ai_badge,
 1. `cargo build` succeeds.
 2. `cargo test` passes.
 3. Normal mode: `[nu] ~/project >` — no AI badge.
-4. AI mode (Enter on empty): `AI [nu] ~/project >` with AI having a
-   colored background.
+4. AI mode (Enter on empty): `AI [nu] ~/project >` with AI having a colored
+   background.
 5. The rest of the prompt (`[nu] ~/project >`) stays in normal prompt color.
 6. Badge adapts to terminal theme (ANSI magenta).
 7. Override works: `ai_badge = "yellow --reverse"` in config.toml.

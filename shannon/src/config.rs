@@ -49,6 +49,7 @@ pub struct ThemeConfig {
     pub type_: Option<String>,
     pub prompt: Option<String>,
     pub hint: Option<String>,
+    pub ai_badge: Option<String>,
 }
 
 /// Configuration for a single shell.

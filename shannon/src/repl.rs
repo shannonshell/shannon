@@ -297,6 +297,7 @@ pub fn run(
             prompt_color: theme.prompt,
             indicator_color: theme.prompt_indicator,
             error_color: theme.prompt_error,
+            ai_badge_style: theme.ai_badge,
         };
 
         match editor.read_line(&prompt) {

@@ -13,6 +13,7 @@ pub struct ShannonPrompt {
     pub prompt_color: Color,
     pub indicator_color: Color,
     pub error_color: Color,
+    pub ai_badge_style: nu_ansi_term::Style,
 }
 
 /// Tilde-contract a path (replace home dir prefix with ~).
@@ -36,13 +37,33 @@ impl ShannonPrompt {
 
 impl Prompt for ShannonPrompt {
     fn render_prompt_left(&self) -> Cow<'_, str> {
-        let mode = if self.ai_mode { ":ai" } else { "" };
-        Cow::Owned(format!(
-            "[{}{}] {}",
-            self.shell_name,
-            mode,
-            self.tilde_contract()
-        ))
+        if self.ai_mode {
+            let badge = self.ai_badge_style.paint(" AI ").to_string();
+            // Re-apply prompt color after badge's ANSI reset
+            let prompt_ansi = match self.prompt_color {
+                Color::Rgb { r, g, b } => format!("\x1b[38;2;{r};{g};{b}m"),
+                Color::Cyan => "\x1b[36m".to_string(),
+                Color::Green => "\x1b[32m".to_string(),
+                Color::Yellow => "\x1b[33m".to_string(),
+                Color::Blue => "\x1b[34m".to_string(),
+                Color::Magenta => "\x1b[35m".to_string(),
+                Color::Red => "\x1b[31m".to_string(),
+                _ => "\x1b[36m".to_string(), // default cyan
+            };
+            Cow::Owned(format!(
+                "{} {}[{}] {}",
+                badge,
+                prompt_ansi,
+                self.shell_name,
+                self.tilde_contract()
+            ))
+        } else {
+            Cow::Owned(format!(
+                "[{}] {}",
+                self.shell_name,
+                self.tilde_contract()
+            ))
+        }
     }
 
     fn render_prompt_right(&self) -> Cow<'_, str> {

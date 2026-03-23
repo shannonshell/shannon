@@ -34,6 +34,7 @@ pub struct Theme {
 
     // UI (nu_ansi_term styles for hinter/menu)
     pub hint: Style,
+    pub ai_badge: Style,
 }
 
 impl Default for Theme {
@@ -53,6 +54,7 @@ impl Default for Theme {
             prompt_error: crossterm::style::Color::Red,
             prompt_indicator: crossterm::style::Color::DarkGrey,
             hint: Style::new().fg(Color::DarkGray).italic(),
+            ai_badge: Style::new().fg(Color::Black).on(Color::Magenta),
         }
     }
 }
@@ -143,6 +145,9 @@ impl Theme {
         }
         if let Some(ref s) = config.hint {
             theme.hint = parse_style(s);
+        }
+        if let Some(ref s) = config.ai_badge {
+            theme.ai_badge = parse_style(s);
         }
 
         theme
