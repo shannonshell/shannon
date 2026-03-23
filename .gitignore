@@ -1,1 +1,13 @@
 target/
+vendor/bash/
+vendor/codex/
+vendor/elvish/
+vendor/fish/
+vendor/nushell/
+vendor/opencode/
+vendor/pi/
+vendor/powershell/
+vendor/reedline/
+vendor/tree-sitter-nu/
+vendor/zsh/
+website/node_modules/
