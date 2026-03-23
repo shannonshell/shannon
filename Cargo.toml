@@ -1,7 +1,30 @@
 [package]
-name = "shannon"
-edition = "2021"
+name = "shannonshell"
 version = "0.1.0"
+edition = "2021"
+description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
+license = "MIT"
+repository = "https://github.com/user/shannon"
+readme = "README.md"
+keywords = ["shell", "nushell", "bash", "ai", "terminal"]
+categories = ["command-line-utilities"]
+include = [
+    "src/**/*.rs",
+    "build.rs",
+    "completions/**/*.fish",
+    "themes/**/*.theme",
+    "tree-sitter-nu/**/*.c",
+    "tree-sitter-nu/**/*.h",
+    "tree-sitter-nu/**/*.json",
+    "tree-sitter-nu/LICENSE",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+]
+
+[[bin]]
+name = "shannon"
+path = "src/main.rs"
 
 [dependencies]
 reedline = { version = "0.46.0", features = ["sqlite"] }

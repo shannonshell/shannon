@@ -5,7 +5,6 @@ use std::process::Command;
 use chrono::Utc;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
-use nu_ansi_term::{Color, Style};
 use reedline::{
     default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultHinter,
     EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal,

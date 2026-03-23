@@ -1,11 +1,11 @@
 use std::io;
 
-use shannon::config::ShannonConfig;
-use shannon::executor::run_startup_script;
-use shannon::nushell_engine::NushellEngine;
-use shannon::repl;
-use shannon::shell::ShellState;
-use shannon::theme::Theme;
+use shannonshell::config::ShannonConfig;
+use shannonshell::executor::run_startup_script;
+use shannonshell::nushell_engine::NushellEngine;
+use shannonshell::repl;
+use shannonshell::shell::ShellState;
+use shannonshell::theme::Theme;
 
 fn main() -> io::Result<()> {
     // Load config.toml (or use built-in defaults)

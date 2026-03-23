@@ -4019,7 +4019,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "shannon"
+name = "shannonshell"
 version = "0.1.0"
 dependencies = [
  "cc",

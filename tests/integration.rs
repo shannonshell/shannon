@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use shannon::config::ShellConfig;
-use shannon::executor::execute_command;
-use shannon::nushell_engine::NushellEngine;
-use shannon::shell::ShellState;
+use shannonshell::config::ShellConfig;
+use shannonshell::executor::execute_command;
+use shannonshell::nushell_engine::NushellEngine;
+use shannonshell::shell::ShellState;
 
 fn has_binary(binary: &str) -> bool {
     Command::new(binary)
@@ -20,7 +20,7 @@ fn initial_state() -> ShellState {
 }
 
 fn bash_config() -> ShellConfig {
-    shannon::config::ShannonConfig::default()
+    shannonshell::config::ShannonConfig::default()
         .shells()
         .into_iter()
         .find(|(name, _)| name == "bash")
@@ -29,7 +29,7 @@ fn bash_config() -> ShellConfig {
 }
 
 fn fish_config() -> ShellConfig {
-    shannon::config::ShannonConfig::default()
+    shannonshell::config::ShannonConfig::default()
         .shells()
         .into_iter()
         .find(|(name, _)| name == "fish")
@@ -38,7 +38,7 @@ fn fish_config() -> ShellConfig {
 }
 
 fn zsh_config() -> ShellConfig {
-    shannon::config::ShannonConfig::default()
+    shannonshell::config::ShannonConfig::default()
         .shells()
         .into_iter()
         .find(|(name, _)| name == "zsh")
