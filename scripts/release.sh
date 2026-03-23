@@ -24,8 +24,12 @@ cargo publish --dry-run
 echo "==> Committing and tagging..."
 cd "$REPO_DIR"
 git add -A
-git commit -m "Release v$VERSION"
-git tag "v$VERSION"
+if git diff --cached --quiet; then
+  echo "  No changes to commit (version already set)"
+else
+  git commit -m "Release v$VERSION"
+fi
+git tag -f "v$VERSION"
 
 # Publish
 echo "==> Publishing to crates.io..."

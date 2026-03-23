@@ -10,6 +10,7 @@ keywords = ["shell", "nushell", "bash", "ai", "terminal"]
 categories = ["command-line-utilities"]
 include = [
     "src/**/*.rs",
+    "tests/**/*.rs",
     "build.rs",
     "completions/**/*.fish",
     "themes/**/*.theme",
