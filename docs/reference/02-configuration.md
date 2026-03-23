@@ -158,7 +158,10 @@ hex (`"#FF79C6"`), with modifiers (`"green --bold"`, `"cyan --italic"`).
 
 Available color categories: `keyword`, `command`, `string`, `number`,
 `variable`, `operator`, `comment`, `error`, `foreground`, `type`,
-`prompt`, `hint`.
+`prompt`, `hint`, `ai_badge`.
+
+The `ai_badge` controls the highlighted ` AI ` indicator that appears when
+AI mode is active. Default: black text on magenta background.
 
 ## Environment Script (env.sh)
 
