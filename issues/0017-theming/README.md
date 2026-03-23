@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-23"
+closed = "2026-03-23"
 +++
 
 # Issue 17: Theming
@@ -475,4 +476,20 @@ Named themes are working. All three layers complete:
 2. Named themes (`name = "catppuccin-mocha"`)
 3. Individual overrides (`keyword = "red"`)
 
-Light/dark auto-detection deferred to a future experiment.
+Light/dark auto-detection deferred to a future issue.
+
+## Conclusion
+
+Issue complete. Shannon is fully themeable with three layers:
+
+1. **ANSI defaults** — inherits terminal theme, zero config
+2. **Named themes** — 26 themes (25 from fish + tokyo-night), set via
+   `name = "catppuccin-mocha"` in config.toml
+3. **Individual overrides** — any color overrideable on top of a theme
+
+Key files:
+- `src/theme.rs` — Theme struct, parse_style, named theme loading
+- `src/highlighter.rs` — uses theme colors instead of hardcoded constants
+- `src/prompt.rs` — configurable prompt colors
+- `build.rs` — parses fish .theme files at build time, embeds as JSON
+- `themes/` — 26 .theme files checked into git
