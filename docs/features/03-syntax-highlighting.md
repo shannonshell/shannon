@@ -2,55 +2,58 @@
 
 Shannon highlights your input as you type using
 [tree-sitter](https://tree-sitter.github.io/) grammars. Each shell has its own
-grammar, so you get accurate highlighting for bash and nushell syntax.
+grammar, so you get accurate highlighting for bash, nushell, fish, and zsh
+syntax.
 
-## Tokyo Night Theme
+## Color Themes
 
-Shannon uses the [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme)
-color palette:
+By default, shannon uses standard ANSI colors that inherit from your
+terminal's theme. If your terminal uses Dracula, shannon looks like Dracula.
+If it uses Solarized Light, shannon adapts automatically.
 
-| Element   | Color                           | Examples                            |
-| --------- | ------------------------------- | ----------------------------------- |
-| Keywords  | Purple `#bb9af7`                | `if`, `for`, `let`, `export`, `def` |
-| Commands  | Blue `#7aa2f7`                  | `ls`, `grep`, `echo`, `cd`          |
-| Strings   | Green `#9ece6a`                 | `"hello"`, `'world'`                |
-| Numbers   | Orange `#ff9e64`                | `42`, `3.14`                        |
-| Variables | Cyan `#7dcfff`                  | `$HOME`, `$env.PATH`                |
-| Operators | Bright cyan `#89ddff`           | `\|`, `>`, `&&`, `\|\|`             |
-| Comments  | Gray `#565f89`                  | `# this is a comment`               |
-| Types     | Yellow `#e0af68` (nushell only) | `int`, `string`, `list`             |
-| Errors    | Red `#f7768e`                   | Syntax errors, unmatched quotes     |
-| Default   | Foreground `#a9b1d6`            | Everything else                     |
+You can also pick a named theme or override individual colors. See
+[Configuration](../reference/02-configuration.md) for the `[theme]` section.
+
+### Color Categories
+
+| Category   | What it colors                | Default (ANSI) |
+| ---------- | ----------------------------- | -------------- |
+| Keywords   | `if`, `for`, `let`, `export`  | Magenta bold   |
+| Commands   | `ls`, `grep`, `echo`, `cd`    | Blue           |
+| Strings    | `"hello"`, `'world'`          | Green          |
+| Numbers    | `42`, `3.14`                  | Yellow         |
+| Variables  | `$HOME`, `$env.PATH`          | Cyan           |
+| Operators  | `|`, `>`, `&&`, `||`          | Cyan           |
+| Comments   | `# this is a comment`         | Dark gray      |
+| Types      | `int`, `string` (nushell)     | Yellow         |
+| Errors     | Syntax errors                 | Red bold       |
 
 ## Bash Highlighting
 
 Keywords like `if`, `then`, `else`, `for`, `while`, `export`, and `function`
-are highlighted in purple. Command names are blue. Variables (`$FOO`,
-`${BAR}`) are cyan. Pipes and redirections are bright cyan.
-
-```
-export FOO="hello" | grep -r "pattern" src/
-^^^^^^              ^      ^  ^^^^^^^^  ^^^^
-purple   green      cyan   blue green   default
-```
+are highlighted. Command names are colored. Variables (`$FOO`, `${BAR}`) and
+pipes/redirections are distinct.
 
 ## Nushell Highlighting
 
-Nushell has additional categories: type annotations (`int`, `string`) are
-yellow, and booleans (`true`, `false`) are orange. Nushell keywords include
-`let`, `mut`, `def`, `match`, `try`, `catch`, and `use`.
+Nushell has additional categories: type annotations (`int`, `string`) and
+booleans (`true`, `false`). Nushell keywords include `let`, `mut`, `def`,
+`match`, `try`, `catch`, and `use`.
 
-```
-let name: string = "world"
-^^^ ^^^^  ^^^^^^   ^^^^^^^
-purple cyan yellow  green
-```
+## Fish Highlighting
+
+Fish keywords like `if`, `function`, `set`, `for`, `while` are highlighted.
+Command names (the first word of a command) are colored.
+
+## Zsh Highlighting
+
+Zsh uses the bash grammar for highlighting (the syntax is similar enough).
 
 ## Incomplete Input
 
 Tree-sitter handles incomplete input gracefully. If you're mid-line and the
 syntax is incomplete (like an unterminated string), the parser still highlights
-the valid portions. Unrecoverable parse errors are shown in red.
+the valid portions. Unrecoverable parse errors are shown in the error color.
 
 ## Automatic Switching
 

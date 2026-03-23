@@ -7,7 +7,7 @@ Shannon stores its files in `~/.config/shannon/`. The config directory respects
 
 | File          | Purpose                                          |
 | ------------- | ------------------------------------------------ |
-| `config.toml` | Shannon settings — shell rotation, custom shells |
+| `config.toml` | Shannon settings — shell rotation, theming, AI config |
 | `env.sh`      | Environment setup — PATH, env vars, API keys     |
 | `history.db`  | SQLite database storing all command history       |
 
@@ -122,6 +122,43 @@ binary = "/opt/homebrew/bin/bash"
 wrapper = "..."
 parser = "bash"
 ```
+
+### Theming
+
+Shannon's colors are configurable via the `[theme]` section. Three layers:
+
+**Layer 1: ANSI defaults (no config needed).** Shannon uses standard ANSI
+colors by default, so it inherits your terminal's color scheme automatically.
+
+**Layer 2: Named themes.** Pick from 26 built-in themes:
+
+```toml
+[theme]
+name = "tokyo-night"
+```
+
+Available themes: `ayu`, `ayu-mirage`, `base16-default`, `base16-eighties`,
+`bay-cruise`, `catppuccin-frappe`, `catppuccin-macchiato`, `catppuccin-mocha`,
+`coolbeans`, `default`, `default-rgb`, `dracula`, `fairground`,
+`just-a-touch`, `lava`, `mono-lace`, `mono-smoke`, `none`, `nord`,
+`old-school`, `seaweed`, `snow-day`, `solarized`, `tokyo-night`,
+`tomorrow`, `tomorrow-night-bright`.
+
+**Layer 3: Individual overrides.** Override any color on top of a theme:
+
+```toml
+[theme]
+name = "catppuccin-mocha"
+keyword = "red"              # override just this color
+command = "#7aa2f7 --bold"   # hex with modifier
+```
+
+Color values: named (`"green"`, `"cyan"`), bright (`"brred"`, `"brcyan"`),
+hex (`"#FF79C6"`), with modifiers (`"green --bold"`, `"cyan --italic"`).
+
+Available color categories: `keyword`, `command`, `string`, `number`,
+`variable`, `operator`, `comment`, `error`, `foreground`, `type`,
+`prompt`, `hint`.
 
 ## Environment Script (env.sh)
 
