@@ -176,3 +176,157 @@ Support the same formats as fish:
 | `src/prompt.rs`        | Hardcoded Cyan          | Reads from theme         |
 | `src/config.rs`        | No `[theme]` section    | Parses theme config      |
 | `build.rs` or startup  | N/A                     | Loads/parses theme files |
+
+## Experiments
+
+### Experiment 1: Switch to ANSI defaults and add theme infrastructure
+
+#### Description
+
+Two changes in one experiment:
+
+1. **Switch all hardcoded RGB colors to ANSI colors.** This immediately
+   fixes shannon for users with non-Tokyo-Night terminals. Zero config,
+   inherits terminal theme.
+
+2. **Add a `Theme` struct and `[theme]` config section.** This is the
+   infrastructure for layers 2 and 3. The theme struct holds all semantic
+   colors and is passed to the highlighter, prompt, hinter, and menu.
+
+Defer named theme files (fish `.theme` parsing) and light/dark auto-detection
+to later experiments. This experiment establishes the foundation.
+
+#### Changes
+
+**`src/theme.rs`** (new module):
+
+```rust
+pub struct Theme {
+    // Syntax highlighting
+    pub keyword: Style,
+    pub command: Style,
+    pub string: Style,
+    pub number: Style,
+    pub variable: Style,
+    pub operator: Style,
+    pub comment: Style,
+    pub error: Style,
+    pub foreground: Style,
+    pub type_: Style,
+
+    // UI
+    pub prompt: Color,
+    pub prompt_indicator: Color,
+    pub prompt_error: Color,
+    pub hint: Style,
+    pub menu_text: Style,
+    pub menu_selected: Style,
+    pub menu_description: Style,
+    pub menu_match: Style,
+}
+```
+
+`Theme::default()` — returns ANSI color defaults:
+- keyword → Magenta bold
+- command → Blue
+- string → Green
+- number → Yellow
+- variable → Cyan
+- operator → Cyan
+- comment → DarkGray
+- error → Red
+- foreground → White
+- prompt → Cyan
+- hint → DarkGray italic
+
+`Theme::from_config(config: &ThemeConfig)` — applies overrides from
+config.toml on top of defaults. Parses color strings ("green", "#FF79C6",
+"cyan --bold") into `Style` objects.
+
+`parse_color(s: &str) -> Style` — parses a color string:
+- Named: "red", "green", "cyan", "magenta", "white", "brred", etc.
+- Hex: "#FF79C6" or "FF79C6"
+- Modifiers: "--bold", "--italic", "--underline" appended
+- Example: "green --bold" → `Color::Green.bold()`
+
+**`src/config.rs`** — add `[theme]` section:
+
+```rust
+#[derive(Deserialize, Default)]
+pub struct ThemeConfig {
+    pub name: Option<String>,     // for future named themes
+    pub keyword: Option<String>,
+    pub command: Option<String>,
+    pub string: Option<String>,
+    pub number: Option<String>,
+    pub variable: Option<String>,
+    pub operator: Option<String>,
+    pub comment: Option<String>,
+    pub error: Option<String>,
+    pub foreground: Option<String>,
+    pub type_: Option<String>,
+    pub prompt: Option<String>,
+    pub hint: Option<String>,
+    // ... menu colors
+}
+```
+
+Add `pub theme: ThemeConfig` to `ShannonConfig`.
+
+**`src/highlighter.rs`** — accept `Theme` instead of hardcoded colors:
+
+Replace the `const` color values with fields read from the theme. Change
+`TreeSitterHighlighter::new` to accept `&Theme`:
+
+```rust
+pub fn new(highlighter: Option<&str>, theme: &Theme) -> Self
+```
+
+Store the theme's colors as fields on the struct. The `style_for_node` and
+color methods use these fields instead of constants.
+
+**`src/repl.rs`** — pass theme to components:
+
+- Create `Theme` at the start of `run()` from config
+- Pass `&theme` to `build_editor`
+- In `build_editor`:
+  - `TreeSitterHighlighter::new(highlighter, &theme)`
+  - `DefaultHinter::default().with_style(theme.hint)`
+  - `ColumnarMenu::default().with_text_style(theme.menu_text)...`
+- Pass theme's prompt color to `ShannonPrompt`
+
+**`src/prompt.rs`** — use theme colors:
+
+Add `prompt_color: Color` and `indicator_color: Color` and
+`error_color: Color` to `ShannonPrompt`. Use them in `get_prompt_color()`
+and `get_indicator_color()`.
+
+**`src/lib.rs`** — add `pub mod theme;`
+
+#### Tests
+
+**`src/theme.rs`** tests:
+
+- `test_default_theme` — default theme uses ANSI colors (not RGB)
+- `test_parse_color_named` — "green" → Green, "magenta" → Magenta
+- `test_parse_color_hex` — "#FF79C6" → Rgb(255, 121, 198)
+- `test_parse_color_bright` — "brred" → LightRed
+- `test_parse_color_with_modifiers` — "green --bold" → Green bold
+- `test_theme_from_config` — overrides apply on top of defaults
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes.
+3. Run shannon with NO `[theme]` config — colors come from terminal's
+   ANSI palette. Looks good in any terminal theme.
+4. Add overrides to config.toml:
+   ```toml
+   [theme]
+   keyword = "#bb9af7"
+   command = "#7aa2f7"
+   ```
+   Verify those two colors are RGB while others remain ANSI.
+5. Syntax highlighting still works for all grammars (bash, nushell, fish).
+6. Prompt, hints, and completion menu all respect the theme.
+7. Test in a light terminal theme — should be readable (ANSI defaults).
