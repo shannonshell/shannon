@@ -3,13 +3,21 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    // --- Completions ---
+    build_completions(&out_dir);
+
+    // --- Themes ---
+    build_themes(&out_dir);
+}
+
+fn build_completions(out_dir: &str) {
     let completions_dir = Path::new("completions");
     println!("cargo:rerun-if-changed=completions/");
 
     if !completions_dir.exists() {
-        // No completions directory — write empty table
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-        fs::write(Path::new(&out_dir).join("completions.json"), "{}").unwrap();
+        fs::write(Path::new(out_dir).join("completions.json"), "{}").unwrap();
         return;
     }
 
@@ -25,13 +33,112 @@ fn main() {
     }
 
     let json = serde_json::to_string(&table).unwrap();
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    fs::write(Path::new(&out_dir).join("completions.json"), json).unwrap();
+    fs::write(Path::new(out_dir).join("completions.json"), json).unwrap();
 
     eprintln!(
         "build.rs: parsed {} commands from fish completions",
         table.len()
     );
+}
+
+/// Fish variable → shannon semantic category mapping.
+fn map_fish_var(var: &str) -> Option<&'static str> {
+    match var {
+        "fish_color_command" => Some("command"),
+        "fish_color_keyword" => Some("keyword"),
+        "fish_color_quote" => Some("string"),
+        "fish_color_comment" => Some("comment"),
+        "fish_color_error" => Some("error"),
+        "fish_color_normal" => Some("foreground"),
+        "fish_color_autosuggestion" => Some("hint"),
+        "fish_color_redirection" => Some("operator"),
+        "fish_color_option" => Some("operator"),
+        "fish_color_operator" => Some("operator"),
+        "fish_color_escape" => Some("variable"),
+        "fish_color_param" => Some("foreground"),
+        "fish_pager_color_description" => Some("menu_description"),
+        "fish_pager_color_prefix" => Some("menu_match"),
+        "fish_pager_color_completion" => Some("menu_text"),
+        _ => None,
+    }
+}
+
+/// Parse a fish .theme file into sections with mapped shannon categories.
+fn parse_fish_theme(
+    contents: &str,
+) -> HashMap<String, HashMap<String, String>> {
+    let mut sections: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut current_section = "unknown".to_string();
+
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            current_section = line[1..line.len() - 1].to_string();
+            continue;
+        }
+        // Lines: fish_color_name value [--modifiers]
+        let parts: Vec<&str> = line.splitn(2, ' ').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let var_name = parts[0];
+        let color_value = parts[1].trim();
+
+        if let Some(category) = map_fish_var(var_name) {
+            // Normalize hex colors: bare "ab1234" → "#ab1234"
+            let normalized = if color_value.len() >= 6
+                && !color_value.starts_with('#')
+                && !color_value.starts_with('-')
+                && color_value[..6].chars().all(|c| c.is_ascii_hexdigit())
+            {
+                format!("#{color_value}")
+            } else {
+                color_value.to_string()
+            };
+
+            sections
+                .entry(current_section.clone())
+                .or_default()
+                .insert(category.to_string(), normalized);
+        }
+    }
+
+    sections
+}
+
+fn build_themes(out_dir: &str) {
+    let themes_dir = Path::new("themes");
+    println!("cargo:rerun-if-changed=themes/");
+
+    if !themes_dir.exists() {
+        fs::write(Path::new(out_dir).join("themes.json"), "{}").unwrap();
+        return;
+    }
+
+    let mut all_themes: HashMap<String, HashMap<String, HashMap<String, String>>> = HashMap::new();
+
+    for entry in fs::read_dir(themes_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map(|e| e == "theme").unwrap_or(false) {
+            let name = path
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .to_string();
+            let contents = fs::read_to_string(&path).unwrap_or_default();
+            let sections = parse_fish_theme(&contents);
+            all_themes.insert(name, sections);
+        }
+    }
+
+    let json = serde_json::to_string(&all_themes).unwrap();
+    fs::write(Path::new(out_dir).join("themes.json"), json).unwrap();
+
+    eprintln!("build.rs: parsed {} themes", all_themes.len());
 }
 
 #[derive(Default, serde::Serialize)]

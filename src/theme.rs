@@ -1,6 +1,17 @@
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use nu_ansi_term::{Color, Style};
 
 use crate::config::ThemeConfig;
+
+/// Embedded themes parsed at build time from themes/*.theme files.
+/// Map: theme_name → { section_name → { category → color_string } }
+static THEMES: LazyLock<HashMap<String, HashMap<String, HashMap<String, String>>>> =
+    LazyLock::new(|| {
+        let json = include_str!(concat!(env!("OUT_DIR"), "/themes.json"));
+        serde_json::from_str(json).unwrap_or_default()
+    });
 
 /// Shannon's theme — semantic colors for syntax highlighting and UI.
 pub struct Theme {
@@ -47,10 +58,56 @@ impl Default for Theme {
 }
 
 impl Theme {
+    /// Apply a named theme's colors on top of the current theme.
+    fn apply_named_theme(&mut self, name: &str) {
+        let themes = &*THEMES;
+        let sections = match themes.get(name) {
+            Some(s) => s,
+            None => {
+                eprintln!("shannon: unknown theme: {name}");
+                return;
+            }
+        };
+
+        // Prefer "dark" section, fall back to "unknown", then first available
+        let colors = sections
+            .get("dark")
+            .or_else(|| sections.get("unknown"))
+            .or_else(|| sections.values().next());
+
+        let colors = match colors {
+            Some(c) => c,
+            None => return,
+        };
+
+        for (category, color_str) in colors {
+            match category.as_str() {
+                "keyword" => self.keyword = parse_style(color_str),
+                "command" => self.command = parse_style(color_str),
+                "string" => self.string = parse_style(color_str),
+                "number" => self.number = parse_style(color_str),
+                "variable" => self.variable = parse_style(color_str),
+                "operator" => self.operator = parse_style(color_str),
+                "comment" => self.comment = parse_style(color_str),
+                "error" => self.error = parse_style(color_str),
+                "foreground" => self.foreground = parse_style(color_str),
+                "hint" => self.hint = parse_style(color_str),
+                "prompt" => self.prompt = parse_crossterm_color(color_str),
+                _ => {} // menu colors etc. — future use
+            }
+        }
+    }
+
     /// Create a theme from config, applying overrides on top of defaults.
     pub fn from_config(config: &ThemeConfig) -> Self {
         let mut theme = Theme::default();
 
+        // Layer 2: named theme
+        if let Some(ref name) = config.name {
+            theme.apply_named_theme(name);
+        }
+
+        // Layer 3: individual overrides
         if let Some(ref s) = config.keyword {
             theme.keyword = parse_style(s);
         }
@@ -249,5 +306,53 @@ mod tests {
         assert_eq!(theme.command, Style::new().fg(Color::Blue).bold());
         // Non-overridden fields stay as ANSI defaults
         assert_eq!(theme.string, Style::new().fg(Color::Green));
+    }
+
+    #[test]
+    fn test_themes_loaded() {
+        let themes = &*THEMES;
+        assert!(
+            themes.len() > 20,
+            "expected 20+ themes, got {}",
+            themes.len()
+        );
+        assert!(themes.contains_key("tokyo-night"));
+        assert!(themes.contains_key("catppuccin-mocha"));
+        assert!(themes.contains_key("dracula"));
+    }
+
+    #[test]
+    fn test_named_theme_tokyo_night() {
+        let config = ThemeConfig {
+            name: Some("tokyo-night".to_string()),
+            ..Default::default()
+        };
+        let theme = Theme::from_config(&config);
+        // Tokyo Night keyword is #bb9af7
+        assert_eq!(theme.keyword, Style::new().fg(Color::Rgb(187, 154, 247)));
+        // Tokyo Night command is #7aa2f7
+        assert_eq!(theme.command, Style::new().fg(Color::Rgb(122, 162, 247)));
+    }
+
+    #[test]
+    fn test_named_theme_with_override() {
+        let config = ThemeConfig {
+            name: Some("tokyo-night".to_string()),
+            keyword: Some("red".to_string()),
+            ..Default::default()
+        };
+        let theme = Theme::from_config(&config);
+        // Override takes precedence
+        assert_eq!(theme.keyword, Style::new().fg(Color::Red));
+        // Non-overridden stays from named theme
+        assert_eq!(theme.command, Style::new().fg(Color::Rgb(122, 162, 247)));
+    }
+
+    #[test]
+    fn test_no_config_stays_ansi() {
+        let config = ThemeConfig::default();
+        let theme = Theme::from_config(&config);
+        assert_eq!(theme.keyword, Style::new().fg(Color::Magenta).bold());
+        assert_eq!(theme.command, Style::new().fg(Color::Blue));
     }
 }

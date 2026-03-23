@@ -351,18 +351,18 @@ Ready for experiment 2 (named themes from fish `.theme` files).
 
 #### Description
 
-Add named theme support: `name = "catppuccin-mocha"` in config.toml loads
-a complete color scheme. Copy fish's 25 `.theme` files into the repo, add
-a custom `tokyo-night.theme`, parse them at startup, and apply as defaults
-that individual overrides can still override.
+Add named theme support: `name = "catppuccin-mocha"` in config.toml loads a
+complete color scheme. Copy fish's 25 `.theme` files into the repo, add a custom
+`tokyo-night.theme`, parse them at startup, and apply as defaults that
+individual overrides can still override.
 
 #### Changes
 
 **`scripts/update-themes.sh`** (new):
 
-Copies `vendor/fish/share/themes/*.theme` into `themes/` directory. Does
-not overwrite files that don't exist in fish (preserves our custom themes
-like `tokyo-night.theme`).
+Copies `vendor/fish/share/themes/*.theme` into `themes/` directory. Does not
+overwrite files that don't exist in fish (preserves our custom themes like
+`tokyo-night.theme`).
 
 **`themes/`** (new directory):
 
@@ -393,6 +393,7 @@ fish_pager_color_prefix 7aa2f7
 **`src/theme.rs`** — add theme file parsing:
 
 `parse_fish_theme(contents: &str, mode: &str) -> HashMap<String, String>`:
+
 - Parse `.theme` file format: skip comments and blank lines
 - Track current section (`[light]`, `[dark]`, `[unknown]`)
 - Only collect variables from the matching section (or `[unknown]`)
@@ -400,27 +401,30 @@ fish_pager_color_prefix 7aa2f7
 - Return a map of fish variable name → color string
 
 `Theme::from_fish_theme(theme_map: &HashMap<String, String>) -> Theme`:
-- Map fish variable names to our semantic categories using the mapping
-  from the issue (fish_color_command → command, etc.)
+
+- Map fish variable names to our semantic categories using the mapping from the
+  issue (fish_color_command → command, etc.)
 - Parse each color string via `parse_style`
 - Return a Theme with all mapped colors set, ANSI defaults for unmapped
 
 `Theme::from_config(config: &ThemeConfig)` — updated:
+
 1. Start with ANSI defaults
 2. If `name` is set, load the named theme file and apply it
 3. Apply individual overrides on top
 
 `load_theme_file(name: &str) -> Option<String>`:
-- Look for `{config_dir}/themes/{name}.theme` first (user custom)
-- Fall back to built-in themes (embedded via `include_str!` at build time
-  or loaded from the themes/ directory)
-- For simplicity: embed all theme files at build time using a build.rs
-  addition, or load from a known path at runtime
 
-Actually, simplest approach: embed the theme files in the binary at build
-time (like completions). `build.rs` reads `themes/*.theme`, builds a
-`HashMap<theme_name, theme_contents>` as JSON, `include_str!` at runtime.
-This means no file I/O at startup — themes are in the binary.
+- Look for `{config_dir}/themes/{name}.theme` first (user custom)
+- Fall back to built-in themes (embedded via `include_str!` at build time or
+  loaded from the themes/ directory)
+- For simplicity: embed all theme files at build time using a build.rs addition,
+  or load from a known path at runtime
+
+Actually, simplest approach: embed the theme files in the binary at build time
+(like completions). `build.rs` reads `themes/*.theme`, builds a
+`HashMap<theme_name, theme_contents>` as JSON, `include_str!` at runtime. This
+means no file I/O at startup — themes are in the binary.
 
 **`build.rs`** — add theme embedding:
 
@@ -430,9 +434,9 @@ Read all `.theme` files from `themes/`, build a JSON map of
 
 **Mode detection (deferred):**
 
-For now, default to `"dark"` mode when parsing theme sections. Auto-detection
-of light/dark is a future experiment. Users can override with a `mode` field
-in config.toml if needed later.
+For now, default to `"dark"` mode when parsing theme sections. Auto-detection of
+light/dark is a future experiment. Users can override with a `mode` field in
+config.toml if needed later.
 
 #### Tests
 
@@ -440,8 +444,8 @@ in config.toml if needed later.
 
 - `test_parse_fish_theme_dark` — parse catppuccin-mocha dark section
 - `test_parse_fish_theme_unknown` — parse theme with only `[unknown]` section
-- `test_theme_from_fish_maps_colors` — fish variables map to correct
-  semantic categories
+- `test_theme_from_fish_maps_colors` — fish variables map to correct semantic
+  categories
 - `test_named_theme_loads` — `name = "tokyo-night"` loads and applies
 - `test_named_theme_with_overrides` — name + individual override works
 
@@ -449,10 +453,26 @@ in config.toml if needed later.
 
 1. `cargo build` succeeds (themes embedded).
 2. `cargo test` passes.
-3. Config with `name = "tokyo-night"` — colors match the old hardcoded
-   Tokyo Night RGB values.
+3. Config with `name = "tokyo-night"` — colors match the old hardcoded Tokyo
+   Night RGB values.
 4. Config with `name = "catppuccin-mocha"` — catppuccin colors appear.
 5. Config with `name = "dracula"` — dracula colors appear.
 6. Config with `name = "catppuccin-mocha"` + `keyword = "red"` — catppuccin
    everywhere except keyword which is red.
 7. No config — ANSI defaults still work (layer 1 unchanged).
+
+**Result:** Pass
+
+All verification steps confirmed. 88 tests pass (68 unit + 20 integration),
+including 4 new named theme tests. 26 themes embedded in the binary (25 from
+fish + tokyo-night). Named themes load correctly, individual overrides work
+on top. ANSI defaults unchanged when no theme is set.
+
+#### Conclusion
+
+Named themes are working. All three layers complete:
+1. ANSI defaults (no config)
+2. Named themes (`name = "catppuccin-mocha"`)
+3. Individual overrides (`keyword = "red"`)
+
+Light/dark auto-detection deferred to a future experiment.
