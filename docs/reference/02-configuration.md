@@ -187,6 +187,23 @@ for `config.sh` as a fallback (backward compatibility).
 The script is always executed by bash. If it fails, shannon prints a warning
 and continues with the inherited environment.
 
+## Meta-Commands
+
+Shannon has built-in commands prefixed with `/`. These are handled by shannon
+itself, not sent to the active shell.
+
+| Command | Description |
+|---------|-------------|
+| `/switch <shell>` | Switch to a specific shell |
+| `/switch` | List available shells |
+| `/help` | Show available commands and keybindings |
+
+If a file exists at the path (e.g. `/usr/bin/env`), the command goes to
+the shell instead. Meta-commands only activate when no matching file exists.
+
+You can also access `/switch` via the **Ctrl+S** shell picker menu, which
+shows a vertical list of available shells.
+
 ## Shannon Environment Variables
 
 | Variable         | Purpose                                              |

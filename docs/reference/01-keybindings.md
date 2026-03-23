@@ -10,9 +10,11 @@ These work in both insert and normal mode:
 
 | Key       | Action                              |
 | --------- | ----------------------------------- |
-| Shift+Tab | Switch to next shell                |
+| Shift+Tab | Cycle to next shell                 |
+| Ctrl+S    | Shell picker menu                   |
 | Tab       | Command/file completion             |
 | Right     | Accept autosuggestion (insert mode) |
+| Enter     | Toggle AI mode (on empty line)      |
 | Ctrl+D    | Exit shannon                        |
 
 ## Vi Normal Mode

@@ -88,13 +88,18 @@ model = "claude-sonnet-4-20250514"
 
 See the [documentation](docs/) for full config options.
 
-## Building
-
-Requires [Rust](https://www.rust-lang.org/tools/install).
+## Installation
 
 ```sh
+cargo install shannonshell
+```
+
+Or build from source:
+
+```sh
+git clone https://github.com/shannonshell/shannon.git
+cd shannon/shannon
 cargo build --release
-./scripts/install.sh
 ```
 
 ## License

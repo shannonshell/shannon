@@ -2,22 +2,24 @@
 
 ## Installation
 
-Shannon requires [Rust](https://www.rust-lang.org/tools/install). Clone the
-repo and build:
+Install from [crates.io](https://crates.io/crates/shannonshell):
 
 ```sh
-git clone https://github.com/yourusername/shannon.git
-cd shannon
-cargo build --release
+cargo install shannonshell
 ```
 
-The binary is at `target/release/shannon`. Copy it to somewhere in your PATH,
-or run it directly.
+Or build from source:
+
+```sh
+git clone https://github.com/shannonshell/shannon.git
+cd shannon/shannon
+cargo build --release
+```
 
 ## First Run
 
 ```sh
-cargo run
+shannon
 ```
 
 You'll see a prompt like this:
