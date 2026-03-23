@@ -194,3 +194,137 @@ Ctrl+G or similar.
 6. Shift+Tab still works for cycling.
 7. State (env, cwd) carries over on switch (same as Shift+Tab).
 8. Menu doesn't appear if only one shell is available.
+
+**Result:** Partial
+
+Ctrl+S menu works — shows shells, selection switches correctly. Two issues:
+
+1. Ctrl+Tab was taken by the terminal — changed to Ctrl+S (S for switch)
+2. The menu fills `__shannon_switch:zsh` into the prompt, which looks ugly
+   and requires an extra Enter press
+
+#### Conclusion
+
+The picker menu works but the internal `__shannon_switch:` prefix is
+user-visible. This motivates a meta-command system with `/` prefix that
+looks intentional. The menu should fill in `/switch zsh` instead.
+
+### Experiment 2: Meta-commands with `/` prefix
+
+#### Description
+
+Replace `__shannon_switch:{name}` with `/switch {name}`. Establish a
+meta-command convention: lines starting with `/` are checked against known
+shannon commands before being sent to the shell. If `/command` doesn't
+match a known meta-command AND a file `/command` exists on the filesystem,
+it's sent to the shell. Otherwise it's handled as a meta-command.
+
+This also means users can type `/switch zsh` directly without the picker
+menu.
+
+#### Changes
+
+**`shannon/src/repl.rs`**:
+
+1. Update `ShellSwitchCompleter` — change suggestion values from
+   `__shannon_switch:{name}` to `/switch {name}`:
+
+   ```rust
+   value: format!("/switch {name}"),
+   display_override: Some(name.clone()),
+   ```
+
+2. Add meta-command detection in the main loop. After trimming the line,
+   before the existing `__shannon_switch` check:
+
+   ```rust
+   // Meta-commands: /switch, /help, etc.
+   if line.starts_with('/') {
+       if handle_meta_command(line, &shells, &mut active_idx, &mut editor,
+           session_id, ai_mode, &theme, &shell_names) {
+           continue;
+       }
+       // Not a known meta-command — fall through to shell execution
+   }
+   ```
+
+3. Add `handle_meta_command` function:
+
+   ```rust
+   fn handle_meta_command(
+       line: &str,
+       shells: &[(String, ShellConfig)],
+       active_idx: &mut usize,
+       editor: &mut Reedline,
+       session_id: Option<HistorySessionId>,
+       ai_mode: bool,
+       theme: &Theme,
+       shell_names: &[String],
+   ) -> bool {
+       let parts: Vec<&str> = line.splitn(2, ' ').collect();
+       let cmd = parts[0];
+       let arg = parts.get(1).map(|s| s.trim()).unwrap_or("");
+
+       // Check if a file with this name exists on the filesystem
+       if std::path::Path::new(cmd).exists() {
+           return false; // let the shell handle it
+       }
+
+       match cmd {
+           "/switch" => {
+               if let Some(idx) = shells.iter().position(|(n, _)| n == arg) {
+                   *active_idx = idx;
+                   *editor = build_editor(...);
+               } else if !arg.is_empty() {
+                   eprintln!("shannon: unknown shell: {arg}");
+               } else {
+                   // No arg — list available shells
+                   let names: Vec<&str> = shells.iter().map(|(n, _)| n.as_str()).collect();
+                   eprintln!("Available shells: {}", names.join(", "));
+               }
+               true
+           }
+           "/help" => {
+               eprintln!("Shannon commands:");
+               eprintln!("  /switch <shell>  — switch to a shell");
+               eprintln!("  /help            — show this help");
+               eprintln!("  Shift+Tab        — cycle to next shell");
+               eprintln!("  Ctrl+S           — shell picker menu");
+               eprintln!("  Enter (empty)    — toggle AI mode");
+               true
+           }
+           _ => false, // unknown /command, let shell handle it
+       }
+   }
+   ```
+
+4. Remove the `__shannon_switch:` detection (replaced by `/switch`).
+
+5. Update highlighter to skip tree-sitter for meta-commands. In
+   `TreeSitterHighlighter::highlight()`, at the top:
+
+   ```rust
+   if line.starts_with('/') {
+       let first_word = line.split_whitespace().next().unwrap_or("");
+       if matches!(first_word, "/switch" | "/help") {
+           styled.push((Style::new().fg(self.foreground), line.to_string()));
+           return styled;
+       }
+   }
+   ```
+
+   This renders meta-commands in plain foreground text — no confusing
+   syntax highlighting artifacts.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes.
+3. Ctrl+S menu shows shells, selecting fills `/switch zsh`, Enter switches.
+4. Typing `/switch bash` directly switches to bash.
+5. `/switch` with no arg lists available shells.
+6. `/help` shows help text.
+7. `/usr/bin/env` still works (filesystem check finds the file).
+8. `/nonexistent` with no matching file and no matching command goes to shell.
+9. Shift+Tab still cycles.
+10. Meta-commands don't get tree-sitter highlighted (plain text).
