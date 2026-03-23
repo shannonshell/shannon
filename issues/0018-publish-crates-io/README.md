@@ -124,3 +124,93 @@ path = "src/main.rs"
 No workspace needed. One crate (`shannonshell`), one publish. The
 tree-sitter-nu grammar is vendored inline — compiled by our build.rs, no
 separate package.
+
+## Experiments
+
+### Experiment 1: Vendor tree-sitter-nu inline
+
+#### Description
+
+Copy tree-sitter-nu source into our repo, compile the C parser via build.rs
++ cc, expose the language function from a Rust module, and remove the git
+dependency. Shannon must still build and run with nushell syntax highlighting
+working.
+
+#### Changes
+
+**Copy files from `vendor/tree-sitter-nu/` into `tree-sitter-nu/`:**
+
+```
+tree-sitter-nu/
+├── src/
+│   ├── parser.c          ← generated C parser
+│   ├── scanner.c         ← custom scanner
+│   └── tree_sitter/
+│       ├── alloc.h
+│       ├── array.h
+│       └── parser.h
+├── bindings/
+│   └── rust/
+│       └── lib.rs        ← Rust bindings (language() function)
+├── LICENSE               ← MIT license, credit nushell authors
+└── src/node-types.json   ← node type definitions
+```
+
+Only copy what's needed for compilation — skip grammar.js, queries/,
+tree-sitter.json, examples, etc.
+
+**`Cargo.toml`** — update dependencies:
+
+- Remove: `tree-sitter-nu = { git = "https://github.com/nushell/tree-sitter-nu" }`
+- Add: `cc = "1"` to `[build-dependencies]`
+- Add: `tree-sitter-language = "0.1"` to `[dependencies]` (the vendored
+  lib.rs depends on this)
+
+**`build.rs`** — add C compilation:
+
+After the existing completions and themes code, add:
+
+```rust
+fn build_tree_sitter_nu() {
+    let dir = Path::new("tree-sitter-nu/src");
+    cc::Build::new()
+        .include(dir)
+        .file(dir.join("parser.c"))
+        .file(dir.join("scanner.c"))
+        .warnings(false)
+        .compile("tree_sitter_nu");
+    println!("cargo:rerun-if-changed=tree-sitter-nu/src/");
+}
+```
+
+**`src/tree_sitter_nu.rs`** (new module):
+
+Re-export the language function from the vendored bindings. Or simpler:
+inline the binding code (it's ~10 lines):
+
+```rust
+use tree_sitter_language::LanguageFn;
+
+extern "C" {
+    fn tree_sitter_nu() -> *const ();
+}
+
+pub const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_nu) };
+```
+
+**`src/highlighter.rs`** — update import:
+
+Change `tree_sitter_nu::LANGUAGE` to `crate::tree_sitter_nu::LANGUAGE`.
+
+**`src/lib.rs`** — add module:
+
+Add `pub mod tree_sitter_nu;`
+
+#### Verification
+
+1. `cargo build` succeeds (C parser compiles, Rust links).
+2. `cargo test` passes — all existing tests green.
+3. Run shannon, switch to nushell mode — syntax highlighting works.
+4. Type `if`, `let`, `def` — keywords are colored.
+5. Type `"hello"` — string is colored.
+6. No git dependency on tree-sitter-nu remains in Cargo.toml or Cargo.lock.
