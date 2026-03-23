@@ -8,69 +8,65 @@ opened = "2026-03-23"
 ## Goal
 
 Publish shannon to crates.io as `shannonshell` so users can install it with
-`cargo install shannonshell`. Set up a Cargo workspace, a versioning process
-with git tags, and a release script.
+`cargo install shannonshell`. Set up a versioning process with git tags and
+a release script.
 
 ## Background
 
 The crate name `shannon` is taken on crates.io. We'll use `shannonshell` as
 the crate name, but the binary is still called `shannon`.
 
-`tree-sitter-nu` is not on crates.io (the nushell team never published it).
-We'll republish it as `tree-sitter-shannon-nu` to avoid name-squatting.
+### tree-sitter-nu: vendor inline
 
-### Cargo workspace
-
-Shannon becomes a workspace with two crates:
-
-```
-Cargo.toml                            ← workspace root
-├── crates/tree-sitter-shannon-nu/    ← republished grammar
-│   ├── Cargo.toml                    ← name = "tree-sitter-shannon-nu"
-│   ├── bindings/rust/
-│   ├── src/                          ← generated C parser
-│   └── ...
-├── src/                              ← shannonshell binary
-├── completions/
-├── themes/
-└── ...
-```
-
-The root `Cargo.toml` is both the workspace definition and the `shannonshell`
-package.
+`tree-sitter-nu` is not on crates.io. Rather than publishing it as a separate
+crate, we vendor it directly into our project. The C parser source and Rust
+bindings live in `tree-sitter-nu/` in our repo. Our `build.rs` compiles the C
+source via the `cc` crate. No separate package, no workspace — just one crate
+to publish.
 
 ### What needs to happen
 
-**1. Create `crates/tree-sitter-shannon-nu/`:**
+**1. Vendor tree-sitter-nu into the project:**
 
-- Copy source from `vendor/tree-sitter-nu/` into `crates/tree-sitter-shannon-nu/`
-- Rename package to `tree-sitter-shannon-nu` in its Cargo.toml
-- Set version to `0.1.0`
-- Keep the MIT license and credit the nushell authors
-- Verify with `cargo publish --dry-run -p tree-sitter-shannon-nu`
+- Copy source from `vendor/tree-sitter-nu/` into `tree-sitter-nu/` in the
+  repo root (or `src/tree_sitter_nu/` — wherever makes sense)
+- Include the C source files (`src/parser.c`, `src/scanner.c`, headers)
+- Include the Rust bindings (`bindings/rust/lib.rs`, `bindings/rust/build.rs`)
+- Add `cc` as a build dependency
+- Update our `build.rs` to compile the C parser
+- Create a `src/tree_sitter_nu.rs` module that exposes the language function
+- Remove the `tree-sitter-nu` git dependency from Cargo.toml
 
-**2. Set up workspace in root `Cargo.toml`:**
-
-```toml
-[workspace]
-members = [".", "crates/tree-sitter-shannon-nu"]
-```
-
-**3. Update root `Cargo.toml` for `shannonshell`:**
+**2. Update root `Cargo.toml` for `shannonshell`:**
 
 - Rename package to `shannonshell`
 - Add `[[bin]]` section: `name = "shannon"`, `path = "src/main.rs"`
 - Version: `0.1.0`
 - Add metadata: description, license, repository, keywords, categories, readme
-- Change `tree-sitter-nu` git dependency to
-  `tree-sitter-shannon-nu = { path = "crates/tree-sitter-shannon-nu", version = "0.1" }`
-- Add `include` to ensure `completions/`, `themes/`, `build.rs` are packaged
+- Add `cc` to build-dependencies
+- Remove `tree-sitter-nu` git dependency
+- Add `include` to ensure all needed files are packaged:
+  ```toml
+  include = [
+      "src/**/*.rs",
+      "build.rs",
+      "completions/**/*.fish",
+      "themes/**/*.theme",
+      "tree-sitter-nu/**/*.c",
+      "tree-sitter-nu/**/*.h",
+      "tree-sitter-nu/**/*.rs",
+      "tree-sitter-nu/**/*.json",
+      "Cargo.toml",
+      "LICENSE",
+      "README.md",
+  ]
+  ```
 
-**4. Update `src/highlighter.rs`:**
+**3. Update `src/highlighter.rs`:**
 
-- Change `use tree_sitter_nu::LANGUAGE` to `use tree_sitter_shannon_nu::LANGUAGE`
+- Change `use tree_sitter_nu::LANGUAGE` to use our vendored module
 
-**5. Create `scripts/release.sh`:**
+**4. Create `scripts/release.sh`:**
 
 ```bash
 #!/usr/bin/env bash
@@ -78,9 +74,8 @@ set -euo pipefail
 
 VERSION="${1:?Usage: $0 <version>}"
 
-# Update versions
+# Update version
 sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
-sed -i '' "s/^version = .*/version = \"$VERSION\"/" crates/tree-sitter-shannon-nu/Cargo.toml
 
 # Test
 cargo test
@@ -90,11 +85,8 @@ git add -A
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 
-# Publish (tree-sitter first, then shannon)
-cargo publish -p tree-sitter-shannon-nu
-echo "Waiting for crates.io index..."
-sleep 15
-cargo publish -p shannonshell
+# Publish
+cargo publish
 
 # Push
 git push
@@ -103,27 +95,10 @@ git push --tags
 echo "Published shannonshell v$VERSION"
 ```
 
-**6. Verify:**
+**5. Verify:**
 
-- `cargo publish --dry-run -p tree-sitter-shannon-nu`
-- `cargo publish --dry-run -p shannonshell`
-- Both must pass before real publish
-
-### Include files for crates.io
-
-The `shannonshell` crate must include these non-Rust files:
-
-```toml
-include = [
-    "src/**/*.rs",
-    "build.rs",
-    "completions/**/*.fish",
-    "themes/**/*.theme",
-    "Cargo.toml",
-    "LICENSE",
-    "README.md",
-]
-```
+- `cargo publish --dry-run` must pass before real publish
+- `cargo install --path .` must produce a working `shannon` binary
 
 ### Metadata
 
@@ -143,3 +118,9 @@ categories = ["command-line-utilities"]
 name = "shannon"
 path = "src/main.rs"
 ```
+
+### Simplification
+
+No workspace needed. One crate (`shannonshell`), one publish. The
+tree-sitter-nu grammar is vendored inline — compiled by our build.rs, no
+separate package.
