@@ -114,7 +114,11 @@ fn build_editor(
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
     let shell_menu = ReedlineMenu::WithCompleter {
-        menu: Box::new(reedline::ListMenu::default().with_name("shell_menu")),
+        menu: Box::new(
+            reedline::IdeMenu::default()
+                .with_name("shell_menu")
+                .with_default_border(),
+        ),
         completer: Box::new(ShellSwitchCompleter {
             shells: shell_names.to_vec(),
         }),
