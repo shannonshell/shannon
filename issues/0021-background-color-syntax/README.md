@@ -37,3 +37,46 @@ The `--background=` prefix mirrors nu_ansi_term's `.on()` method and matches fis
   call `.on(parse_nu_color(color))` on the style
 - Update docs to mention `--background=` syntax
 - The default `ai_badge` becomes expressible as `"black --background=magenta"`
+
+## Experiments
+
+### Experiment 1: Add --background= to parse_style
+
+#### Description
+
+Add `--background=color` support to `parse_style` in `src/theme.rs`. Small
+change — detect the prefix in the modifier loop, parse the color, call `.on()`.
+
+#### Changes
+
+**`shannon/src/theme.rs`** — update `parse_style`:
+
+In the modifier loop, before the `match`, check for `--background=`:
+
+```rust
+if let Some(bg) = part.strip_prefix("--background=") {
+    style = style.on(parse_nu_color(bg));
+} else {
+    match *part { ... }
+}
+```
+
+Add test:
+
+- `test_parse_style_background` — `"black --background=magenta"` produces
+  `Style::new().fg(Color::Black).on(Color::Magenta)`
+- `test_parse_style_background_hex` — `"white --background=#1e1e2e"` works
+- `test_parse_style_background_only` — `"--background=red"` sets bg with
+  default fg
+
+**`docs/reference/02-configuration.md`** — update color values section to
+mention `--background=`.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` passes.
+3. Set `ai_badge = "black --background=magenta"` in config.toml — same
+   appearance as the default.
+4. Set `ai_badge = "white --bold --background=blue"` — white bold on blue.
+5. Existing theme colors without `--background=` still work unchanged.
