@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-23"
+closed = "2026-03-23"
 +++
 
 # Issue 18: Publish to crates.io
@@ -332,3 +333,30 @@ echo "Published shannonshell v$VERSION"
 3. `cargo publish --dry-run` passes — no errors, all files included.
 4. `cargo install --path .` produces a working `shannon` binary.
 5. The binary is called `shannon`, not `shannonshell`.
+
+**Result:** Pass
+
+Published `shannonshell v0.1.0` to crates.io. All verification steps
+confirmed. Additional fixes applied during implementation:
+
+- Moved Rust crate into `shannon/` subdirectory to isolate it from
+  vendor/ and website/ (cargo's dirty-check was seeing untracked files)
+- Added `tests/**/*.rs` to include list
+- Fixed release script to handle "nothing to commit" case
+- Tagged as `v0.1.0` and pushed to GitHub
+
+#### Conclusion
+
+shannonshell v0.1.0 is live on crates.io. Users can install with
+`cargo install shannonshell`. The binary is called `shannon`.
+
+## Conclusion
+
+Issue complete. Shannon is published to crates.io as `shannonshell`.
+
+Key deliverables:
+- Crate name: `shannonshell`, binary name: `shannon`
+- tree-sitter-nu vendored inline (no git dependency)
+- Rust crate isolated in `shannon/` subdirectory
+- Release script at `scripts/release.sh`
+- v0.1.0 published and tagged
