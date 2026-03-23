@@ -18,7 +18,7 @@ for arg in "$@"; do
   esac
 done
 
-cd "$REPO_DIR"
+cd "$REPO_DIR/shannon"
 
 if $CLEAN; then
   echo "==> Cleaning..."
@@ -28,9 +28,9 @@ fi
 if $RELEASE; then
   echo "==> Building shannon (release)..."
   cargo build --release
-  echo "  $REPO_DIR/target/release/shannon"
+  echo "  $REPO_DIR/shannon/target/release/shannon"
 else
   echo "==> Building shannon (debug)..."
   cargo build
-  echo "  $REPO_DIR/target/debug/shannon"
+  echo "  $REPO_DIR/shannon/target/debug/shannon"
 fi

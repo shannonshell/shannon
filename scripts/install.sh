@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-BINARY="$REPO_DIR/target/release/shannon"
+BINARY="$REPO_DIR/shannon/target/release/shannon"
 
 if [ ! -f "$BINARY" ]; then
   echo "Error: Release build not found at $BINARY"

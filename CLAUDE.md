@@ -7,9 +7,13 @@ switches to traditional shells. Named after Claude Shannon.
 ## Build
 
 ```sh
+cd shannon
 cargo build
 cargo run
 ```
+
+The Rust crate lives in the `shannon/` subdirectory. All cargo commands
+run from there.
 
 ## Architecture
 
@@ -17,7 +21,7 @@ Shannon uses reedline (from crates.io) as its line editor. Bash, fish, and zsh
 run as subprocesses via wrapper scripts. Nushell is embedded as a library via
 `eval_source()` from the `nu-cli` crate.
 
-### Source files
+### Source files (under `shannon/`)
 
 - `src/main.rs` — entry point, startup sequence
 - `src/repl.rs` — main REPL loop, shell switching, AI mode, OSC integration

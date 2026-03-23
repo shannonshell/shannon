@@ -5,7 +5,7 @@ VERSION="${1:?Usage: $0 <version>}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
-cd "$REPO_DIR"
+cd "$REPO_DIR/shannon"
 
 echo "==> Releasing shannonshell v$VERSION"
 
@@ -22,16 +22,19 @@ cargo publish --dry-run
 
 # Commit and tag
 echo "==> Committing and tagging..."
+cd "$REPO_DIR"
 git add -A
 git commit -m "Release v$VERSION"
 git tag "v$VERSION"
 
 # Publish
 echo "==> Publishing to crates.io..."
+cd "$REPO_DIR/shannon"
 cargo publish
 
 # Push
 echo "==> Pushing..."
+cd "$REPO_DIR"
 git push
 git push --tags
 
