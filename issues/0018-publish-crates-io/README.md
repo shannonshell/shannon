@@ -227,3 +227,108 @@ in Cargo.toml. The tree-sitter-nu crates.io blocker is resolved.
 tree-sitter-nu is vendored inline. The git dependency is gone. Shannon can
 now be published to crates.io without dependency issues. Ready for
 experiment 2 (Cargo.toml metadata, release script, dry-run publish).
+
+### Experiment 2: Cargo.toml metadata, release script, dry-run
+
+#### Description
+
+Prepare shannon for crates.io publishing. Rename the package to
+`shannonshell`, add all required metadata, add the `[[bin]]` section,
+add `include` for non-Rust files, create the release script, and verify
+with `cargo publish --dry-run`.
+
+Do NOT actually publish — just get the dry-run passing.
+
+#### Changes
+
+**`Cargo.toml`** — add crates.io metadata:
+
+Update the `[package]` section:
+```toml
+[package]
+name = "shannonshell"
+version = "0.1.0"
+edition = "2021"
+description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
+license = "MIT"
+repository = "https://github.com/user/shannon"
+readme = "README.md"
+keywords = ["shell", "nushell", "bash", "ai", "terminal"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "shannon"
+path = "src/main.rs"
+```
+
+Add `include` to ensure completions, themes, and vendored C source are
+packaged:
+
+```toml
+include = [
+    "src/**/*.rs",
+    "build.rs",
+    "completions/**/*.fish",
+    "themes/**/*.theme",
+    "tree-sitter-nu/**/*.c",
+    "tree-sitter-nu/**/*.h",
+    "tree-sitter-nu/**/*.json",
+    "tree-sitter-nu/LICENSE",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+]
+```
+
+Note: renaming the package from `shannon` to `shannonshell` means all
+`use shannon::*` imports in `src/main.rs` and `tests/integration.rs`
+become `use shannonshell::*`. The binary name stays `shannon` via the
+`[[bin]]` section.
+
+**`src/main.rs`** — update imports:
+
+Change all `use shannon::` to `use shannonshell::`.
+
+**`tests/integration.rs`** — update imports:
+
+Change all `use shannon::` to `use shannonshell::`.
+
+**`scripts/release.sh`** (new):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+VERSION="${1:?Usage: $0 <version>}"
+
+# Update version
+sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+
+# Test
+cargo test
+
+# Dry run first
+cargo publish --dry-run
+
+# Commit and tag
+git add -A
+git commit -m "Release v$VERSION"
+git tag "v$VERSION"
+
+# Publish
+cargo publish
+
+# Push
+git push
+git push --tags
+
+echo "Published shannonshell v$VERSION"
+```
+
+#### Verification
+
+1. `cargo build` succeeds with renamed package.
+2. `cargo test` passes.
+3. `cargo publish --dry-run` passes — no errors, all files included.
+4. `cargo install --path .` produces a working `shannon` binary.
+5. The binary is called `shannon`, not `shannonshell`.
