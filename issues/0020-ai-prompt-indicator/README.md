@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-23"
+closed = "2026-03-23"
 +++
 
 # Issue 20: Highlighted AI prompt indicator
@@ -129,3 +130,17 @@ ai_badge_style: theme.ai_badge,
 5. The rest of the prompt (`[nu] ~/project >`) stays in normal prompt color.
 6. Badge adapts to terminal theme (ANSI magenta).
 7. Override works: `ai_badge = "yellow --reverse"` in config.toml.
+
+**Result:** Pass
+
+All verification steps confirmed. 88 tests pass. AI badge shows with
+magenta background, prompt color re-applied after badge via inline ANSI.
+
+#### Conclusion
+
+AI badge is working and visually obvious.
+
+## Conclusion
+
+Issue complete. AI mode shows a highlighted ` AI ` badge (black on magenta)
+at the start of the prompt. Themeable via `ai_badge` in config.toml.
