@@ -10,6 +10,9 @@ pub struct ShannonPrompt {
     pub last_exit_code: i32,
     pub depth: u32,
     pub ai_mode: bool,
+    pub prompt_color: Color,
+    pub indicator_color: Color,
+    pub error_color: Color,
 }
 
 /// Tilde-contract a path (replace home dir prefix with ~).
@@ -78,14 +81,14 @@ impl Prompt for ShannonPrompt {
     }
 
     fn get_prompt_color(&self) -> Color {
-        Color::Cyan
+        self.prompt_color
     }
 
     fn get_indicator_color(&self) -> Color {
         if self.last_exit_code != 0 {
-            Color::Red
+            self.error_color
         } else {
-            Color::DarkGrey
+            self.indicator_color
         }
     }
 }

@@ -2,26 +2,41 @@ use nu_ansi_term::{Color, Style};
 use reedline::{Highlighter, StyledText};
 use tree_sitter::{Language, Node, Parser};
 
-// Tokyo Night color palette
-const PURPLE: Color = Color::Rgb(187, 154, 247); // #bb9af7 — keywords
-const BLUE: Color = Color::Rgb(122, 162, 247); // #7aa2f7 — commands
-const GREEN: Color = Color::Rgb(158, 206, 106); // #9ece6a — strings
-const ORANGE: Color = Color::Rgb(255, 158, 100); // #ff9e64 — numbers, booleans
-const CYAN: Color = Color::Rgb(125, 207, 255); // #7dcfff — variables
-const YELLOW: Color = Color::Rgb(224, 175, 104); // #e0af68 — types
-const GRAY: Color = Color::Rgb(86, 95, 137); // #565f89 — comments
-const RED: Color = Color::Rgb(247, 118, 142); // #f7768e — errors
-const FG: Color = Color::Rgb(169, 177, 214); // #a9b1d6 — default foreground
-const OPERATOR: Color = Color::Rgb(137, 221, 255); // #89ddff — operators/pipes
+use crate::theme::Theme;
 
 pub struct TreeSitterHighlighter {
     grammar: String,
+    keyword: Color,
+    command: Color,
+    string: Color,
+    number: Color,
+    variable: Color,
+    operator: Color,
+    comment: Color,
+    error: Color,
+    foreground: Color,
+    type_: Color,
+}
+
+/// Extract the foreground color from a Style, falling back to White.
+fn fg_color(style: &Style) -> Color {
+    style.foreground.unwrap_or(Color::White)
 }
 
 impl TreeSitterHighlighter {
-    pub fn new(highlighter: Option<&str>) -> Self {
+    pub fn new(highlighter: Option<&str>, theme: &Theme) -> Self {
         TreeSitterHighlighter {
             grammar: highlighter.unwrap_or("").to_string(),
+            keyword: fg_color(&theme.keyword),
+            command: fg_color(&theme.command),
+            string: fg_color(&theme.string),
+            number: fg_color(&theme.number),
+            variable: fg_color(&theme.variable),
+            operator: fg_color(&theme.operator),
+            comment: fg_color(&theme.comment),
+            error: fg_color(&theme.error),
+            foreground: fg_color(&theme.foreground),
+            type_: fg_color(&theme.type_),
         }
     }
 
@@ -42,121 +57,96 @@ impl TreeSitterHighlighter {
     fn style_for_node(&self, node: &Node, source: &str) -> Color {
         let kind = node.kind();
 
-        // Error nodes
         if kind == "ERROR" || kind == "MISSING" {
-            return RED;
+            return self.error;
         }
 
         match self.grammar.as_str() {
             "bash" => self.bash_color(node, source),
             "nushell" => self.nushell_color(node, source),
             "fish" => self.fish_color(node, source),
-            _ => FG,
+            _ => self.foreground,
         }
     }
 
     fn bash_color(&self, node: &Node, _source: &str) -> Color {
-        let kind = node.kind();
-        match kind {
-            // Keywords
+        match node.kind() {
             "if" | "then" | "else" | "elif" | "fi" | "for" | "in" | "do" | "done" | "while"
             | "until" | "case" | "esac" | "function" | "export" | "declare" | "local"
-            | "return" | "select" => PURPLE,
+            | "return" | "select" => self.keyword,
 
-            // Command names — the `word` inside a `command_name` node
-            "command_name" => BLUE,
+            "command_name" => self.command,
 
-            // Strings
-            "string" | "raw_string" | "heredoc_body" | "string_content" | "ansii_c_string" => GREEN,
+            "string" | "raw_string" | "heredoc_body" | "string_content" | "ansii_c_string" => {
+                self.string
+            }
 
-            // Numbers
-            "number" => ORANGE,
+            "number" => self.number,
 
-            // Variables
-            "variable_name" | "special_variable_name" => CYAN,
-            "simple_expansion" | "expansion" => CYAN,
-            "$" => CYAN,
+            "variable_name" | "special_variable_name" => self.variable,
+            "simple_expansion" | "expansion" => self.variable,
+            "$" => self.variable,
 
-            // Operators and punctuation
-            "|" | ">" | ">>" | "<" | "<<" | "&&" | "||" | ";" | ";;" | "&" => OPERATOR,
-            "test_operator" => OPERATOR,
+            "|" | ">" | ">>" | "<" | "<<" | "&&" | "||" | ";" | ";;" | "&" => self.operator,
+            "test_operator" => self.operator,
 
-            // Comments
-            "comment" => GRAY,
+            "comment" => self.comment,
 
-            _ => FG,
+            _ => self.foreground,
         }
     }
 
     fn nushell_color(&self, node: &Node, _source: &str) -> Color {
-        let kind = node.kind();
-        match kind {
-            // Keywords
+        match node.kind() {
             "if" | "else" | "for" | "in" | "let" | "mut" | "def" | "where" | "match" | "while"
             | "loop" | "break" | "continue" | "return" | "try" | "catch" | "export" | "use"
-            | "module" | "overlay" | "source" | "hide" | "const" => PURPLE,
+            | "module" | "overlay" | "source" | "hide" | "const" => self.keyword,
 
-            // Command identifiers
-            "cmd_identifier" => BLUE,
+            "cmd_identifier" => self.command,
 
-            // Strings
-            "val_string" | "string_content" | "escaped_interpolated_content" => GREEN,
-            "'" | "\"" | "$\"" | "$'" => GREEN,
+            "val_string" | "string_content" | "escaped_interpolated_content" => self.string,
+            "'" | "\"" | "$\"" | "$'" => self.string,
 
-            // Numbers and booleans
-            "val_number" => ORANGE,
-            "val_bool" | "true" | "false" => ORANGE,
+            "val_number" => self.number,
+            "val_bool" | "true" | "false" => self.number,
 
-            // Variables
-            "val_variable" | "identifier" => CYAN,
-            "$" => CYAN,
+            "val_variable" | "identifier" => self.variable,
+            "$" => self.variable,
 
-            // Types
-            "flat_type" | "param_type" => YELLOW,
+            "flat_type" | "param_type" => self.type_,
 
-            // Operators and pipes
             "|" | ">" | "<" | ">=" | "<=" | "==" | "!=" | "=" | "+" | "-" | "*" | "/" | ".."
-            | "..." | "=~" | "!~" | "and" | "or" | "not" => OPERATOR,
+            | "..." | "=~" | "!~" | "and" | "or" | "not" => self.operator,
 
-            // Comments
-            "comment" => GRAY,
+            "comment" => self.comment,
 
-            // Filesize/duration units
-            "filesize_unit" | "duration_unit" => YELLOW,
+            "filesize_unit" | "duration_unit" => self.type_,
 
-            _ => FG,
+            _ => self.foreground,
         }
     }
 
     fn fish_color(&self, node: &Node, _source: &str) -> Color {
-        let kind = node.kind();
-        match kind {
-            // Keywords
+        match node.kind() {
             "if" | "else" | "else_if" | "for" | "in" | "while" | "switch" | "case"
             | "function" | "end" | "begin" | "return" | "and" | "or" | "not" | "break"
-            | "continue" | "set" | "builtin" | "command" | "exec" | "source" => PURPLE,
+            | "continue" | "set" | "builtin" | "command" | "exec" | "source" => self.keyword,
 
-            // Strings
-            "single_quote_string" | "double_quote_string" | "escape_sequence" => GREEN,
+            "single_quote_string" | "double_quote_string" | "escape_sequence" => self.string,
 
-            // Numbers
-            "integer" | "float" => ORANGE,
+            "integer" | "float" => self.number,
 
-            // Variables
-            "variable_name" | "variable_expansion" => CYAN,
-            "$" => CYAN,
+            "variable_name" | "variable_expansion" => self.variable,
+            "$" => self.variable,
 
-            // Operators and pipes
-            "|" | ">" | ">>" | "<" | "&" | "&&" | "||" | ";" => OPERATOR,
-            "pipe" | "direction" => OPERATOR,
+            "|" | ">" | ">>" | "<" | "&" | "&&" | "||" | ";" => self.operator,
+            "pipe" | "direction" => self.operator,
 
-            // Comments
-            "comment" => GRAY,
+            "comment" => self.comment,
 
-            // Glob and home expansion
-            "glob" | "home_dir_expansion" => YELLOW,
+            "glob" | "home_dir_expansion" => self.type_,
 
-            _ => FG,
+            _ => self.foreground,
         }
     }
 }
@@ -172,8 +162,7 @@ impl Highlighter for TreeSitterHighlighter {
         let mut parser = match self.make_parser() {
             Some(p) => p,
             None => {
-                // No grammar — return unstyled
-                styled.push((Style::new().fg(FG), line.to_string()));
+                styled.push((Style::new().fg(self.foreground), line.to_string()));
                 return styled;
             }
         };
@@ -181,36 +170,30 @@ impl Highlighter for TreeSitterHighlighter {
         let tree = match parser.parse(line, None) {
             Some(tree) => tree,
             None => {
-                // Parse failed — return unstyled
-                styled.push((Style::new().fg(FG), line.to_string()));
+                styled.push((Style::new().fg(self.foreground), line.to_string()));
                 return styled;
             }
         };
 
-        // Collect leaf nodes with their byte ranges and colors
         let mut segments: Vec<(usize, usize, Color)> = Vec::new();
         collect_leaf_styles(&tree.root_node(), line, self, &mut segments);
 
-        // Sort by start position
         segments.sort_by_key(|s| s.0);
 
-        // Build styled text, filling gaps with default color
         let mut pos = 0;
         for (start, end, color) in &segments {
             let start = *start;
             let end = (*end).min(line.len());
             if start > pos {
-                // Gap before this segment — default color
-                styled.push((Style::new().fg(FG), line[pos..start].to_string()));
+                styled.push((Style::new().fg(self.foreground), line[pos..start].to_string()));
             }
             if start >= pos && end > start {
                 styled.push((Style::new().fg(*color), line[start..end].to_string()));
                 pos = end;
             }
         }
-        // Trailing content
         if pos < line.len() {
-            styled.push((Style::new().fg(FG), line[pos..].to_string()));
+            styled.push((Style::new().fg(self.foreground), line[pos..].to_string()));
         }
 
         styled
@@ -224,31 +207,28 @@ fn collect_leaf_styles(
     segments: &mut Vec<(usize, usize, Color)>,
 ) {
     if node.child_count() == 0 {
-        // Leaf node
         let start = node.start_byte();
         let end = node.end_byte();
         let color = highlighter.style_for_node(node, source);
         segments.push((start, end, color));
     } else {
-        // For named parent nodes that map to a color (like command_name),
-        // color all their children with the parent's color
         let parent_color = match highlighter.grammar.as_str() {
             "bash" => {
                 if node.kind() == "command_name" {
-                    Some(BLUE)
+                    Some(highlighter.command)
                 } else if node.kind() == "simple_expansion" || node.kind() == "expansion" {
-                    Some(CYAN)
+                    Some(highlighter.variable)
                 } else if node.kind() == "string" {
-                    Some(GREEN)
+                    Some(highlighter.string)
                 } else {
                     None
                 }
             }
             "nushell" => {
                 if node.kind() == "val_string" {
-                    Some(GREEN)
+                    Some(highlighter.string)
                 } else if node.kind() == "val_variable" {
-                    Some(CYAN)
+                    Some(highlighter.variable)
                 } else {
                     None
                 }
@@ -257,9 +237,9 @@ fn collect_leaf_styles(
                 if node.kind() == "double_quote_string"
                     || node.kind() == "single_quote_string"
                 {
-                    Some(GREEN)
+                    Some(highlighter.string)
                 } else if node.kind() == "variable_expansion" {
-                    Some(CYAN)
+                    Some(highlighter.variable)
                 } else {
                     None
                 }
@@ -268,14 +248,12 @@ fn collect_leaf_styles(
         };
 
         if let Some(color) = parent_color {
-            // Color the entire span of this node
             segments.push((node.start_byte(), node.end_byte(), color));
         } else if highlighter.grammar == "fish" && node.kind() == "command" {
-            // Fish: color the first child (command name) as BLUE, recurse rest
             let mut first = true;
             for child in node.children(&mut node.walk()) {
                 if first && child.kind() == "word" {
-                    segments.push((child.start_byte(), child.end_byte(), BLUE));
+                    segments.push((child.start_byte(), child.end_byte(), highlighter.command));
                     first = false;
                 } else {
                     first = false;
@@ -283,7 +261,6 @@ fn collect_leaf_styles(
                 }
             }
         } else {
-            // Recurse into children
             for child in node.children(&mut node.walk()) {
                 collect_leaf_styles(&child, source, highlighter, segments);
             }

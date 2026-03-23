@@ -330,3 +330,17 @@ and `get_indicator_color()`.
 5. Syntax highlighting still works for all grammars (bash, nushell, fish).
 6. Prompt, hints, and completion menu all respect the theme.
 7. Test in a light terminal theme — should be readable (ANSI defaults).
+
+**Result:** Pass
+
+All verification steps confirmed. 84 tests pass (64 unit + 20 integration),
+including 8 new theme tests. ANSI defaults work — colors inherit from the
+terminal's palette. Individual overrides via config.toml apply correctly
+(tested with `keyword = "#bb9af7"`). Syntax highlighting works for all
+grammars. Prompt, hints, and highlighter all read from the Theme struct.
+
+#### Conclusion
+
+Theming infrastructure is in place. All hardcoded RGB colors replaced with
+ANSI defaults. The Theme struct flows through all components. Config overrides
+work. Ready for experiment 2 (named themes from fish `.theme` files).

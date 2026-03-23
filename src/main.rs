@@ -5,6 +5,7 @@ use shannon::executor::run_startup_script;
 use shannon::nushell_engine::NushellEngine;
 use shannon::repl;
 use shannon::shell::ShellState;
+use shannon::theme::Theme;
 
 fn main() -> io::Result<()> {
     // Load config.toml (or use built-in defaults)
@@ -45,6 +46,9 @@ fn main() -> io::Result<()> {
     // Initialize nushell native engine (always embedded)
     let nushell_engine = Some(NushellEngine::new());
 
+    // Build theme from config
+    let theme = Theme::from_config(&config.theme);
+
     // Run the REPL
-    repl::run(shells, config.ai, state, depth, nushell_engine)
+    repl::run(shells, config.ai, state, depth, nushell_engine, theme)
 }

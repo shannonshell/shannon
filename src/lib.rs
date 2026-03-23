@@ -8,3 +8,4 @@ pub mod nushell_engine;
 pub mod prompt;
 pub mod repl;
 pub mod shell;
+pub mod theme;

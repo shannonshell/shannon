@@ -21,6 +21,7 @@ use crate::highlighter::TreeSitterHighlighter;
 use crate::nushell_engine::NushellEngine;
 use crate::prompt::{tilde_contract, ShannonPrompt};
 use crate::shell::{self, ShellState};
+use crate::theme::Theme;
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
 
@@ -37,6 +38,7 @@ fn build_editor(
     shell_config: &ShellConfig,
     session_id: Option<HistorySessionId>,
     ai_mode: bool,
+    theme: &Theme,
 ) -> Reedline {
     let mut insert_keybindings = default_vi_insert_keybindings();
     let mut normal_keybindings = default_vi_normal_keybindings();
@@ -73,13 +75,12 @@ fn build_editor(
         .expect("failed to create history database");
 
     let highlighter = if ai_mode {
-        TreeSitterHighlighter::new(None)
+        TreeSitterHighlighter::new(None, theme)
     } else {
-        TreeSitterHighlighter::new(shell_config.highlighter.as_deref())
+        TreeSitterHighlighter::new(shell_config.highlighter.as_deref(), theme)
     };
 
-    let hinter = DefaultHinter::default()
-        .with_style(Style::new().fg(Color::Rgb(86, 95, 137)));
+    let hinter = DefaultHinter::default().with_style(theme.hint);
 
     let completer = Box::new(ShannonCompleter::new());
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
@@ -180,12 +181,13 @@ pub fn run(
     mut state: ShellState,
     depth: u32,
     mut nushell_engine: Option<NushellEngine>,
+    theme: Theme,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
 
     let mut active_idx = 0;
     let mut ai_mode = false;
-    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode);
+    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
     let mut ai_session: Option<Session> = None;
 
     loop {
@@ -199,13 +201,16 @@ pub fn run(
             last_exit_code: state.last_exit_code,
             depth,
             ai_mode,
+            prompt_color: theme.prompt,
+            indicator_color: theme.prompt_indicator,
+            error_color: theme.prompt_error,
         };
 
         match editor.read_line(&prompt) {
             Ok(Signal::Success(line)) => {
                 if line == SWITCH_COMMAND {
                     active_idx = (active_idx + 1) % shells.len();
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
                     continue;
                 }
 
@@ -221,7 +226,7 @@ pub fn run(
                         ai_session = Some(Session::new());
                     }
                     // Rebuild editor to toggle highlighting
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
                     continue;
                 }
 
@@ -265,6 +270,7 @@ pub fn run(
                                         &shells[active_idx].1,
                                         session_id,
                                         ai_mode,
+                                        &theme,
                                     );
                                 }
                                 KeyCode::Esc => {

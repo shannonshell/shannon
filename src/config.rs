@@ -16,6 +16,9 @@ pub struct ShannonConfig {
     /// AI mode configuration.
     #[serde(default)]
     pub ai: AiConfig,
+    /// Theme configuration.
+    #[serde(default)]
+    pub theme: ThemeConfig,
 }
 
 /// Configuration for AI mode.
@@ -27,6 +30,25 @@ pub struct AiConfig {
     pub model: Option<String>,
     /// Environment variable name for the API key (default: "ANTHROPIC_API_KEY")
     pub api_key_env: Option<String>,
+}
+
+/// Theme configuration.
+#[derive(Deserialize, Default)]
+pub struct ThemeConfig {
+    pub name: Option<String>,
+    pub keyword: Option<String>,
+    pub command: Option<String>,
+    pub string: Option<String>,
+    pub number: Option<String>,
+    pub variable: Option<String>,
+    pub operator: Option<String>,
+    pub comment: Option<String>,
+    pub error: Option<String>,
+    pub foreground: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: Option<String>,
+    pub prompt: Option<String>,
+    pub hint: Option<String>,
 }
 
 /// Configuration for a single shell.
