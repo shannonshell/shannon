@@ -185,16 +185,16 @@ Support the same formats as fish:
 
 Two changes in one experiment:
 
-1. **Switch all hardcoded RGB colors to ANSI colors.** This immediately
-   fixes shannon for users with non-Tokyo-Night terminals. Zero config,
-   inherits terminal theme.
+1. **Switch all hardcoded RGB colors to ANSI colors.** This immediately fixes
+   shannon for users with non-Tokyo-Night terminals. Zero config, inherits
+   terminal theme.
 
 2. **Add a `Theme` struct and `[theme]` config section.** This is the
-   infrastructure for layers 2 and 3. The theme struct holds all semantic
-   colors and is passed to the highlighter, prompt, hinter, and menu.
+   infrastructure for layers 2 and 3. The theme struct holds all semantic colors
+   and is passed to the highlighter, prompt, hinter, and menu.
 
-Defer named theme files (fish `.theme` parsing) and light/dark auto-detection
-to later experiments. This experiment establishes the foundation.
+Defer named theme files (fish `.theme` parsing) and light/dark auto-detection to
+later experiments. This experiment establishes the foundation.
 
 #### Changes
 
@@ -227,6 +227,7 @@ pub struct Theme {
 ```
 
 `Theme::default()` — returns ANSI color defaults:
+
 - keyword → Magenta bold
 - command → Blue
 - string → Green
@@ -239,11 +240,12 @@ pub struct Theme {
 - prompt → Cyan
 - hint → DarkGray italic
 
-`Theme::from_config(config: &ThemeConfig)` — applies overrides from
-config.toml on top of defaults. Parses color strings ("green", "#FF79C6",
-"cyan --bold") into `Style` objects.
+`Theme::from_config(config: &ThemeConfig)` — applies overrides from config.toml
+on top of defaults. Parses color strings ("green", "#FF79C6", "cyan --bold")
+into `Style` objects.
 
 `parse_color(s: &str) -> Style` — parses a color string:
+
 - Named: "red", "green", "cyan", "magenta", "white", "brred", etc.
 - Hex: "#FF79C6" or "FF79C6"
 - Modifiers: "--bold", "--italic", "--underline" appended
@@ -282,8 +284,8 @@ Replace the `const` color values with fields read from the theme. Change
 pub fn new(highlighter: Option<&str>, theme: &Theme) -> Self
 ```
 
-Store the theme's colors as fields on the struct. The `style_for_node` and
-color methods use these fields instead of constants.
+Store the theme's colors as fields on the struct. The `style_for_node` and color
+methods use these fields instead of constants.
 
 **`src/repl.rs`** — pass theme to components:
 
@@ -297,9 +299,9 @@ color methods use these fields instead of constants.
 
 **`src/prompt.rs`** — use theme colors:
 
-Add `prompt_color: Color` and `indicator_color: Color` and
-`error_color: Color` to `ShannonPrompt`. Use them in `get_prompt_color()`
-and `get_indicator_color()`.
+Add `prompt_color: Color` and `indicator_color: Color` and `error_color: Color`
+to `ShannonPrompt`. Use them in `get_prompt_color()` and
+`get_indicator_color()`.
 
 **`src/lib.rs`** — add `pub mod theme;`
 
@@ -318,8 +320,8 @@ and `get_indicator_color()`.
 
 1. `cargo build` succeeds.
 2. `cargo test` passes.
-3. Run shannon with NO `[theme]` config — colors come from terminal's
-   ANSI palette. Looks good in any terminal theme.
+3. Run shannon with NO `[theme]` config — colors come from terminal's ANSI
+   palette. Looks good in any terminal theme.
 4. Add overrides to config.toml:
    ```toml
    [theme]
@@ -335,12 +337,12 @@ and `get_indicator_color()`.
 
 All verification steps confirmed. 84 tests pass (64 unit + 20 integration),
 including 8 new theme tests. ANSI defaults work — colors inherit from the
-terminal's palette. Individual overrides via config.toml apply correctly
-(tested with `keyword = "#bb9af7"`). Syntax highlighting works for all
-grammars. Prompt, hints, and highlighter all read from the Theme struct.
+terminal's palette. Individual overrides via config.toml apply correctly (tested
+with `keyword = "#bb9af7"`). Syntax highlighting works for all grammars. Prompt,
+hints, and highlighter all read from the Theme struct.
 
 #### Conclusion
 
-Theming infrastructure is in place. All hardcoded RGB colors replaced with
-ANSI defaults. The Theme struct flows through all components. Config overrides
-work. Ready for experiment 2 (named themes from fish `.theme` files).
+Theming infrastructure is in place. All hardcoded RGB colors replaced with ANSI
+defaults. The Theme struct flows through all components. Config overrides work.
+Ready for experiment 2 (named themes from fish `.theme` files).
