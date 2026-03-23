@@ -6,9 +6,9 @@ use chrono::Utc;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 use reedline::{
-    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, DefaultHinter,
-    EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent, ReedlineMenu, Signal,
-    SqliteBackedHistory, Vi,
+    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, Completer,
+    DefaultHinter, EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent,
+    ReedlineMenu, Signal, Span, SqliteBackedHistory, Suggestion, Vi,
 };
 
 use crate::ai::session::Session;
@@ -33,11 +33,35 @@ pub fn shell_available(binary: &str) -> bool {
         .is_ok()
 }
 
+/// Completer that returns available shells for the Ctrl+Tab picker menu.
+struct ShellSwitchCompleter {
+    shells: Vec<String>,
+}
+
+impl Completer for ShellSwitchCompleter {
+    fn complete(&mut self, _line: &str, _pos: usize) -> Vec<Suggestion> {
+        self.shells
+            .iter()
+            .map(|name| Suggestion {
+                value: format!("/switch {name}"),
+                display_override: Some(name.clone()),
+                description: None,
+                style: None,
+                extra: None,
+                span: Span::new(0, 0),
+                append_whitespace: false,
+                match_indices: None,
+            })
+            .collect()
+    }
+}
+
 fn build_editor(
     shell_config: &ShellConfig,
     session_id: Option<HistorySessionId>,
     ai_mode: bool,
     theme: &Theme,
+    shell_names: &[String],
 ) -> Reedline {
     let mut insert_keybindings = default_vi_insert_keybindings();
     let mut normal_keybindings = default_vi_normal_keybindings();
@@ -55,6 +79,11 @@ fn build_editor(
                 ReedlineEvent::Menu("completion_menu".to_string()),
                 ReedlineEvent::MenuNext,
             ]),
+        );
+        kb.add_binding(
+            KeyModifiers::CONTROL,
+            KeyCode::Char('s'),
+            ReedlineEvent::Menu("shell_menu".to_string()),
         );
     }
 
@@ -84,6 +113,13 @@ fn build_editor(
     let completer = Box::new(ShannonCompleter::new());
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
+    let shell_menu = ReedlineMenu::WithCompleter {
+        menu: Box::new(reedline::ListMenu::default().with_name("shell_menu")),
+        completer: Box::new(ShellSwitchCompleter {
+            shells: shell_names.to_vec(),
+        }),
+    };
+
     Reedline::create()
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
@@ -92,6 +128,7 @@ fn build_editor(
         .with_hinter(Box::new(hinter))
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
+        .with_menu(shell_menu)
         .use_bracketed_paste(true)
 }
 
@@ -147,6 +184,58 @@ fn emit_osc2_command(shell_name: &str, cwd: &std::path::PathBuf, command: &str) 
     eprint!("\x1b]2;[{}] {}> {}\x07", shell_name, path, binary);
 }
 
+/// Handle a `/` meta-command. Returns true if handled, false if the shell should run it.
+fn handle_meta_command(
+    line: &str,
+    shells: &[(String, ShellConfig)],
+    active_idx: &mut usize,
+    editor: &mut Reedline,
+    session_id: Option<HistorySessionId>,
+    ai_mode: bool,
+    theme: &Theme,
+    shell_names: &[String],
+) -> bool {
+    let parts: Vec<&str> = line.splitn(2, ' ').collect();
+    let cmd = parts[0];
+    let arg = parts.get(1).map(|s| s.trim()).unwrap_or("");
+
+    // If a file with this path exists, let the shell handle it
+    if std::path::Path::new(cmd).exists() {
+        return false;
+    }
+
+    match cmd {
+        "/switch" => {
+            if let Some(idx) = shells.iter().position(|(n, _)| n == arg) {
+                *active_idx = idx;
+                *editor = build_editor(
+                    &shells[*active_idx].1,
+                    session_id,
+                    ai_mode,
+                    theme,
+                    shell_names,
+                );
+            } else if !arg.is_empty() {
+                eprintln!("shannon: unknown shell: {arg}");
+            } else {
+                let names: Vec<&str> = shells.iter().map(|(n, _)| n.as_str()).collect();
+                eprintln!("Available shells: {}", names.join(", "));
+            }
+            true
+        }
+        "/help" => {
+            eprintln!("Shannon commands:");
+            eprintln!("  /switch <shell>  — switch to a shell");
+            eprintln!("  /help            — show this help");
+            eprintln!("  Shift+Tab        — cycle to next shell");
+            eprintln!("  Ctrl+S           — shell picker menu");
+            eprintln!("  Enter (empty)    — toggle AI mode");
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Execute a command using the nushell engine (for "nu") or wrapper (for others).
 fn run_command(
     shell: &(String, ShellConfig),
@@ -183,10 +272,11 @@ pub fn run(
     theme: Theme,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
+    let shell_names: Vec<String> = shells.iter().map(|(n, _)| n.clone()).collect();
 
     let mut active_idx = 0;
     let mut ai_mode = false;
-    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
+    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
     let mut ai_session: Option<Session> = None;
 
     loop {
@@ -207,13 +297,31 @@ pub fn run(
 
         match editor.read_line(&prompt) {
             Ok(Signal::Success(line)) => {
+                // Shift+Tab: cycle to next shell
                 if line == SWITCH_COMMAND {
                     active_idx = (active_idx + 1) % shells.len();
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
                     continue;
                 }
 
                 let line = line.trim();
+
+                // Meta-commands: /switch, /help, etc.
+                if line.starts_with('/') {
+                    if handle_meta_command(
+                        line,
+                        &shells,
+                        &mut active_idx,
+                        &mut editor,
+                        session_id,
+                        ai_mode,
+                        &theme,
+                        &shell_names,
+                    ) {
+                        continue;
+                    }
+                    // Not a known meta-command — fall through to shell
+                }
 
                 // Empty line toggles AI mode
                 if line.is_empty() {
@@ -225,7 +333,7 @@ pub fn run(
                         ai_session = Some(Session::new());
                     }
                     // Rebuild editor to toggle highlighting
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
                     continue;
                 }
 
@@ -270,6 +378,7 @@ pub fn run(
                                         session_id,
                                         ai_mode,
                                         &theme,
+                                        &shell_names,
                                     );
                                 }
                                 KeyCode::Esc => {

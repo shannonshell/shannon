@@ -159,6 +159,15 @@ impl Highlighter for TreeSitterHighlighter {
             return styled;
         }
 
+        // Meta-commands: render as plain text (no tree-sitter)
+        if line.starts_with('/') {
+            let first_word = line.split_whitespace().next().unwrap_or("");
+            if matches!(first_word, "/switch" | "/help") {
+                styled.push((Style::new().fg(self.foreground), line.to_string()));
+                return styled;
+            }
+        }
+
         let mut parser = match self.make_parser() {
             Some(p) => p,
             None => {

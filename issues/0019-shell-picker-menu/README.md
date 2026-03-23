@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-23"
+closed = "2026-03-23"
 +++
 
 # Issue 19: Shell picker menu via Ctrl+Tab
@@ -328,3 +329,35 @@ menu.
 8. `/nonexistent` with no matching file and no matching command goes to shell.
 9. Shift+Tab still cycles.
 10. Meta-commands don't get tree-sitter highlighted (plain text).
+
+**Result:** Pass
+
+All verification steps confirmed. 88 tests pass. `/switch` and `/help`
+meta-commands work. Ctrl+S opens a vertical ListMenu (arrow key navigation).
+Filesystem check prevents conflicts with real files. Highlighter skips
+tree-sitter for meta-commands.
+
+Additional fix during implementation: changed ColumnarMenu (horizontal,
+Tab-only) to ListMenu (vertical, arrow keys) for the shell picker.
+
+#### Conclusion
+
+Meta-command system is in place with `/switch` and `/help`. The shell
+picker menu (Ctrl+S) uses the same `/switch` command. The foundation
+supports future meta-commands (`/model`, `/theme`, etc.).
+
+## Conclusion
+
+Issue complete. Two ways to switch shells:
+
+- **Shift+Tab** — instant cycle (unchanged)
+- **Ctrl+S** — vertical picker menu with arrow key navigation
+- **`/switch {name}`** — type directly
+
+Plus `/help` for discoverability. Meta-commands use `/` prefix with
+filesystem existence check to avoid conflicts.
+
+Key files:
+- `shannon/src/repl.rs` — ShellSwitchCompleter, handle_meta_command,
+  ListMenu for shell picker
+- `shannon/src/highlighter.rs` — skips tree-sitter for meta-commands
