@@ -453,3 +453,12 @@ number). These are intentional interrupts, not errors.
 4. `exit 1` in bash → prompt shows `!`.
 5. Normal command → prompt shows `>`.
 
+**Result:** Pass
+
+All verification steps confirmed. 91 tests pass. Signal exits (>= 128)
+show `>` not `!`. Real errors still show `!`.
+
+#### Conclusion
+
+Ctrl+C no longer shows an error indicator. The prompt correctly
+distinguishes intentional interrupts from actual errors.
