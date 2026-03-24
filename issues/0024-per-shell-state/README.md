@@ -465,6 +465,7 @@ including 4 new brush tests). Brush is embedded alongside nushell as a fully
 functional shell with persistent state.
 
 Implementation notes:
+
 - `brush-core` 0.4 + `brush-builtins` 0.1 from crates.io
 - `BrushEngine` mirrors `NushellEngine`: create once, inject state, execute,
   capture state
@@ -479,6 +480,78 @@ Implementation notes:
 #### Conclusion
 
 Brush can be embedded in shannon exactly like nushell. The PoC is fully
-functional: echo, env capture, cwd, external commands, and state persistence
-all work. Two embedded shells (nushell + brush) now coexist with persistent
+functional: echo, env capture, cwd, external commands, and state persistence all
+work. Two embedded shells (nushell + brush) now coexist with persistent
 per-shell state, while fish/zsh remain on the wrapper model.
+
+### Experiment 5: Vendor brush-core source for full API access
+
+#### Description
+
+The crates.io version of brush-core (0.4.0) doesn't expose `env()` or
+`env_mut()` on Shell, so we can't iterate exported env vars. The git main branch
+already has these as public. We'll fork brush, maintain our patches on a
+`shannon` branch, and add it as a submodule.
+
+**Repo setup:**
+
+1. Fork `reubeno/brush` → `shannonshell/shannon_brush`
+2. Add upstream remote:
+   `git remote add upstream https://github.com/reubeno/brush`
+3. Create a `shannon` branch off upstream's main
+4. Apply our patches on the `shannon` branch:
+   - Rename crates: `brush-core` → `shannon-brush-core`, etc. (needed for
+     crates.io — can't publish under someone else's crate name)
+   - Any API changes we need (though `env()`/`env_mut()` are already public on
+     main)
+5. Add as submodule at `brush/` in the shannon repo, pinned to `shannon` branch
+
+**Upstream sync:**
+
+1. `git fetch upstream`
+2. `git rebase upstream/main` on the `shannon` branch
+3. Our patches replay on top of the new upstream base
+4. Resolve conflicts if any (our changes are minimal — mostly crate renames)
+5. Publish new version of `shannon-brush-*` crates
+6. Update submodule pin in shannon
+
+**Exit strategy:**
+
+When upstream brush publishes `env()` / `env_mut()` as public:
+
+1. Switch shannon's Cargo.toml to official `brush-core` / `brush-builtins`
+2. Remove the submodule
+3. Archive the fork
+
+#### Changes
+
+**Fork and submodule:**
+
+- Create `shannonshell/shannon_brush` on GitHub
+- Add submodule at `brush/` in the shannon repo
+- On the `shannon` branch: rename crate packages to `shannon-brush-*`
+
+**`shannon/Cargo.toml`:**
+
+- Replace `brush-core = "0.4"` with
+  `shannon-brush-core = { path = "brush/brush-core" }`
+- Replace `brush-builtins = "0.1"` with
+  `shannon-brush-builtins = { path = "brush/brush-builtins" }`
+- (Use path deps for dev; publish `shannon-brush-*` to crates.io and switch to
+  version deps for shannon releases)
+
+**`shannon/src/brush_engine.rs`:**
+
+- Update imports: `brush_core` → `shannon_brush_core`, `brush_builtins` →
+  `shannon_brush_builtins`
+- Replace heuristic env capture with `shell.env().iter_exported()`
+- Remove `known_keys` tracking and `discover_new_keys` heuristic
+- Use `shell.env_mut().set_global()` directly in inject_state
+
+#### Verification
+
+1. Submodule cloned and checked out on `shannon` branch.
+2. `cargo build` succeeds with path dependencies.
+3. `cargo test` — all tests pass.
+4. `export FOO=bar` in brush, switch to nushell, `$env.FOO` shows `bar`.
+5. Source a script that exports vars — they're captured correctly.
