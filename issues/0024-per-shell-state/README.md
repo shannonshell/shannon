@@ -1061,3 +1061,21 @@ the wrapper path's SIG_IGN), but for the embedded paths too.
 3. Nushell: `sleep 10sec` + Ctrl+C → interrupted, prompt returns.
 4. Brush: `sleep 10` + Ctrl+C → interrupted, prompt returns.
 5. Bash (wrapper): `sleep 10` + Ctrl+C → still works.
+
+**Result:** Fail
+
+Re-registering signal-hook before each embedded command did not fix the issue.
+The theory that something overwrites the handler between registration and
+execution was wrong — re-registering immediately before execution doesn't help.
+
+The debug code's second `signal_hook::flag::register` was not the fix. The debug
+code also spawned a background thread polling an AtomicBool every 50ms. That
+thread is the remaining suspect — it may affect how signals are delivered across
+threads, or the act of having a second registered flag changes signal-hook's
+internal behavior.
+
+#### Conclusion
+
+Re-registering before each command doesn't work. The background polling thread
+from the debug code is the most likely cause of the fix. Need to isolate exactly
+which part of the debug code makes Ctrl+C work.
