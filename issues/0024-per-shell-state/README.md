@@ -555,3 +555,101 @@ When upstream brush publishes `env()` / `env_mut()` as public:
 3. `cargo test` — all tests pass.
 4. `export FOO=bar` in brush, switch to nushell, `$env.FOO` shows `bar`.
 5. Source a script that exports vars — they're captured correctly.
+
+**Result:** Fail
+
+Path dependencies from the submodule create a shared `Cargo.lock` between
+shannon and brush. Brush's git main requires newer transitive deps (libc
+0.2.183 via nix 0.31.2 and whoami 2.1.1) that conflict with nushell 0.111's
+exact pin on `libc =0.2.178`. Cargo can't resolve a single libc version that
+satisfies both.
+
+Downgrading brush's deps would work but defeats the purpose — we want to track
+upstream, not maintain a divergent dependency tree.
+
+#### Conclusion
+
+Path dependencies between shannon and brush don't work due to transitive
+dependency conflicts between brush (git main) and nushell. The submodule
+approach is wrong for this — it forces a shared resolver.
+
+The correct approach: publish the fork to crates.io. When brush is a crates.io
+dependency (not a path dep), it gets its own resolved dependency tree. No
+conflicts. This is exactly how brush-core 0.4.0 from crates.io already works
+with nushell — they each resolve their own libc version independently.
+
+Next experiment: fork brush at latest main, rename packages to `shannon-brush-*`
+(the only change — the API we need is already public on main), publish to
+crates.io, and use version deps in shannon.
+
+### Experiment 6: Fork, rename, publish shannon-brush to crates.io
+
+#### Description
+
+Fork brush, rename the crate packages, publish to crates.io, and use them in
+shannon as normal version dependencies. The submodule is just for convenience
+— it lives in the repo so we can make changes and publish, but shannon's
+Cargo.toml points to crates.io, not a path.
+
+**What we change in the fork:**
+
+Only crate names. The `shannon` branch renames:
+- `brush-parser` → `shannon-brush-parser`
+- `brush-core` → `shannon-brush-core`
+- `brush-builtins` → `shannon-brush-builtins`
+
+No API changes needed — `env()` and `env_mut()` are already public on main.
+
+Internal dependency references use `package = "shannon-brush-*"` so Rust import
+names (`brush_core`, `brush_parser`) stay the same. No source code changes.
+
+**Submodule role:**
+
+The submodule at `brush/` is where we maintain the fork. It is NOT a path
+dependency. Shannon depends on the published crates.io versions. The submodule
+exists so we can:
+- Make changes to the fork
+- Publish new versions
+- Keep the fork in sync with upstream
+
+**Workflow to publish:**
+
+1. `cd brush/`
+2. Make changes on `shannon` branch
+3. `cargo publish -p shannon-brush-parser`
+4. `cargo publish -p shannon-brush-core`
+5. `cargo publish -p shannon-brush-builtins`
+6. Update versions in `shannon/Cargo.toml`
+
+**Upstream sync:**
+
+1. `cd brush/ && git fetch upstream && git rebase upstream/main`
+2. Resolve conflicts (only crate name renames)
+3. Publish new versions
+
+#### Changes
+
+**In the fork (`brush/` submodule):**
+- Rename package names in Cargo.toml files (3 crates + internal references)
+- Update version numbers if needed for initial publish
+
+**`shannon/Cargo.toml`:**
+- Replace `brush-core = "0.4"` with
+  `shannon-brush-core = "0.4"` (or whatever version we publish)
+- Replace `brush-builtins = "0.1"` with
+  `shannon-brush-builtins = "0.1"`
+
+**`shannon/src/brush_engine.rs`:**
+- Update imports: `brush_core` → `shannon_brush_core`,
+  `brush_builtins` → `shannon_brush_builtins`
+- Replace heuristic env capture with `shell.env().iter_exported()`
+- Remove `known_keys` tracking and `discover_new_keys` heuristic
+
+#### Verification
+
+1. `shannon-brush-*` crates published on crates.io.
+2. Submodule exists at `brush/` but is NOT a path dependency.
+3. `cargo build` succeeds with crates.io deps.
+4. `cargo test` — all tests pass.
+5. `export FOO=bar` in brush, switch to nushell, `$env.FOO` shows `bar`.
+6. Source a script that exports vars — captured correctly (no heuristic).
