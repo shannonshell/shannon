@@ -75,6 +75,7 @@ impl NushellEngine {
         self.capture_state(exit_code)
     }
 
+
     /// Read current state from the nushell Stack.
     fn capture_state(&self, exit_code: i32) -> ShellState {
         let nu_env = self.stack.get_env_vars(&self.engine_state);

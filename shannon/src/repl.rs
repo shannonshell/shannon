@@ -27,6 +27,7 @@ use crate::theme::Theme;
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
 
+
 pub fn shell_available(binary: &str) -> bool {
     Command::new(binary)
         .arg("--version")
@@ -65,6 +66,7 @@ fn build_editor(
     ai_mode: bool,
     theme: &Theme,
     shell_names: &[String],
+    interrupt: &Arc<AtomicBool>,
 ) -> Reedline {
     let mut insert_keybindings = default_vi_insert_keybindings();
     let mut normal_keybindings = default_vi_normal_keybindings();
@@ -136,6 +138,7 @@ fn build_editor(
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_menu(shell_menu)
+        .with_break_signal(interrupt.clone())
         .use_bracketed_paste(true)
 }
 
@@ -201,6 +204,7 @@ fn handle_meta_command(
     ai_mode: bool,
     theme: &Theme,
     shell_names: &[String],
+    interrupt: &Arc<AtomicBool>,
 ) -> bool {
     let parts: Vec<&str> = line.splitn(2, ' ').collect();
     let cmd = parts[0];
@@ -221,6 +225,7 @@ fn handle_meta_command(
                     ai_mode,
                     theme,
                     shell_names,
+                    interrupt,
                 );
             } else if !arg.is_empty() {
                 eprintln!("shannon: unknown shell: {arg}");
@@ -265,8 +270,6 @@ fn run_command(
 ) {
     if shell.0 == "nu" {
         if let Some(ref mut engine) = nushell_engine {
-            // Nushell's Signals system handles SIGINT internally.
-            // signal-hook sets the interrupt AtomicBool, nushell checks it during execution.
             engine.inject_state(state);
             *state = engine.execute(command);
             return;
@@ -316,9 +319,10 @@ pub fn run(
     signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
         .expect("failed to register SIGINT handler");
 
+
     let mut active_idx = 0;
     let mut ai_mode = false;
-    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
+    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
     let mut ai_session: Option<Session> = None;
 
     loop {
@@ -344,7 +348,7 @@ pub fn run(
                 // Shift+Tab: cycle to next shell
                 if line == SWITCH_COMMAND {
                     active_idx = (active_idx + 1) % shells.len();
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
                     continue;
                 }
 
@@ -361,6 +365,7 @@ pub fn run(
                         ai_mode,
                         &theme,
                         &shell_names,
+                        &interrupt,
                     ) {
                         continue;
                     }
@@ -377,7 +382,7 @@ pub fn run(
                         ai_session = Some(Session::new());
                     }
                     // Rebuild editor to toggle highlighting
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names);
+                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
                     continue;
                 }
 
@@ -425,6 +430,7 @@ pub fn run(
                                         ai_mode,
                                         &theme,
                                         &shell_names,
+                                        &interrupt,
                                     );
                                 }
                                 KeyCode::Esc => {
@@ -468,7 +474,8 @@ pub fn run(
                 state.last_exit_code = 0;
                 continue;
             }
-            Ok(_) => continue, // handle any new reedline Signal variants
+            Ok(Signal::ExternalBreak(_)) => continue,
+            Ok(_) => continue, // future Signal variants
             Err(e) => {
                 eprintln!("shannon: {e}");
                 break;

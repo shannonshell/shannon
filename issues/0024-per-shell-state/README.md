@@ -559,10 +559,9 @@ When upstream brush publishes `env()` / `env_mut()` as public:
 **Result:** Fail
 
 Path dependencies from the submodule create a shared `Cargo.lock` between
-shannon and brush. Brush's git main requires newer transitive deps (libc
-0.2.183 via nix 0.31.2 and whoami 2.1.1) that conflict with nushell 0.111's
-exact pin on `libc =0.2.178`. Cargo can't resolve a single libc version that
-satisfies both.
+shannon and brush. Brush's git main requires newer transitive deps (libc 0.2.183
+via nix 0.31.2 and whoami 2.1.1) that conflict with nushell 0.111's exact pin on
+`libc =0.2.178`. Cargo can't resolve a single libc version that satisfies both.
 
 Downgrading brush's deps would work but defeats the purpose — we want to track
 upstream, not maintain a divergent dependency tree.
@@ -587,13 +586,14 @@ crates.io, and use version deps in shannon.
 #### Description
 
 Fork brush, rename the crate packages, publish to crates.io, and use them in
-shannon as normal version dependencies. The submodule is just for convenience
-— it lives in the repo so we can make changes and publish, but shannon's
+shannon as normal version dependencies. The submodule is just for convenience —
+it lives in the repo so we can make changes and publish, but shannon's
 Cargo.toml points to crates.io, not a path.
 
 **What we change in the fork:**
 
 Only crate names. The `shannon` branch renames:
+
 - `brush-parser` → `shannon-brush-parser`
 - `brush-core` → `shannon-brush-core`
 - `brush-builtins` → `shannon-brush-builtins`
@@ -608,6 +608,7 @@ names (`brush_core`, `brush_parser`) stay the same. No source code changes.
 The submodule at `brush/` is where we maintain the fork. It is NOT a path
 dependency. Shannon depends on the published crates.io versions. The submodule
 exists so we can:
+
 - Make changes to the fork
 - Publish new versions
 - Keep the fork in sync with upstream
@@ -630,18 +631,20 @@ exists so we can:
 #### Changes
 
 **In the fork (`brush/` submodule):**
+
 - Rename package names in Cargo.toml files (3 crates + internal references)
 - Update version numbers if needed for initial publish
 
 **`shannon/Cargo.toml`:**
-- Replace `brush-core = "0.4"` with
-  `shannon-brush-core = "0.4"` (or whatever version we publish)
-- Replace `brush-builtins = "0.1"` with
-  `shannon-brush-builtins = "0.1"`
+
+- Replace `brush-core = "0.4"` with `shannon-brush-core = "0.4"` (or whatever
+  version we publish)
+- Replace `brush-builtins = "0.1"` with `shannon-brush-builtins = "0.1"`
 
 **`shannon/src/brush_engine.rs`:**
-- Update imports: `brush_core` → `shannon_brush_core`,
-  `brush_builtins` → `shannon_brush_builtins`
+
+- Update imports: `brush_core` → `shannon_brush_core`, `brush_builtins` →
+  `shannon_brush_builtins`
 - Replace heuristic env capture with `shell.env().iter_exported()`
 - Remove `known_keys` tracking and `discover_new_keys` heuristic
 
@@ -662,14 +665,14 @@ conflict as experiment 5.
 
 The root cause was a wrong assumption: we believed crates.io deps get
 independent dependency resolution, unlike path deps. They don't. Cargo resolves
-all dependencies for a crate together in a single resolution pass, regardless
-of whether they come from crates.io or paths.
+all dependencies for a crate together in a single resolution pass, regardless of
+whether they come from crates.io or paths.
 
 The original `brush-core 0.4.0` from crates.io worked because it was published
 with older transitive deps (nix 0.29, whoami 1.x) that were compatible with
-nushell 0.111's `libc =0.2.178` pin. Our fork is from brush's latest main,
-which uses nix 0.31.2 and whoami 2.1.1, both requiring libc >= 0.2.181. These
-conflict with nushell's exact pin.
+nushell 0.111's `libc =0.2.178` pin. Our fork is from brush's latest main, which
+uses nix 0.31.2 and whoami 2.1.1, both requiring libc >= 0.2.181. These conflict
+with nushell's exact pin.
 
 #### Conclusion
 
@@ -679,47 +682,51 @@ brush's latest main (requires `libc >= 0.2.181` via nix 0.31.2 and whoami
 crates.io dep — Cargo resolves them together either way.
 
 Options:
+
 1. Downgrade brush's deps to match nushell's libc pin (rejected — we want to
    track upstream brush, not maintain a divergent dependency tree)
 2. Fork nushell to relax its libc pin
 3. Wait for nushell to update (nushell 0.112+ may use a newer libc)
-4. Use the original brush-core 0.4.0 from crates.io (works, but no `env()`
-   API — back to the heuristic)
+4. Use the original brush-core 0.4.0 from crates.io (works, but no `env()` API —
+   back to the heuristic)
 
 ### Experiment 7: Fork nushell, shared workspace with brush and shannon
 
 #### Description
 
 The libc conflict is caused by nushell pinning `libc = "=0.2.178"` in its
-workspace Cargo.toml. Brush's latest main requires `libc >= 0.2.181`. These
-are incompatible under a single resolver.
+workspace Cargo.toml. Brush's latest main requires `libc >= 0.2.181`. These are
+incompatible under a single resolver.
 
-Fix: fork nushell, relax the libc pin, rename all crates to `shannon-nu-*`,
-and put everything in a shared workspace. Shannon, brush, and nushell all
-resolve together with compatible deps.
+Fix: fork nushell, relax the libc pin, rename all crates to `shannon-nu-*`, and
+put everything in a shared workspace. Shannon, brush, and nushell all resolve
+together with compatible deps.
 
 **Repos:**
+
 - `shannonshell/shannon` — main repo (already exists)
 - `shannonshell/shannon_brush` — brush fork (already exists as submodule)
 - `shannonshell/shannon_nushell` — nushell fork (just created)
 
 **Nushell fork changes (on `shannon` branch):**
+
 1. Relax `libc = "=0.2.178"` → `libc = "0.2"` in workspace Cargo.toml
 2. Rename all 26 nu-* crate packages to `shannon-nu-*`
-3. Add `package = "shannon-nu-*"` to all internal dependency references
-   so Rust import names stay unchanged
+3. Add `package = "shannon-nu-*"` to all internal dependency references so Rust
+   import names stay unchanged
 
 **Shannon repo changes:**
+
 1. Add `shannonshell/shannon_nushell` as submodule at `nushell/`
-2. Create a root workspace Cargo.toml that includes all three:
-   `shannon/`, `brush/brush-{core,builtins,parser}`,
-   `nushell/crates/nu-*`
+2. Create a root workspace Cargo.toml that includes all three: `shannon/`,
+   `brush/brush-{core,builtins,parser}`, `nushell/crates/nu-*`
 3. Update `shannon/Cargo.toml` to use path deps for both nushell and brush
 4. Update `brush_engine.rs` to use `shannon_brush_core` imports and
    `shell.env().iter_exported()`
 5. Update `nushell_engine.rs` imports if crate names change
 
 **Workspace structure:**
+
 ```
 shannon/              (repo root)
 ├── Cargo.toml        (workspace root)
@@ -738,25 +745,31 @@ shannon/              (repo root)
 #### Changes
 
 **In nushell fork (`nushell/` submodule):**
+
 - Relax libc pin: `"=0.2.178"` → `"0.2"`
 - Rename 26 crate packages to `shannon-nu-*`
 - Update all internal nu-* dependency references with `package = "shannon-nu-*"`
 
 **In brush fork (`brush/` submodule):**
+
 - Update brush's nu-* references if any (likely none — brush doesn't depend on
   nushell)
 
 **New file: `Cargo.toml` at repo root:**
+
 - Workspace definition listing all members
 
 **`shannon/Cargo.toml`:**
+
 - Replace crates.io deps with path deps to submodule crates
 
 **`shannon/src/brush_engine.rs`:**
+
 - Use `shannon_brush_core` imports
 - Replace heuristic with `shell.env().iter_exported()`
 
 **`shannon/src/nushell_engine.rs`:**
+
 - Update imports if crate names change in Rust code (they shouldn't — we use
   `package = "shannon-nu-*"` to keep import names as `nu_protocol` etc.)
 
@@ -778,8 +791,8 @@ section overrides reedline with a git dependency to `nushell/reedline` main
 branch. This means the nushell fork requires an unreleased version of reedline.
 
 Reedline is a separate repo (`nushell/reedline`), not part of the nushell
-monorepo. It needs the same fork treatment: fork, rename to
-`shannon-reedline`, publish to crates.io, and use it as a version dependency.
+monorepo. It needs the same fork treatment: fork, rename to `shannon-reedline`,
+publish to crates.io, and use it as a version dependency.
 
 #### Conclusion
 
@@ -792,25 +805,29 @@ nushell, brush, reedline.
 #### Description
 
 Same as experiment 7, plus fork reedline. Reedline is a single crate (no
-workspace, no sub-crates) so the fork is trivial: rename to
-`shannon-reedline`, publish, and point both shannon and nushell at it.
+workspace, no sub-crates) so the fork is trivial: rename to `shannon-reedline`,
+publish, and point both shannon and nushell at it.
 
 **All four repos:**
+
 - `shannonshell/shannon` — main repo
 - `shannonshell/shannon_brush` — brush fork (submodule at `brush/`)
 - `shannonshell/shannon_nushell` — nushell fork (submodule at `nushell/`)
 - `shannonshell/shannon_reedline` — reedline fork (submodule at `reedline/`)
 
 **Reedline fork changes (on `shannon` branch):**
+
 1. Rename package: `reedline` → `shannon-reedline`
 
 **Nushell fork additional changes:**
+
 1. Replace `[patch.crates-io]` reedline git override with a path dep to the
    reedline submodule
 2. Update workspace.dependencies: `reedline = "0.46.0"` → path dep to
    `shannon-reedline`
 
 **Shannon Cargo.toml:**
+
 1. Replace `reedline = { version = "0.46.0", ... }` with path dep to
    `shannon-reedline` submodule
 
@@ -821,9 +838,11 @@ instance.
 #### Changes
 
 **Reedline fork (`reedline/` submodule):**
+
 - Rename `name = "reedline"` → `name = "shannon-reedline"` in Cargo.toml
 
 **Nushell fork (`nushell/` submodule):**
+
 - All changes from experiment 7 (libc pin, 40 crate renames, 206 dep refs)
 - Replace `[patch.crates-io]` reedline git override with:
   `reedline = { path = "../reedline", package = "shannon-reedline" }`
@@ -831,11 +850,13 @@ instance.
   `reedline = { path = "../reedline", package = "shannon-reedline" }`
 
 **Shannon (`shannon/Cargo.toml`):**
+
 - Path deps to nushell and brush submodules (from experiment 7)
 - Replace `reedline = { version = "0.46.0", features = ["sqlite"] }` with
   `reedline = { path = "../reedline", package = "shannon-reedline", features = ["sqlite"] }`
 
 **`shannon/src/brush_engine.rs`:**
+
 - Replace heuristic with `shell.env().iter_exported()` (from experiment 7)
 
 #### Verification
@@ -849,19 +870,21 @@ instance.
 **Result:** Partial
 
 All three forks are set up as submodules (nushell, brush, reedline). The libc
-pin is relaxed, all crates renamed, path deps wired up. `cargo build` and all
-95 tests pass. Basic commands work in both nushell and brush. The heuristic env
+pin is relaxed, all crates renamed, path deps wired up. `cargo build` and all 95
+tests pass. Basic commands work in both nushell and brush. The heuristic env
 capture in brush is replaced with `shell.env().iter_exported()`.
 
 Two regressions:
+
 1. **Nushell Ctrl+C broken:** `sleep 10sec` + Ctrl+C prints `^C` but doesn't
    kill the process. The signal-hook integration from issue 22 may not be
    compatible with the newer nushell version from the fork.
-2. **Brush Ctrl+C broken:** `sleep 10` + Ctrl+C same behavior — prints `^C`
-   but process continues. Brush has no signal integration yet (noted as a
-   known gap from experiment 4).
+2. **Brush Ctrl+C broken:** `sleep 10` + Ctrl+C same behavior — prints `^C` but
+   process continues. Brush has no signal integration yet (noted as a known gap
+   from experiment 4).
 
 Three additional minor fixes were needed for API changes:
+
 - `brush_core::SourceInfo` parameter added to `run_string()`
 - `ExecutionExitCode::BrokenPipe` variant added
 - `reedline::Signal` has new variants (added wildcard match)
@@ -877,28 +900,30 @@ to be fixed in a follow-up experiment.
 #### Description
 
 Reedline's git main added `with_break_signal(Arc<AtomicBool>)` (commit
-`5c2f105`). When configured, reedline polls non-blocking instead of blocking
-on `event::read()`. When the AtomicBool is set, reedline returns
+`5c2f105`). When configured, reedline polls non-blocking instead of blocking on
+`event::read()`. When the AtomicBool is set, reedline returns
 `Signal::ExternalBreak`.
 
-Shannon already has the interrupt `Arc<AtomicBool>` (from issue 22's
-signal-hook setup) — it just needs to pass it to reedline. Without it,
-reedline blocks forever after a subprocess is killed by Ctrl+C, making it
-appear that Ctrl+C doesn't work.
+Shannon already has the interrupt `Arc<AtomicBool>` (from issue 22's signal-hook
+setup) — it just needs to pass it to reedline. Without it, reedline blocks
+forever after a subprocess is killed by Ctrl+C, making it appear that Ctrl+C
+doesn't work.
 
 #### Changes
 
 **`shannon/src/repl.rs`** — `build_editor()`:
+
 - Add `interrupt: &Arc<AtomicBool>` parameter
 - Add `.with_break_signal(interrupt.clone())` to the reedline builder chain
 
 **`shannon/src/repl.rs`** — all `build_editor()` call sites:
+
 - Pass the `interrupt` Arc
 
 **`shannon/src/repl.rs`** — `Signal::ExternalBreak` handling:
+
 - The existing `Ok(_) => continue` wildcard already handles this, but make it
-  explicit for clarity:
-  `Ok(Signal::ExternalBreak(_)) => continue`
+  explicit for clarity: `Ok(Signal::ExternalBreak(_)) => continue`
 
 #### Verification
 
@@ -910,19 +935,19 @@ appear that Ctrl+C doesn't work.
 
 **Result:** Fail
 
-Build succeeds, all 95 tests pass, but Ctrl+C behavior is unchanged. Passing
-the interrupt Arc to reedline via `with_break_signal()` and handling
+Build succeeds, all 95 tests pass, but Ctrl+C behavior is unchanged. Passing the
+interrupt Arc to reedline via `with_break_signal()` and handling
 `Signal::ExternalBreak` did not fix the issue. The problem is deeper than
 reedline's event loop — the signal is not reaching nushell's or brush's
 subprocess at all.
 
 #### Conclusion
 
-The break_signal feature only helps reedline wake up from its event loop when
-an external interrupt occurs. It doesn't fix the underlying problem: the
-subprocess running inside nushell or brush is not receiving SIGINT. The issue
-is in how signals are delivered during embedded execution, not in how reedline
-polls for events.
+The break_signal feature only helps reedline wake up from its event loop when an
+external interrupt occurs. It doesn't fix the underlying problem: the subprocess
+running inside nushell or brush is not receiving SIGINT. The issue is in how
+signals are delivered during embedded execution, not in how reedline polls for
+events.
 
 ### Experiment 10: Debug logging to trace signal delivery
 
@@ -934,16 +959,17 @@ find exactly where the chain breaks.
 
 #### Log points
 
-1. **signal-hook handler fires** — in `repl.rs` after `signal_hook::flag::register`,
-   add a second handler via `signal_hook::low_level::register` that writes a
-   log line when SIGINT arrives.
-2. **nushell engine execute starts** — in `nushell_engine.rs` `execute()`,
-   log before `eval_source`.
+1. **signal-hook handler fires** — in `repl.rs` after
+   `signal_hook::flag::register`, add a second handler via
+   `signal_hook::low_level::register` that writes a log line when SIGINT
+   arrives.
+2. **nushell engine execute starts** — in `nushell_engine.rs` `execute()`, log
+   before `eval_source`.
 3. **nushell signals reset** — log after `reset_signals()`.
 4. **nushell signals interrupted check** — log the state of the interrupt
    AtomicBool before and after `eval_source`.
-5. **run_command entry** — in `repl.rs` `run_command()`, log which shell path
-   is taken (nushell/brush/wrapper).
+5. **run_command entry** — in `repl.rs` `run_command()`, log which shell path is
+   taken (nushell/brush/wrapper).
 6. **ExternalBreak received** — log when reedline returns ExternalBreak.
 
 All logs go to `/tmp/shannon-debug.log` with timestamps.
@@ -951,11 +977,13 @@ All logs go to `/tmp/shannon-debug.log` with timestamps.
 #### Changes
 
 **`shannon/src/repl.rs`:**
+
 - Add a debug log helper function that appends to `/tmp/shannon-debug.log`
-- Add log calls at signal registration, run_command entry, and
-  ExternalBreak handling
+- Add log calls at signal registration, run_command entry, and ExternalBreak
+  handling
 
 **`shannon/src/nushell_engine.rs`:**
+
 - Add log calls before/after reset_signals and eval_source
 - Log the interrupt AtomicBool value
 
@@ -970,6 +998,7 @@ All logs go to `/tmp/shannon-debug.log` with timestamps.
 **Result:** Pass
 
 Debug logging confirmed the entire signal chain works correctly:
+
 1. signal-hook receives SIGINT and sets the AtomicBool
 2. Nushell checks `signals.interrupted()`, returns from `eval_source`
 3. Reedline detects the break signal via `with_break_signal()`, returns
@@ -984,6 +1013,51 @@ experiments 8+9 together resolved the Ctrl+C regression.
 
 #### Conclusion
 
-Ctrl+C works for both nushell and brush. The debug logging can be removed.
-The signal chain is: signal-hook → AtomicBool → nushell Signals / brush
-subprocess → reedline ExternalBreak → shannon prompt.
+Ctrl+C works for both nushell and brush. The debug logging can be removed. The
+signal chain is: signal-hook → AtomicBool → nushell Signals / brush subprocess →
+reedline ExternalBreak → shannon prompt.
+
+**However:** removing the debug logs broke Ctrl+C again. The debug code included
+a second `signal_hook::flag::register` call. That second registration was
+inadvertently keeping the SIGINT handler alive. Without it, the handler gets
+overwritten by something between registration and command execution.
+
+### Experiment 11: Re-register signal-hook before each command
+
+#### Description
+
+Ctrl+C works with the debug logging present but breaks when it's removed. The
+debug code included a second `signal_hook::flag::register(SIGINT, ...)` call.
+Removing it broke signal delivery.
+
+This means something is overwriting signal-hook's SIGINT handler between the
+initial registration (at REPL startup) and command execution. Candidates:
+
+1. **Reedline's `read_line()`** — enters/exits crossterm raw mode, which may
+   reset signal dispositions via `tcsetattr` or similar
+2. **Tokio runtime** (created by BrushEngine) — may lazily install signal
+   handlers
+3. **Crossterm's event system** — may install its own SIGINT handling
+
+The fix: re-register signal-hook before each embedded command execution (nushell
+and brush paths). This ensures the handler is installed regardless of what
+reedline or crossterm did during `read_line()`.
+
+#### Changes
+
+**`shannon/src/repl.rs`** — in `run_command()`:
+
+- Before the nushell path: call
+  `signal_hook::flag::register(SIGINT, interrupt.clone())`
+- Before the brush path: same
+
+This is the same pattern as `restore_sigint_handler` (which re-registers after
+the wrapper path's SIG_IGN), but for the embedded paths too.
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` — all tests pass.
+3. Nushell: `sleep 10sec` + Ctrl+C → interrupted, prompt returns.
+4. Brush: `sleep 10` + Ctrl+C → interrupted, prompt returns.
+5. Bash (wrapper): `sleep 10` + Ctrl+C → still works.
