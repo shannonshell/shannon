@@ -173,14 +173,18 @@ pub fn parse_style(s: &str) -> Style {
 
     // Apply modifiers
     for part in &parts[1..] {
-        match *part {
-            "--bold" => style = style.bold(),
-            "--italic" | "--italics" => style = style.italic(),
-            "--underline" => style = style.underline(),
-            "--dimmed" => style = style.dimmed(),
-            "--reverse" => style = style.reverse(),
-            "--strikethrough" => style = style.strikethrough(),
-            _ => {}
+        if let Some(bg) = part.strip_prefix("--background=") {
+            style = style.on(parse_nu_color(bg));
+        } else {
+            match *part {
+                "--bold" => style = style.bold(),
+                "--italic" | "--italics" => style = style.italic(),
+                "--underline" => style = style.underline(),
+                "--dimmed" => style = style.dimmed(),
+                "--reverse" => style = style.reverse(),
+                "--strikethrough" => style = style.strikethrough(),
+                _ => {}
+            }
         }
     }
 
@@ -297,6 +301,30 @@ mod tests {
     fn test_parse_style_multiple_modifiers() {
         let style = parse_style("cyan --bold --italic");
         assert_eq!(style, Style::new().fg(Color::Cyan).bold().italic());
+    }
+
+    #[test]
+    fn test_parse_style_background() {
+        let style = parse_style("black --background=magenta");
+        assert_eq!(style, Style::new().fg(Color::Black).on(Color::Purple));
+    }
+
+    #[test]
+    fn test_parse_style_background_hex() {
+        let style = parse_style("white --background=#1e1e2e");
+        assert_eq!(
+            style,
+            Style::new().fg(Color::White).on(Color::Rgb(30, 30, 46))
+        );
+    }
+
+    #[test]
+    fn test_parse_style_background_with_bold() {
+        let style = parse_style("white --bold --background=blue");
+        assert_eq!(
+            style,
+            Style::new().fg(Color::White).bold().on(Color::Blue)
+        );
     }
 
     #[test]

@@ -154,7 +154,8 @@ command = "#7aa2f7 --bold"   # hex with modifier
 ```
 
 Color values: named (`"green"`, `"cyan"`), bright (`"brred"`, `"brcyan"`),
-hex (`"#FF79C6"`), with modifiers (`"green --bold"`, `"cyan --italic"`).
+hex (`"#FF79C6"`), with modifiers (`"green --bold"`, `"cyan --italic"`,
+`"black --background=magenta"`).
 
 Available color categories: `keyword`, `command`, `string`, `number`,
 `variable`, `operator`, `comment`, `error`, `foreground`, `type`,
