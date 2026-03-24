@@ -406,3 +406,50 @@ pieces working together:
 
 Remaining: verify nushell embedded path handles Ctrl+C correctly.
 
+### Experiment 5: Don't show error indicator for SIGINT
+
+#### Description
+
+After Ctrl+C, the prompt shows `!` because the exit code is 130 (nonzero).
+But the user intentionally interrupted — it's not an error. Bash and zsh
+show a normal prompt after Ctrl+C, not an error indicator.
+
+Fix: treat signal exits (exit code >= 128) as non-errors for the prompt
+indicator. The exit code is still stored correctly in `last_exit_code`
+(scripts can check `$?`), but the visual indicator shows `>` not `!`.
+
+#### Changes
+
+**`shannon/src/prompt.rs`** — update `get_indicator_color`:
+
+```rust
+fn get_indicator_color(&self) -> Color {
+    if self.last_exit_code != 0 && self.last_exit_code < 128 {
+        self.error_color
+    } else {
+        self.indicator_color
+    }
+}
+```
+
+And update `render_prompt_indicator` similarly:
+
+```rust
+if self.last_exit_code != 0 && self.last_exit_code < 128 {
+    Cow::Owned(format!(" {depth_prefix}! "))
+} else {
+    Cow::Owned(format!(" {depth_prefix}> "))
+}
+```
+
+Exit codes >= 128 mean the process was killed by a signal (128 + signal
+number). These are intentional interrupts, not errors.
+
+#### Verification
+
+1. `cargo test` passes.
+2. `sleep 10` + Ctrl+C → prompt shows `>` (not `!`).
+3. `false` → prompt shows `!` (real error, exit code 1).
+4. `exit 1` in bash → prompt shows `!`.
+5. Normal command → prompt shows `>`.
+
