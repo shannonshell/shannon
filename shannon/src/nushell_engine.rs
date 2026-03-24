@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use nu_cli::eval_source;
 use nu_protocol::engine::{EngineState, Stack, StateWorkingSet};
-use nu_protocol::{PipelineData, Span, Value};
+use nu_protocol::{PipelineData, Signals, Span, Value};
 
 use crate::shell::ShellState;
 
@@ -13,7 +15,7 @@ pub struct NushellEngine {
 }
 
 impl NushellEngine {
-    pub fn new() -> Self {
+    pub fn new(interrupt: Arc<AtomicBool>) -> Self {
         // Initialize engine with all built-in commands
         let mut engine_state = EngineState::new();
         engine_state = nu_cmd_lang::add_default_context(engine_state);
@@ -30,6 +32,10 @@ impl NushellEngine {
         engine_state
             .merge_delta(delta)
             .expect("failed to register nushell commands");
+
+        // Connect nushell's signal system to the shared interrupt flag.
+        // The caller is responsible for registering signal-hook on this Arc.
+        engine_state.set_signals(Signals::new(interrupt));
 
         let stack = Stack::new();
         NushellEngine {
@@ -54,6 +60,9 @@ impl NushellEngine {
 
     /// Execute a nushell command natively and return updated state.
     pub fn execute(&mut self, command: &str) -> ShellState {
+        // Reset interrupt flag before each command
+        self.engine_state.reset_signals();
+
         let exit_code = eval_source(
             &mut self.engine_state,
             &mut self.stack,

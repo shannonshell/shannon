@@ -390,19 +390,20 @@ let new_state = std::fs::read_to_string(&temp_path)
 
 **Result:** Pass
 
-All verification steps confirmed. 91 tests pass. Ctrl+C kills the child,
-shannon survives, cwd is preserved, exit code shows 130 (128 + SIGINT).
-The empty temp file filter prevents the fallback to cwd `/`.
+All verification steps confirmed. 91 tests pass. Ctrl+C kills the child, shannon
+survives, cwd is preserved, exit code shows 130 (128 + SIGINT). The empty temp
+file filter prevents the fallback to cwd `/`.
 
 #### Conclusion
 
-The Ctrl+C fix is complete for the wrapper path (bash/fish/zsh). Three
-pieces working together:
+The Ctrl+C fix is complete for the wrapper path (bash/fish/zsh). Three pieces
+working together:
+
 1. `SIG_IGN` in shannon before child spawn (shannon ignores SIGINT)
 2. `pre_exec` restores `SIG_DFL` in child (child receives SIGINT)
 3. Empty temp file filtered (previous state preserved on interrupt)
-4. `SIG_DFL` restored in REPL loop before `read_line` (reedline handles
-   Ctrl+C at prompt)
+4. `SIG_DFL` restored in REPL loop before `read_line` (reedline handles Ctrl+C
+   at prompt)
 
 Remaining: verify nushell embedded path handles Ctrl+C correctly.
 
@@ -410,13 +411,13 @@ Remaining: verify nushell embedded path handles Ctrl+C correctly.
 
 #### Description
 
-After Ctrl+C, the prompt shows `!` because the exit code is 130 (nonzero).
-But the user intentionally interrupted — it's not an error. Bash and zsh
-show a normal prompt after Ctrl+C, not an error indicator.
+After Ctrl+C, the prompt shows `!` because the exit code is 130 (nonzero). But
+the user intentionally interrupted — it's not an error. Bash and zsh show a
+normal prompt after Ctrl+C, not an error indicator.
 
 Fix: treat signal exits (exit code >= 128) as non-errors for the prompt
-indicator. The exit code is still stored correctly in `last_exit_code`
-(scripts can check `$?`), but the visual indicator shows `>` not `!`.
+indicator. The exit code is still stored correctly in `last_exit_code` (scripts
+can check `$?`), but the visual indicator shows `>` not `!`.
 
 #### Changes
 
@@ -442,8 +443,8 @@ if self.last_exit_code != 0 && self.last_exit_code < 128 {
 }
 ```
 
-Exit codes >= 128 mean the process was killed by a signal (128 + signal
-number). These are intentional interrupts, not errors.
+Exit codes >= 128 mean the process was killed by a signal (128 + signal number).
+These are intentional interrupts, not errors.
 
 #### Verification
 
@@ -455,10 +456,172 @@ number). These are intentional interrupts, not errors.
 
 **Result:** Pass
 
-All verification steps confirmed. 91 tests pass. Signal exits (>= 128)
-show `>` not `!`. Real errors still show `!`.
+All verification steps confirmed. 91 tests pass. Signal exits (>= 128) show `>`
+not `!`. Real errors still show `!`.
 
 #### Conclusion
 
-Ctrl+C no longer shows an error indicator. The prompt correctly
-distinguishes intentional interrupts from actual errors.
+Ctrl+C no longer shows an error indicator. The prompt correctly distinguishes
+intentional interrupts from actual errors.
+
+### Experiment 6: Connect nushell's Signals to real SIGINT
+
+#### Description
+
+The nushell embedded path doesn't handle Ctrl+C correctly. Currently we set
+`SIG_IGN` before nushell execution, which prevents shannon from dying but also
+prevents the child process from receiving SIGINT (since `SIG_IGN` is inherited
+across fork).
+
+The real fix: nushell has its own signal system via `Signals` struct (an
+`Arc<AtomicBool>`). When connected and triggered, nushell checks
+`signals.interrupted()` internally and stops execution. Our `NushellEngine` uses
+`Signals::empty()` (disconnected) — we need to connect it.
+
+Nushell's own binary does this in `src/signals.rs`:
+
+```rust
+let interrupt = Arc::new(AtomicBool::new(false));
+engine_state.set_signals(Signals::new(interrupt.clone()));
+ctrlc::set_handler(move || {
+    interrupt.store(true, Ordering::Relaxed);
+});
+```
+
+We'll use `signal-hook` (more composable than `ctrlc` crate) to register a
+handler that sets the AtomicBool on SIGINT. This replaces SIG_DFL with a safe
+handler — shannon won't die, and nushell will see the interrupt.
+
+#### Changes
+
+**`shannon/Cargo.toml`**:
+
+- Add `signal-hook = "0.3"` dependency
+
+**`shannon/src/nushell_engine.rs`**:
+
+- Create `Arc<AtomicBool>` in `NushellEngine::new()`
+- Call `engine_state.set_signals(Signals::new(interrupt.clone()))`
+- Register SIGINT handler via `signal_hook::flag::register(SIGINT, interrupt)`
+- Store the `Arc<AtomicBool>` on the struct
+- Add `reset_signals()` method that calls `engine_state.reset_signals()`
+- Call `reset_signals()` at the start of `execute()`
+
+**`shannon/src/repl.rs`**:
+
+- Remove `SIG_IGN` from the nushell path in `run_command`
+- Call `engine.reset_signals()` is handled internally by execute()
+
+#### Verification
+
+1. `cargo test` passes.
+2. Switch to nushell, run `sleep 10sec`, Ctrl+C → sleep is interrupted, shannon
+   shows prompt.
+3. Switch to bash, run `sleep 10`, Ctrl+C → sleep is interrupted, shannon shows
+   prompt (no regression).
+4. `scripts/test-sigint.sh` still passes.
+
+**Result:** Fail
+
+Ctrl+C still kills the entire terminal pane. The `signal-hook` handler alone is
+not enough — it registers a handler that sets the AtomicBool, but SIGINT's
+default disposition still terminates the process. `signal_hook::flag::register`
+adds a flag-setting action but does NOT prevent the default signal behavior from
+also running. Shannon dies before nushell ever gets to check
+`signals.interrupted()`.
+
+The fix needs to also prevent SIGINT from killing shannon during nushell
+execution. Options:
+
+1. Use `SIG_IGN` on shannon's side AND signal-hook for nushell's signals — but
+   SIG_IGN overrides signal-hook's handler.
+2. Manually set a no-op signal handler via libc that just returns (not SIG_IGN,
+   which is inherited across fork). Then separately set the AtomicBool.
+3. Use `signal_hook::low_level::register` with a custom action that only sets
+   the flag (this replaces the default handler entirely).
+
+#### Conclusion
+
+The REPL loop sets `libc::signal(SIGINT, SIG_DFL)` at the top of every
+iteration, which overwrites signal-hook's handler. By the time nushell runs,
+SIGINT is back to SIG_DFL and kills the process. Need to keep signal-hook's
+handler active during nushell execution.
+
+### Experiment 7: Keep signal-hook handler active during nushell execution
+
+#### Description
+
+The REPL loop calls `libc::signal(SIGINT, SIG_DFL)` at the top of every
+iteration. This was needed so reedline could handle Ctrl+C at the prompt. But
+reedline uses crossterm raw mode — Ctrl+C is a keypress event, not a signal.
+Reedline doesn't need SIG_DFL.
+
+The fix:
+
+1. Remove `libc::signal(SIGINT, SIG_DFL)` from the REPL loop
+2. Signal-hook's handler (from NushellEngine) stays active permanently
+3. For the wrapper path, executor.rs already sets SIG_IGN before spawn — but it
+   never restores afterwards (the REPL loop was doing that). Now executor.rs
+   must restore signal-hook's handler after the child exits.
+
+Problem: executor.rs can't easily restore signal-hook's handler because it
+doesn't own the registration. Instead, we'll move the signal setup out of
+NushellEngine and into the REPL. The REPL will own the AtomicBool and pass it to
+both NushellEngine and executor.
+
+Simpler approach: just re-register signal-hook after every wrapper execution.
+`signal_hook::flag::register` can be called multiple times safely — it adds
+another action (but same effect since same AtomicBool). Or use
+`signal_hook::low_level::register` to install a persistent handler.
+
+Actually simplest: the NushellEngine may not exist (if nushell isn't available).
+So move signal-hook registration to REPL startup unconditionally. The handler
+sets an AtomicBool that nushell uses if present. After wrapper execution,
+re-register the signal-hook handler (since executor.rs set SIG_IGN which
+overwrites it).
+
+#### Changes
+
+**`shannon/src/nushell_engine.rs`**:
+
+- Accept `Arc<AtomicBool>` in `new()` instead of creating it internally
+- Remove signal-hook registration from here
+
+**`shannon/src/repl.rs`**:
+
+- Create `Arc<AtomicBool>` at REPL startup
+- Register signal-hook handler for SIGINT
+- Pass the Arc to NushellEngine
+- Remove `libc::signal(SIGINT, SIG_DFL)` from top of loop
+- After `run_command` returns (for wrapper path only), re-register signal-hook
+  to restore the handler that SIG_IGN overwrote
+
+#### Verification
+
+1. `cargo test` passes.
+2. Nushell: `sleep 10sec` + Ctrl+C → interrupted, shannon survives.
+3. Bash: `sleep 10` + Ctrl+C → interrupted, shannon survives.
+4. `scripts/test-sigint.sh` passes.
+
+**Result:** Pass
+
+All verification steps confirmed. 91 tests pass. Nushell's `sleep 10sec` is
+correctly interrupted by Ctrl+C and shannon returns to the prompt. The
+"Operation interrupted" error message with source annotation is standard nushell
+behavior (nushell's own REPL shows the same thing).
+
+#### Conclusion
+
+Nushell embedded path now handles Ctrl+C correctly. The fix has three parts:
+
+1. `signal-hook` registers a SIGINT handler that sets an `Arc<AtomicBool>`
+2. `NushellEngine` connects that Arc to nushell's `Signals` system via
+   `set_signals(Signals::new(interrupt))`
+3. The REPL no longer overwrites signal-hook with `SIG_DFL` — reedline uses
+   crossterm raw mode and doesn't need OS-level SIGINT handling
+
+After wrapper execution (bash/fish/zsh), signal-hook is re-registered since
+executor.rs's `SIG_IGN` overwrites it.
+
+Both execution paths (wrapper and embedded) now handle Ctrl+C correctly.
+

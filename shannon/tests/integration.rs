@@ -101,7 +101,7 @@ fn test_bash_env_persistence() {
 
 #[test]
 fn test_nushell_echo() {
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&initial_state());
     let result = engine.execute("echo hello");
     assert_eq!(result.last_exit_code, 0);
@@ -109,7 +109,7 @@ fn test_nushell_echo() {
 
 #[test]
 fn test_nushell_env_capture() {
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&initial_state());
     let result = engine.execute(r#"$env.FOO = "test_value_456""#);
     assert_eq!(result.env.get("FOO").unwrap(), "test_value_456");
@@ -117,7 +117,7 @@ fn test_nushell_env_capture() {
 
 #[test]
 fn test_nushell_cwd_capture() {
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&initial_state());
     let result = engine.execute("cd /tmp");
     assert!(
@@ -129,7 +129,7 @@ fn test_nushell_cwd_capture() {
 
 #[test]
 fn test_nushell_state_persistence() {
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&initial_state());
     let state1 = engine.execute(r#"$env.PERSIST = "hello""#);
     assert_eq!(state1.env.get("PERSIST").unwrap(), "hello");
@@ -245,7 +245,7 @@ fn test_env_bash_to_nushell() {
     assert_eq!(bash_state.env.get("CROSS").unwrap(), "hello_from_bash");
 
     // Nushell is embedded — inject bash state into engine
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&bash_state);
     let nu_state = engine.execute("echo $env.CROSS");
     assert_eq!(nu_state.last_exit_code, 0);
@@ -261,7 +261,7 @@ fn test_cwd_bash_to_nushell() {
     let bash_state = execute_command(&bash_config(), "cd /tmp", &state).unwrap();
 
     // Nushell is embedded — inject bash state into engine
-    let mut engine = NushellEngine::new();
+    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
     engine.inject_state(&bash_state);
     let nu_state = engine.execute("pwd");
     assert!(

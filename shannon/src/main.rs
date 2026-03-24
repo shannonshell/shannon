@@ -1,4 +1,6 @@
 use std::io;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use shannonshell::config::ShannonConfig;
 use shannonshell::executor::run_startup_script;
@@ -43,12 +45,17 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
+    // Shared interrupt flag for nushell's signal system.
+    // signal-hook registers a SIGINT handler that sets this flag.
+    // Nushell checks it via signals.interrupted() during execution.
+    let interrupt = Arc::new(AtomicBool::new(false));
+
     // Initialize nushell native engine (always embedded)
-    let nushell_engine = Some(NushellEngine::new());
+    let nushell_engine = Some(NushellEngine::new(interrupt.clone()));
 
     // Build theme from config
     let theme = Theme::from_config(&config.theme);
 
     // Run the REPL
-    repl::run(shells, config.ai, state, depth, nushell_engine, theme)
+    repl::run(shells, config.ai, state, depth, nushell_engine, theme, interrupt)
 }

@@ -1,6 +1,8 @@
 use std::io;
 use std::io::Write;
 use std::process::Command;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use chrono::Utc;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
@@ -240,22 +242,29 @@ fn handle_meta_command(
     }
 }
 
+/// Re-register signal-hook's SIGINT handler.
+///
+/// Called after wrapper execution (bash/fish/zsh) because executor.rs sets
+/// SIG_IGN which overwrites signal-hook's handler. This restores it so
+/// nushell's Signals system works on the next nushell command.
+#[cfg(unix)]
+fn restore_sigint_handler(interrupt: &Arc<AtomicBool>) {
+    signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
+        .expect("failed to re-register SIGINT handler");
+}
+
 /// Execute a command using the nushell engine (for "nu") or wrapper (for others).
 fn run_command(
     shell: &(String, ShellConfig),
     command: &str,
     state: &mut ShellState,
     nushell_engine: &mut Option<NushellEngine>,
+    interrupt: &Arc<AtomicBool>,
 ) {
     if shell.0 == "nu" {
         if let Some(ref mut engine) = nushell_engine {
-            // Ignore SIGINT in shannon while nushell runs the command.
-            // Nushell's engine handles SIGINT internally for external commands.
-            #[cfg(unix)]
-            unsafe {
-                libc::signal(libc::SIGINT, libc::SIG_IGN);
-            }
-
+            // Nushell's Signals system handles SIGINT internally.
+            // signal-hook sets the interrupt AtomicBool, nushell checks it during execution.
             engine.inject_state(state);
             *state = engine.execute(command);
             return;
@@ -271,6 +280,10 @@ fn run_command(
             state.last_exit_code = 1;
         }
     }
+    // executor.rs sets SIG_IGN which overwrites signal-hook's handler.
+    // Re-register it so nushell's signal system works next time.
+    #[cfg(unix)]
+    restore_sigint_handler(interrupt);
 }
 
 /// Run the main read-eval-print loop.
@@ -281,9 +294,17 @@ pub fn run(
     depth: u32,
     mut nushell_engine: Option<NushellEngine>,
     theme: Theme,
+    interrupt: Arc<AtomicBool>,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
     let shell_names: Vec<String> = shells.iter().map(|(n, _)| n.clone()).collect();
+
+    // Register signal-hook's SIGINT handler. This replaces SIG_DFL with a
+    // handler that sets the AtomicBool. Shannon won't die from SIGINT.
+    // Reedline uses crossterm raw mode — Ctrl+C is a keypress, not a signal.
+    #[cfg(unix)]
+    signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
+        .expect("failed to register SIGINT handler");
 
     let mut active_idx = 0;
     let mut ai_mode = false;
@@ -291,12 +312,6 @@ pub fn run(
     let mut ai_session: Option<Session> = None;
 
     loop {
-        // Restore default SIGINT handling so reedline can catch Ctrl+C at the prompt.
-        // During command execution, SIGINT is set to SIG_IGN (in executor.rs).
-        #[cfg(unix)]
-        unsafe {
-            libc::signal(libc::SIGINT, libc::SIG_DFL);
-        }
 
         // Report cwd and title to terminal
         emit_osc7(&state.cwd);
@@ -386,6 +401,7 @@ pub fn run(
                                         &command,
                                         &mut state,
                                         &mut nushell_engine,
+                                        &interrupt,
                                     );
                                     emit_osc7(&state.cwd);
 
@@ -426,6 +442,7 @@ pub fn run(
                         line,
                         &mut state,
                         &mut nushell_engine,
+                        &interrupt,
                     );
                     emit_osc7(&state.cwd);
                 }
