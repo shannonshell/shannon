@@ -20,12 +20,25 @@ pub fn execute_command(
     let init_content = read_init_file(shell_config.init.as_deref());
     let wrapper = expand_wrapper(&shell_config.wrapper, command, &temp_path, &init_content);
 
+    // Ignore SIGINT while child runs — let only the child handle it.
+    // This is what bash/zsh/fish do: the shell survives Ctrl+C.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_IGN);
+    }
+
     let status = Command::new(&shell_config.binary)
         .args(["-c", &wrapper])
         .env_clear()
         .envs(&state.env)
         .current_dir(&state.cwd)
         .status();
+
+    // Restore default SIGINT handling
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_DFL);
+    }
 
     let exit_code = match &status {
         Ok(s) => s.code().unwrap_or(1),

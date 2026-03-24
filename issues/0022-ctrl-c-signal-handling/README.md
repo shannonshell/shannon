@@ -142,3 +142,22 @@ manage SIGINT for external commands, but wrapping it ensures consistency.
 4. `cargo test` — all tests pass.
 5. Manual: run `npm run dev` (or `sleep 10`) in shannon, Ctrl+C, shannon
    survives and shows a new prompt.
+
+**Result:** Fail
+
+The integration test (sending SIGINT directly to the process) passed, but
+the real scenario still fails. The integration test doesn't reproduce the
+actual problem: in a real terminal, SIGINT goes to the entire foreground
+process group, not just to our process. The `SIG_IGN` fix in
+`execute_command` is not sufficient.
+
+An external shell script test (`scripts/test-sigint.sh`) correctly
+reproduces the failure. The fix needs to address process group behavior,
+not just per-process signal handling.
+
+#### Conclusion
+
+The integration test approach was wrong — it tested signal delivery to a
+single process, not process group behavior. The external script test
+confirms the bug still exists. Need a different fix approach in
+experiment 2.
