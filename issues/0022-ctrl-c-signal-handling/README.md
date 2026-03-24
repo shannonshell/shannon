@@ -272,3 +272,103 @@ Partial progress. Shannon no longer dies from Ctrl+C (the original crash
 is fixed). But the child process doesn't receive SIGINT, so Ctrl+C
 effectively does nothing visible. Need to investigate why the child's
 process group isn't receiving the terminal's SIGINT.
+
+### Experiment 3: Debug and fix child SIGINT delivery
+
+#### Description
+
+The child process isn't receiving SIGINT. Three possible causes:
+
+1. **Race condition**: `tcsetpgrp` is called after `spawn` returns, but
+   the child may not have called `setpgid` yet. If `tcsetpgrp` runs
+   before `setpgid`, the child's group doesn't exist yet.
+
+2. **Bash wrapper absorbs SIGINT**: The child is `bash -c 'sleep 10; ...'`.
+   Bash may set its own signal handling for non-interactive mode.
+
+3. **tcsetpgrp is failing silently**: We don't check return values.
+
+#### Approach: simplify
+
+Instead of the complex process group dance, try a simpler approach that
+real shells use:
+
+**Option A: Don't use process groups at all.** Just `SIG_IGN` SIGINT in
+shannon, run the child normally (same process group), and the child
+receives SIGINT from the terminal because it's in the foreground group.
+Shannon ignores it, child handles it. After child exits, restore
+`SIG_DFL`.
+
+The problem with experiment 2 was that SIG_DFL restore after child exit
+allowed a pending SIGINT to kill shannon. Fix: don't restore to SIG_DFL
+immediately. Instead, drain any pending signals first, or restore inside
+the reedline `read_line` loop where reedline handles Ctrl+C as
+`Signal::CtrlC`.
+
+Actually — reedline already handles SIGINT correctly during `read_line`
+(it returns `Signal::CtrlC`). The only time we need to ignore SIGINT is
+during command execution. After execution, reedline takes over signal
+handling again.
+
+**Option B: Forward SIGINT manually.** Keep SIG_IGN on shannon, but
+install a custom handler that forwards SIGINT to the child's PID. No
+process groups needed.
+
+#### Plan: try Option A first (simplest)
+
+1. Remove all process group code (`setpgid`, `tcsetpgrp`)
+2. Keep `SIG_IGN` before child spawn
+3. Run child with normal `.status()` (same process group as shannon)
+4. Child receives SIGINT from terminal (it's in the foreground group)
+5. Shannon ignores it (SIG_IGN)
+6. After child exits, DON'T restore SIG_DFL — let reedline handle
+   signals during `read_line`
+
+The key insight from experiment 2's failure: restoring `SIG_DFL` after
+the child exits caused a pending SIGINT to kill shannon. If we never
+restore `SIG_DFL` at the executor level, and let reedline manage signals
+during input, the problem goes away.
+
+#### Changes
+
+**`shannon/src/executor.rs`**:
+
+Remove all process group code. Simplify to:
+
+```rust
+#[cfg(unix)]
+unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN); }
+
+let status = Command::new(&shell_config.binary)
+    .args(["-c", &wrapper])
+    .env_clear()
+    .envs(&state.env)
+    .current_dir(&state.cwd)
+    .status();
+
+// Don't restore SIG_DFL here — reedline handles SIGINT during read_line
+```
+
+**`shannon/src/repl.rs`**:
+
+Before each `editor.read_line()`, ensure SIGINT is restored to default
+so reedline can catch Ctrl+C at the prompt:
+
+```rust
+#[cfg(unix)]
+unsafe { libc::signal(libc::SIGINT, libc::SIG_DFL); }
+
+match editor.read_line(&prompt) { ... }
+```
+
+This creates a clean cycle:
+- At prompt → SIG_DFL (reedline handles Ctrl+C)
+- During execution → SIG_IGN (child handles Ctrl+C)
+
+#### Verification
+
+1. `cargo test` passes.
+2. `scripts/test-sigint.sh` passes.
+3. Manual: `sleep 10` + Ctrl+C → sleep dies, shannon shows prompt.
+4. Manual: at prompt, Ctrl+C → clears input (reedline behavior).
+5. Manual: `vim` + Ctrl+C → vim handles it normally.
