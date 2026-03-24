@@ -870,5 +870,40 @@ Three additional minor fixes were needed for API changes:
 
 The core goal — shared workspace with all three forks, proper env capture via
 `iter_exported()`, no dependency conflicts — is achieved. Ctrl+C handling needs
-to be fixed in a follow-up experiment, likely by reconnecting signal-hook to
-the newer nushell's signal system and adding signal support to brush.
+to be fixed in a follow-up experiment.
+
+### Experiment 9: Fix Ctrl+C with reedline's break_signal
+
+#### Description
+
+Reedline's git main added `with_break_signal(Arc<AtomicBool>)` (commit
+`5c2f105`). When configured, reedline polls non-blocking instead of blocking
+on `event::read()`. When the AtomicBool is set, reedline returns
+`Signal::ExternalBreak`.
+
+Shannon already has the interrupt `Arc<AtomicBool>` (from issue 22's
+signal-hook setup) — it just needs to pass it to reedline. Without it,
+reedline blocks forever after a subprocess is killed by Ctrl+C, making it
+appear that Ctrl+C doesn't work.
+
+#### Changes
+
+**`shannon/src/repl.rs`** — `build_editor()`:
+- Add `interrupt: &Arc<AtomicBool>` parameter
+- Add `.with_break_signal(interrupt.clone())` to the reedline builder chain
+
+**`shannon/src/repl.rs`** — all `build_editor()` call sites:
+- Pass the `interrupt` Arc
+
+**`shannon/src/repl.rs`** — `Signal::ExternalBreak` handling:
+- The existing `Ok(_) => continue` wildcard already handles this, but make it
+  explicit for clarity:
+  `Ok(Signal::ExternalBreak(_)) => continue`
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `cargo test` — all tests pass.
+3. Nushell: `sleep 10sec` + Ctrl+C → process killed, prompt returns.
+4. Brush: `sleep 10` + Ctrl+C → process killed, prompt returns.
+5. Bash (wrapper): `sleep 10` + Ctrl+C → still works (no regression).
