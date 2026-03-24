@@ -263,3 +263,140 @@ Read the vendored brush source at `vendor/brush/`. Examine:
 - How env/variables/cwd are stored and accessible
 - How external commands are spawned
 - Any existing examples of embedding brush as a library
+
+#### Findings
+
+**Crate structure:**
+
+Brush is a workspace with 10 crates. The key one is `brush-core` — an explicit
+library crate with a public API designed for embedding. Other crates include
+`brush-parser`, `brush-builtins`, `brush-interactive` (REPL UI using reedline),
+and `brush-shell` (the binary).
+
+**Public API — shell creation:**
+
+```rust
+let shell = brush_core::Shell::builder()
+    .build()   // async
+    .await?;
+```
+
+Builder supports: `.working_dir()`, `.var()`, `.builtin()`, `.interactive()`,
+`.do_not_inherit_env()`, `.enable_option()`, `.rc()`, `.profile()`, etc.
+
+**Public API — command execution:**
+
+```rust
+let result = shell.run_string(
+    "echo hello",
+    &source_info,
+    &shell.default_exec_params(),
+).await?;
+// result.exit_code, result.is_success(), result.next_control_flow
+```
+
+Returns `ExecutionResult` with exit code and control flow (normal, break, exit).
+
+**State access — fully readable and writable:**
+
+```rust
+shell.env()          // &ShellEnvironment (read env vars)
+shell.env_mut()      // &mut ShellEnvironment (write env vars)
+shell.working_dir()  // &Path
+shell.working_dir_mut()  // &mut PathBuf
+shell.last_exit_status() // u8
+shell.set_last_exit_status(code)
+```
+
+Env vars can be iterated with `.iter_exported()`. Shell variables (non-exported)
+are also accessible. This is cleaner than nushell's API.
+
+**External commands:** Spawns real subprocesses via `tokio::process::Command`.
+They inherit the parent's stdio — output goes directly to the terminal.
+Interactive programs (vim, less, ssh) should work.
+
+**Async requirement:** Everything is async, requiring a tokio runtime. This is
+the main integration cost. Shannon already depends on tokio (for rig-core/AI),
+so this is not a new dependency.
+
+**Dependencies:** ~29 transitive deps. Tokio, nix, chrono, clap, regex. Moderate
+weight, similar to the nushell crates.
+
+**Examples:** `brush-core/examples/call-func.rs` demonstrates creating a shell,
+running commands, and invoking functions. `custom-builtin.rs` shows extending
+with custom builtins.
+
+**Compatibility:** Brush aims for bash compatibility. It has extensive test
+suites and compatibility tests. Less mature than real bash, but actively
+developed.
+
+#### Comparison with nushell embedding
+
+| Aspect | Nushell | Brush |
+|--------|---------|-------|
+| Creation | Sync: `EngineState::new()` | Async: `.builder().build().await` |
+| Execute | Sync: `eval_source()` | Async: `run_string()` |
+| State access | Stack + EngineState (indirect) | Direct methods on Shell |
+| Env vars | `stack.add_env_var()` | `shell.env_mut()` |
+| Exit code | i32 from eval_source | `ExecutionResult.exit_code` |
+| External cmds | Real subprocesses | Real subprocesses |
+| Stdio | Inherited | Inherited |
+| Async required | No | Yes (tokio) |
+
+**What a `BrushEngine` would look like:**
+
+```rust
+pub struct BrushEngine {
+    shell: brush_core::Shell,
+    runtime: tokio::runtime::Runtime,
+}
+
+impl BrushEngine {
+    pub fn new() -> Self {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let shell = runtime.block_on(
+            brush_core::Shell::builder().build()
+        ).unwrap();
+        BrushEngine { shell, runtime }
+    }
+
+    pub fn execute(&mut self, command: &str) -> ShellState {
+        let result = self.runtime.block_on(
+            self.shell.run_string(command, &source_info, &params)
+        );
+        // Read state from self.shell.env(), working_dir(), etc.
+    }
+}
+```
+
+The pattern mirrors `NushellEngine` almost exactly — create once, execute
+commands, capture state. The async wrapping with `block_on` is the only
+difference.
+
+**Result:** Research complete.
+
+Brush is embeddable as a library. `brush-core` provides a clean public API for
+creating a shell, executing commands, and reading/writing state. External
+commands spawn real subprocesses with inherited stdio. The only integration cost
+is async (tokio), which shannon already has.
+
+#### Conclusion
+
+Brush can be embedded in shannon the same way nushell is. The API is actually
+cleaner than nushell's — direct methods for env, cwd, and exit code instead of
+reaching into Stack/EngineState internals.
+
+Key advantages over the wrapper model:
+- Persistent state (shell vars, aliases, functions survive between commands)
+- No temp file for env capture (read directly from Shell struct)
+- No wrapper script template needed
+- Signal handling can be integrated (like nushell's Signals)
+
+Key risks:
+- Brush is less mature than bash (compatibility gaps)
+- Async requirement adds complexity
+- Unknown how well interactive programs (vim, less) work through the embedded
+  engine vs direct subprocess
+
+Next step: build a proof-of-concept `BrushEngine` and test it with real
+commands.
