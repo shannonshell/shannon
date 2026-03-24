@@ -83,3 +83,47 @@ nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "sh
 Locally, cargo uses the path. When publishing, it uses the version. This avoids
 needing to switch Cargo.toml before each publish. The nushell fork crates
 already use this pattern for their internal deps.
+
+## Experiments
+
+### Experiment 1: Extend release.sh with fork crate publishing
+
+#### Description
+
+`scripts/release.sh` already handles version bumping, testing, dry-run,
+commit, tag, publish, and push for `shannonshell`. Extend it to also publish
+all fork crates in dependency order before publishing shannonshell.
+
+The script takes a version argument: `scripts/release.sh 0.2.0`.
+
+Steps:
+
+1. Compute the topological publish order for all ~37 fork crates
+2. Add `version` fields to shannon's Cargo.toml (dual path+version pattern)
+3. Extend `scripts/release.sh` to publish fork crates before shannonshell
+4. Test with `--dry-run` to validate everything resolves
+
+#### Changes
+
+**`shannon/Cargo.toml`:**
+
+- Add `version` fields alongside existing `path` deps (dual pattern):
+  `nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "shannon-nu-cli" }`
+
+**`scripts/release.sh`:**
+
+- Before publishing `shannonshell`, publish all fork crates in order:
+  1. `cd reedline && cargo publish`
+  2. `cd nushell && cargo publish -p <crate>` for each nu crate in topo order
+  3. `cd brush && cargo publish -p <crate>` for each brush crate in order
+- Sleep between publishes for crates.io indexing
+- Update version in shannonshell's Cargo.toml (already does this)
+- Fork crate versions stay at their current versions (we don't bump them
+  unless we change them — they track upstream versions)
+- Support `--dry-run` flag to validate without publishing
+
+#### Verification
+
+1. `scripts/release.sh 0.2.0 --dry-run` passes for all crates.
+2. `scripts/release.sh 0.2.0` publishes all crates successfully.
+3. `cargo install shannonshell` works from a clean environment.
