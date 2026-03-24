@@ -907,3 +907,62 @@ appear that Ctrl+C doesn't work.
 3. Nushell: `sleep 10sec` + Ctrl+C → process killed, prompt returns.
 4. Brush: `sleep 10` + Ctrl+C → process killed, prompt returns.
 5. Bash (wrapper): `sleep 10` + Ctrl+C → still works (no regression).
+
+**Result:** Fail
+
+Build succeeds, all 95 tests pass, but Ctrl+C behavior is unchanged. Passing
+the interrupt Arc to reedline via `with_break_signal()` and handling
+`Signal::ExternalBreak` did not fix the issue. The problem is deeper than
+reedline's event loop — the signal is not reaching nushell's or brush's
+subprocess at all.
+
+#### Conclusion
+
+The break_signal feature only helps reedline wake up from its event loop when
+an external interrupt occurs. It doesn't fix the underlying problem: the
+subprocess running inside nushell or brush is not receiving SIGINT. The issue
+is in how signals are delivered during embedded execution, not in how reedline
+polls for events.
+
+### Experiment 10: Debug logging to trace signal delivery
+
+#### Description
+
+Add temporary debug logging to `/tmp/shannon-debug.log` at every point in the
+signal chain. Run `sleep 10sec` in nushell, press Ctrl+C, and read the log to
+find exactly where the chain breaks.
+
+#### Log points
+
+1. **signal-hook handler fires** — in `repl.rs` after `signal_hook::flag::register`,
+   add a second handler via `signal_hook::low_level::register` that writes a
+   log line when SIGINT arrives.
+2. **nushell engine execute starts** — in `nushell_engine.rs` `execute()`,
+   log before `eval_source`.
+3. **nushell signals reset** — log after `reset_signals()`.
+4. **nushell signals interrupted check** — log the state of the interrupt
+   AtomicBool before and after `eval_source`.
+5. **run_command entry** — in `repl.rs` `run_command()`, log which shell path
+   is taken (nushell/brush/wrapper).
+6. **ExternalBreak received** — log when reedline returns ExternalBreak.
+
+All logs go to `/tmp/shannon-debug.log` with timestamps.
+
+#### Changes
+
+**`shannon/src/repl.rs`:**
+- Add a debug log helper function that appends to `/tmp/shannon-debug.log`
+- Add log calls at signal registration, run_command entry, and
+  ExternalBreak handling
+
+**`shannon/src/nushell_engine.rs`:**
+- Add log calls before/after reset_signals and eval_source
+- Log the interrupt AtomicBool value
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. Run shannon, switch to nushell, run `sleep 10sec`.
+3. In another terminal: `tail -f /tmp/shannon-debug.log`.
+4. Press Ctrl+C.
+5. Read the log to determine where the signal chain breaks.
