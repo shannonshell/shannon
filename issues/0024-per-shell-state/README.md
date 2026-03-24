@@ -1079,3 +1079,49 @@ internal behavior.
 Re-registering before each command doesn't work. The background polling thread
 from the debug code is the most likely cause of the fix. Need to isolate exactly
 which part of the debug code makes Ctrl+C work.
+
+### Experiment 12: Isolate which debug code piece fixes Ctrl+C
+
+#### Description
+
+The debug code had three pieces beyond the log statements:
+
+1. A second `signal_hook::flag::register` call (separate AtomicBool)
+2. A background thread polling that AtomicBool every 50ms via `swap(false)`
+3. Both together
+
+Binary search to isolate the fix:
+
+**Step A** — add both (thread + second registration, no logging):
+```rust
+let extra_flag = Arc::new(AtomicBool::new(false));
+signal_hook::flag::register(SIGINT, extra_flag.clone()).unwrap();
+std::thread::spawn(move || loop {
+    extra_flag.swap(false, Ordering::Relaxed);
+    std::thread::sleep(Duration::from_millis(50));
+});
+```
+Test Ctrl+C. If it works, proceed to step B.
+
+**Step B** — remove the thread, keep only the second registration:
+```rust
+let _extra_flag = Arc::new(AtomicBool::new(false));
+signal_hook::flag::register(SIGINT, _extra_flag.clone()).unwrap();
+```
+Test Ctrl+C again.
+
+**Step C** (if B fails) — keep the thread, remove the second registration.
+Use the existing `interrupt` Arc instead:
+```rust
+let interrupt2 = interrupt.clone();
+std::thread::spawn(move || loop {
+    interrupt2.load(Ordering::Relaxed);
+    std::thread::sleep(Duration::from_millis(50));
+});
+```
+
+#### Verification
+
+- A works + B works → second registration is the fix
+- A works + B fails → thread is the fix (investigate why)
+- A fails → something else entirely
