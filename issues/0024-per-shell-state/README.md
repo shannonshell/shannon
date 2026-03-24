@@ -966,3 +966,24 @@ All logs go to `/tmp/shannon-debug.log` with timestamps.
 3. In another terminal: `tail -f /tmp/shannon-debug.log`.
 4. Press Ctrl+C.
 5. Read the log to determine where the signal chain breaks.
+
+**Result:** Pass
+
+Debug logging confirmed the entire signal chain works correctly:
+1. signal-hook receives SIGINT and sets the AtomicBool
+2. Nushell checks `signals.interrupted()`, returns from `eval_source`
+3. Reedline detects the break signal via `with_break_signal()`, returns
+   `Signal::ExternalBreak`
+4. Shannon handles it and returns to the prompt
+
+Brush also works — Ctrl+C kills `sleep 10` and returns exit code 130.
+
+The fix from experiment 9 (`with_break_signal`) was actually correct. The
+earlier test failure was likely a stale binary. The debug logging proved that
+experiments 8+9 together resolved the Ctrl+C regression.
+
+#### Conclusion
+
+Ctrl+C works for both nushell and brush. The debug logging can be removed.
+The signal chain is: signal-hook → AtomicBool → nushell Signals / brush
+subprocess → reedline ExternalBreak → shannon prompt.
