@@ -1,5 +1,5 @@
 [package]
-name = "brush-builtins"
+name = "shannon-brush-builtins"
 description = "Builtins for a POSIX/bash shell (used by brush-shell)"
 version = "0.1.0"
 categories.workspace = true
@@ -128,8 +128,8 @@ default = [
 workspace = true
 
 [dependencies]
-brush-core = { version = "^0.4.0", path = "../brush-core" }
-brush-parser = { version = "^0.3.0", path = "../brush-parser" }
+brush-core = { version = "^0.4.0", path = "../brush-core", package = "shannon-brush-core" }
+brush-parser = { version = "^0.3.0", path = "../brush-parser", package = "shannon-brush-parser" }
 cfg-if = "1.0.4"
 chrono = "0.4.44"
 clap = { version = "4.6.0", features = ["derive", "wrap_help"] }

@@ -26,9 +26,11 @@ tokio = { version = "1.50.0", features = ["rt"] }
 
 [dependencies.brush-core]
 path = "../brush-core"
+package = "shannon-brush-core"
 
 [dependencies.brush-parser]
 path = "../brush-parser"
+package = "shannon-brush-parser"
 features = ["arbitrary"]
 
 [[bin]]
