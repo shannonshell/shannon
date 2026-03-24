@@ -1125,3 +1125,28 @@ std::thread::spawn(move || loop {
 - A works + B works → second registration is the fix
 - A works + B fails → thread is the fix (investigate why)
 - A fails → something else entirely
+
+**Result:** Pass
+
+Step A (thread + second registration): Ctrl+C works.
+Step B (second registration only, separate Arc): Ctrl+C works.
+Step B2 (register same `interrupt` Arc twice): Ctrl+C works.
+
+The fix is calling `signal_hook::flag::register(SIGINT, interrupt)` twice.
+The thread and the separate Arc were red herrings. A single registration is
+unreliable — something during initialization (reedline, crossterm, or tokio)
+interferes with the first registration. The second call re-installs the
+handler.
+
+This is fishy. `signal_hook::flag::register` should work with a single call.
+The fact that it requires two calls suggests a race condition or handler
+overwrite during startup. Candidates: crossterm's internal signal setup,
+tokio's signal infrastructure, or reedline's initialization. This warrants
+investigation in a future issue — the double registration works but is a
+workaround, not a proper fix.
+
+#### Conclusion
+
+Double-registering signal-hook for SIGINT reliably fixes Ctrl+C. The root
+cause is unknown — likely a signal handler overwrite during startup by one of
+our dependencies. Keeping the workaround with a comment for now.
