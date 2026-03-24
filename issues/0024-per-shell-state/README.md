@@ -786,3 +786,62 @@ monorepo. It needs the same fork treatment: fork, rename to
 The nushell fork requires bleeding-edge reedline (not yet on crates.io).
 Reedline must also be forked, renamed, and published. Three forks total:
 nushell, brush, reedline.
+
+### Experiment 8: Fork reedline, complete the shared workspace
+
+#### Description
+
+Same as experiment 7, plus fork reedline. Reedline is a single crate (no
+workspace, no sub-crates) so the fork is trivial: rename to
+`shannon-reedline`, publish, and point both shannon and nushell at it.
+
+**All four repos:**
+- `shannonshell/shannon` — main repo
+- `shannonshell/shannon_brush` — brush fork (submodule at `brush/`)
+- `shannonshell/shannon_nushell` — nushell fork (submodule at `nushell/`)
+- `shannonshell/shannon_reedline` — reedline fork (submodule at `reedline/`)
+
+**Reedline fork changes (on `shannon` branch):**
+1. Rename package: `reedline` → `shannon-reedline`
+
+**Nushell fork additional changes:**
+1. Replace `[patch.crates-io]` reedline git override with a path dep to the
+   reedline submodule
+2. Update workspace.dependencies: `reedline = "0.46.0"` → path dep to
+   `shannon-reedline`
+
+**Shannon Cargo.toml:**
+1. Replace `reedline = { version = "0.46.0", ... }` with path dep to
+   `shannon-reedline` submodule
+
+Since both shannon and nushell depend on reedline, they must agree on the same
+crate. With path deps pointing to the same submodule, they resolve to the same
+instance.
+
+#### Changes
+
+**Reedline fork (`reedline/` submodule):**
+- Rename `name = "reedline"` → `name = "shannon-reedline"` in Cargo.toml
+
+**Nushell fork (`nushell/` submodule):**
+- All changes from experiment 7 (libc pin, 40 crate renames, 206 dep refs)
+- Replace `[patch.crates-io]` reedline git override with:
+  `reedline = { path = "../reedline", package = "shannon-reedline" }`
+- Update `[workspace.dependencies]`:
+  `reedline = { path = "../reedline", package = "shannon-reedline" }`
+
+**Shannon (`shannon/Cargo.toml`):**
+- Path deps to nushell and brush submodules (from experiment 7)
+- Replace `reedline = { version = "0.46.0", features = ["sqlite"] }` with
+  `reedline = { path = "../reedline", package = "shannon-reedline", features = ["sqlite"] }`
+
+**`shannon/src/brush_engine.rs`:**
+- Replace heuristic with `shell.env().iter_exported()` (from experiment 7)
+
+#### Verification
+
+1. All three submodules cloned, `shannon` branches checked out.
+2. `cargo build` succeeds (no libc conflict, no reedline mismatch).
+3. `cargo test -p shannonshell` — all tests pass.
+4. Manual: brush `export FOO=bar`, switch to nushell, `$env.FOO` shows `bar`.
+5. Manual: Ctrl+C works in both shells.
