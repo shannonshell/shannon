@@ -625,3 +625,48 @@ executor.rs's `SIG_IGN` overwrites it.
 
 Both execution paths (wrapper and embedded) now handle Ctrl+C correctly.
 
+### Experiment 8: Revert error indicator special-casing for SIGINT
+
+#### Description
+
+Experiment 5 made exit code 130 (SIGINT) show `>` instead of `!` in the prompt.
+This creates an inconsistency: Ctrl+C in bash/fish/zsh shows `>`, but Ctrl+C in
+nushell shows `!` (because nushell returns exit code 1, not 130).
+
+The user doesn't know or care about wrapper vs embedded paths. They see
+inconsistent behavior across shells. The fix: revert experiment 5. All shells
+show `!` after Ctrl+C. This is correct — the user interrupted something, the
+command exited nonzero, and `!` accurately reflects that.
+
+#### Changes
+
+**`shannon/src/prompt.rs`**:
+
+Revert the `!= 130` special case in both `render_prompt_indicator` and
+`get_indicator_color`. Return to the original logic: any nonzero exit code
+shows `!`.
+
+```rust
+// render_prompt_indicator
+if self.last_exit_code != 0 {
+    Cow::Owned(format!(" {depth_prefix}! "))
+} else {
+    Cow::Owned(format!(" {depth_prefix}> "))
+}
+
+// get_indicator_color
+if self.last_exit_code != 0 {
+    self.error_color
+} else {
+    self.indicator_color
+}
+```
+
+#### Verification
+
+1. `cargo test` passes.
+2. Bash: `sleep 10` + Ctrl+C → prompt shows `!`.
+3. Nushell: `sleep 10sec` + Ctrl+C → prompt shows `!`.
+4. Both shells: `echo hello` → prompt shows `>`.
+5. Both shells: `false` → prompt shows `!`.
+
