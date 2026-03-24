@@ -249,6 +249,13 @@ fn run_command(
 ) {
     if shell.0 == "nu" {
         if let Some(ref mut engine) = nushell_engine {
+            // Ignore SIGINT in shannon while nushell runs the command.
+            // Nushell's engine handles SIGINT internally for external commands.
+            #[cfg(unix)]
+            unsafe {
+                libc::signal(libc::SIGINT, libc::SIG_IGN);
+            }
+
             engine.inject_state(state);
             *state = engine.execute(command);
             return;
