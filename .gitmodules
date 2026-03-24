@@ -4,3 +4,6 @@
 [submodule "nushell"]
 	path = nushell
 	url = git@github.com:shannonshell/shannon_nushell.git
+[submodule "reedline"]
+	path = reedline
+	url = git@github.com:shannonshell/shannon_reedline.git

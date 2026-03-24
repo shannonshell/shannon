@@ -1,16 +1,13 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use brush_builtins::ShellBuilderExt;
-use brush_core::{ExecutionExitCode, Shell, ShellVariable};
+use brush_core::{ExecutionExitCode, Shell, ShellValue, ShellVariable, SourceInfo};
 
 use crate::shell::ShellState;
 
 pub struct BrushEngine {
     shell: Shell,
     runtime: tokio::runtime::Runtime,
-    /// Track all env var names we know about (from inject + commands).
-    known_keys: HashSet<String>,
 }
 
 impl BrushEngine {
@@ -28,14 +25,7 @@ impl BrushEngine {
             )
             .expect("failed to create brush shell");
 
-        // Seed known keys from process env (brush inherits these)
-        let known_keys: HashSet<String> = std::env::vars().map(|(k, _)| k).collect();
-
-        BrushEngine {
-            shell,
-            runtime,
-            known_keys,
-        }
+        BrushEngine { shell, runtime }
     }
 
     /// Inject shannon's ShellState into the brush shell before evaluation.
@@ -47,8 +37,7 @@ impl BrushEngine {
         for (key, value) in &state.env {
             let mut var = ShellVariable::new(value.as_str());
             var.export();
-            let _ = self.shell.set_env_global(key, var);
-            self.known_keys.insert(key.clone());
+            let _ = self.shell.env_mut().set_global(key.clone(), var);
         }
     }
 
@@ -58,15 +47,12 @@ impl BrushEngine {
 
         let result = self
             .runtime
-            .block_on(self.shell.run_string(command, &params));
+            .block_on(self.shell.run_string(command, &SourceInfo::default(), &params));
 
         let exit_code = match result {
             Ok(r) => self.exit_code_to_i32(&r.exit_code),
             Err(_) => 1,
         };
-
-        // Discover newly exported vars by checking the command for export/declare
-        self.discover_new_keys(command);
 
         let env = self.capture_env();
         let cwd = self.shell.working_dir().to_path_buf();
@@ -87,34 +73,18 @@ impl BrushEngine {
             ExecutionExitCode::NotFound => 127,
             ExecutionExitCode::Interrupted => 130,
             ExecutionExitCode::Unimplemented => 99,
+            ExecutionExitCode::BrokenPipe => 141, // 128 + SIGPIPE(13)
             ExecutionExitCode::Custom(c) => *c as i32,
         }
     }
 
-    /// Try to discover env var names from the command text.
-    /// This is a heuristic — catches `export FOO=bar` patterns.
-    fn discover_new_keys(&mut self, command: &str) {
-        for word in command.split_whitespace() {
-            if let Some(eq_pos) = word.find('=') {
-                let key = &word[..eq_pos];
-                if !key.is_empty() && key.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    self.known_keys.insert(key.to_string());
-                }
-            }
-        }
-    }
-
-    /// Capture env vars by querying brush for all known keys.
+    /// Capture all exported env vars directly from brush's environment.
     fn capture_env(&self) -> HashMap<String, String> {
         let mut env = HashMap::new();
 
-        for key in &self.known_keys {
-            if let Some(var) = self.shell.env_var(key) {
-                if var.is_exported() {
-                    if let Some(val) = self.shell.env_str(key) {
-                        env.insert(key.clone(), val.to_string());
-                    }
-                }
+        for (name, var) in self.shell.env().iter_exported() {
+            if let ShellValue::String(s) = var.value() {
+                env.insert(name.clone(), s.clone());
             }
         }
 

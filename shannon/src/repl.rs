@@ -468,6 +468,7 @@ pub fn run(
                 state.last_exit_code = 0;
                 continue;
             }
+            Ok(_) => continue, // handle any new reedline Signal variants
             Err(e) => {
                 eprintln!("shannon: {e}");
                 break;

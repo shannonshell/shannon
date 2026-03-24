@@ -845,3 +845,30 @@ instance.
 3. `cargo test -p shannonshell` — all tests pass.
 4. Manual: brush `export FOO=bar`, switch to nushell, `$env.FOO` shows `bar`.
 5. Manual: Ctrl+C works in both shells.
+
+**Result:** Partial
+
+All three forks are set up as submodules (nushell, brush, reedline). The libc
+pin is relaxed, all crates renamed, path deps wired up. `cargo build` and all
+95 tests pass. Basic commands work in both nushell and brush. The heuristic env
+capture in brush is replaced with `shell.env().iter_exported()`.
+
+Two regressions:
+1. **Nushell Ctrl+C broken:** `sleep 10sec` + Ctrl+C prints `^C` but doesn't
+   kill the process. The signal-hook integration from issue 22 may not be
+   compatible with the newer nushell version from the fork.
+2. **Brush Ctrl+C broken:** `sleep 10` + Ctrl+C same behavior — prints `^C`
+   but process continues. Brush has no signal integration yet (noted as a
+   known gap from experiment 4).
+
+Three additional minor fixes were needed for API changes:
+- `brush_core::SourceInfo` parameter added to `run_string()`
+- `ExecutionExitCode::BrokenPipe` variant added
+- `reedline::Signal` has new variants (added wildcard match)
+
+#### Conclusion
+
+The core goal — shared workspace with all three forks, proper env capture via
+`iter_exported()`, no dependency conflicts — is achieved. Ctrl+C handling needs
+to be fixed in a follow-up experiment, likely by reconnecting signal-hook to
+the newer nushell's signal system and adding signal support to brush.
