@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 use std::process::Command;
-use std::thread;
-use std::time::Duration;
 
 use shannonshell::config::ShellConfig;
 use shannonshell::executor::execute_command;
@@ -297,38 +295,4 @@ fn test_env_bash_to_fish() {
     );
 }
 
-// --- SIGINT handling tests ---
-
-#[test]
-#[ignore] // sends SIGINT to process — must run with --test-threads=1
-fn test_sigint_during_subprocess() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-
-    // Ignore SIGINT for the test process before spawning the sender thread.
-    // execute_command will also ignore SIGINT (the fix under test).
-    // The key assertion: execute_command returns normally despite SIGINT.
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-    }
-
-    let pid = std::process::id();
-    thread::spawn(move || {
-        thread::sleep(Duration::from_millis(200));
-        unsafe {
-            libc::kill(pid as i32, libc::SIGINT);
-        }
-    });
-
-    // Run a command that takes 500ms — SIGINT arrives mid-execution
-    let result = execute_command(&bash_config(), "sleep 0.5", &state);
-
-    // If we get here, the process survived SIGINT
-    assert!(result.is_ok(), "execute_command should survive SIGINT");
-
-    // Wait for the signal thread to finish, then restore default handling
-    thread::sleep(Duration::from_millis(400));
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_DFL);
-    }
-}
+// SIGINT handling is tested via scripts/test-sigint.sh (not integration tests).

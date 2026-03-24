@@ -3,6 +3,9 @@ use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
 use crate::config::{expand_wrapper, read_init_file, ShellConfig};
 use crate::shell::ShellState;
 
@@ -20,24 +23,60 @@ pub fn execute_command(
     let init_content = read_init_file(shell_config.init.as_deref());
     let wrapper = expand_wrapper(&shell_config.wrapper, command, &temp_path, &init_content);
 
-    // Ignore SIGINT while child runs — let only the child handle it.
-    // This is what bash/zsh/fish do: the shell survives Ctrl+C.
     #[cfg(unix)]
     unsafe {
+        // Ignore SIGINT and SIGTTOU while managing child process groups.
+        // SIGINT: so shannon doesn't die from Ctrl+C during child execution.
+        // SIGTTOU: so tcsetpgrp doesn't stop shannon when changing foreground group.
         libc::signal(libc::SIGINT, libc::SIG_IGN);
+        libc::signal(libc::SIGTTOU, libc::SIG_IGN);
     }
 
-    let status = Command::new(&shell_config.binary)
-        .args(["-c", &wrapper])
+    let mut cmd = Command::new(&shell_config.binary);
+    cmd.args(["-c", &wrapper])
         .env_clear()
         .envs(&state.env)
-        .current_dir(&state.cwd)
-        .status();
+        .current_dir(&state.cwd);
 
-    // Restore default SIGINT handling
+    // Put child in its own process group so terminal SIGINT goes only
+    // to the child, not to shannon.
+    #[cfg(unix)]
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::setpgid(0, 0);
+            Ok(())
+        });
+    }
+
+    let status = match cmd.spawn() {
+        Ok(mut child) => {
+            let child_pid = child.id() as i32;
+
+            // Give the child's process group foreground control of the terminal.
+            // Now Ctrl+C sends SIGINT to the child's group, not shannon's.
+            #[cfg(unix)]
+            unsafe {
+                libc::tcsetpgrp(libc::STDIN_FILENO, child_pid);
+            }
+
+            let result = child.wait();
+
+            // Reclaim foreground control for shannon
+            #[cfg(unix)]
+            unsafe {
+                libc::tcsetpgrp(libc::STDIN_FILENO, libc::getpgrp());
+            }
+
+            result
+        }
+        Err(e) => Err(e),
+    };
+
+    // Restore default signal handling
     #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGINT, libc::SIG_DFL);
+        libc::signal(libc::SIGTTOU, libc::SIG_DFL);
     }
 
     let exit_code = match &status {

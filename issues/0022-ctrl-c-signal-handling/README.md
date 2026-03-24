@@ -145,46 +145,44 @@ manage SIGINT for external commands, but wrapping it ensures consistency.
 
 **Result:** Fail
 
-The integration test (sending SIGINT directly to the process) passed, but
-the real scenario still fails. The integration test doesn't reproduce the
-actual problem: in a real terminal, SIGINT goes to the entire foreground
-process group, not just to our process. The `SIG_IGN` fix in
-`execute_command` is not sufficient.
+The integration test (sending SIGINT directly to the process) passed, but the
+real scenario still fails. The integration test doesn't reproduce the actual
+problem: in a real terminal, SIGINT goes to the entire foreground process group,
+not just to our process. The `SIG_IGN` fix in `execute_command` is not
+sufficient.
 
-An external shell script test (`scripts/test-sigint.sh`) correctly
-reproduces the failure. The fix needs to address process group behavior,
-not just per-process signal handling.
+An external shell script test (`scripts/test-sigint.sh`) correctly reproduces
+the failure. The fix needs to address process group behavior, not just
+per-process signal handling.
 
 #### Conclusion
 
-The integration test approach was wrong — it tested signal delivery to a
-single process, not process group behavior. The external script test
-confirms the bug still exists. Need a different fix approach in
-experiment 2.
+The integration test approach was wrong — it tested signal delivery to a single
+process, not process group behavior. The external script test confirms the bug
+still exists. Need a different fix approach in experiment 2.
 
 ### Experiment 2: External script test + process group fix
 
 #### Description
 
-Remove the broken integration test. Use `scripts/test-sigint.sh` as the
-test. Fix the actual problem: shannon needs to either put child processes
-in their own process group, or become a session leader so that terminal
-SIGINT doesn't kill it.
+Remove the broken integration test. Use `scripts/test-sigint.sh` as the test.
+Fix the actual problem: shannon needs to either put child processes in their own
+process group, or become a session leader so that terminal SIGINT doesn't kill
+it.
 
 #### The real problem
 
-When you press Ctrl+C, the terminal sends SIGINT to the **foreground
-process group**. Shannon and its child subprocess are in the same group.
-Both receive SIGINT. `SIG_IGN` on shannon's side isn't enough because
-reedline or the Rust runtime may have their own signal handlers that
-override it.
+When you press Ctrl+C, the terminal sends SIGINT to the **foreground process
+group**. Shannon and its child subprocess are in the same group. Both receive
+SIGINT. `SIG_IGN` on shannon's side isn't enough because reedline or the Rust
+runtime may have their own signal handlers that override it.
 
 #### The fix: pre_exec to set child process group
 
-Use Rust's `Command::pre_exec` (Unix-only) to put the child in its own
-process group via `setpgid(0, 0)`. Then give the child's group foreground
-control of the terminal via `tcsetpgrp`. When Ctrl+C is pressed, SIGINT
-goes to the child's process group only. Shannon doesn't receive it.
+Use Rust's `Command::pre_exec` (Unix-only) to put the child in its own process
+group via `setpgid(0, 0)`. Then give the child's group foreground control of the
+terminal via `tcsetpgrp`. When Ctrl+C is pressed, SIGINT goes to the child's
+process group only. Shannon doesn't receive it.
 
 After the child exits, shannon reclaims foreground control.
 
@@ -221,9 +219,9 @@ unsafe {
 }
 ```
 
-This is exactly what bash does — child gets its own process group, gets
-terminal foreground, receives SIGINT on Ctrl+C. Shell stays in background,
-never gets SIGINT.
+This is exactly what bash does — child gets its own process group, gets terminal
+foreground, receives SIGINT on Ctrl+C. Shell stays in background, never gets
+SIGINT.
 
 #### Changes
 
@@ -251,3 +249,26 @@ never gets SIGINT.
 2. `cargo test` passes (no regressions, broken test removed).
 3. Manual: run `sleep 10` in shannon, Ctrl+C, shannon survives.
 4. Manual: run `npm run dev`, Ctrl+C, npm stops, shannon survives.
+
+**Result:** Partial
+
+Shannon now survives Ctrl+C (SIG_IGN + SIGTTOU handling works). But the
+child process (sleep) does NOT receive SIGINT — it continues running
+instead of being killed. The process group + tcsetpgrp approach is not
+correctly forwarding SIGINT to the child's group.
+
+The problem is likely:
+- The child's process group is set correctly (setpgid works)
+- But tcsetpgrp may not be making it the true foreground group
+- Or the wrapper bash process is absorbing/ignoring the signal
+- Or there's a race between spawn, setpgid, and tcsetpgrp
+
+91 tests pass. Broken integration test removed. Shannon survives Ctrl+C
+but child doesn't receive it — needs further investigation in experiment 3.
+
+#### Conclusion
+
+Partial progress. Shannon no longer dies from Ctrl+C (the original crash
+is fixed). But the child process doesn't receive SIGINT, so Ctrl+C
+effectively does nothing visible. Need to investigate why the child's
+process group isn't receiving the terminal's SIGINT.
