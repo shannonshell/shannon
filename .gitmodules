@@ -1,0 +1,3 @@
+[submodule "brush"]
+	path = brush
+	url = git@github.com:shannonshell/shannon_brush.git

@@ -653,3 +653,117 @@ exists so we can:
 4. `cargo test` — all tests pass.
 5. `export FOO=bar` in brush, switch to nushell, `$env.FOO` shows `bar`.
 6. Source a script that exports vars — captured correctly (no heuristic).
+
+**Result:** Fail
+
+The `shannon-brush-*` crates were forked, renamed, and published to crates.io.
+The submodule is set up correctly. But `cargo build` fails with the same libc
+conflict as experiment 5.
+
+The root cause was a wrong assumption: we believed crates.io deps get
+independent dependency resolution, unlike path deps. They don't. Cargo resolves
+all dependencies for a crate together in a single resolution pass, regardless
+of whether they come from crates.io or paths.
+
+The original `brush-core 0.4.0` from crates.io worked because it was published
+with older transitive deps (nix 0.29, whoami 1.x) that were compatible with
+nushell 0.111's `libc =0.2.178` pin. Our fork is from brush's latest main,
+which uses nix 0.31.2 and whoami 2.1.1, both requiring libc >= 0.2.181. These
+conflict with nushell's exact pin.
+
+#### Conclusion
+
+The libc version conflict is between nushell 0.111 (pins `libc =0.2.178`) and
+brush's latest main (requires `libc >= 0.2.181` via nix 0.31.2 and whoami
+2.1.1). This conflict exists regardless of whether brush is a path dep or a
+crates.io dep — Cargo resolves them together either way.
+
+Options:
+1. Downgrade brush's deps to match nushell's libc pin (rejected — we want to
+   track upstream brush, not maintain a divergent dependency tree)
+2. Fork nushell to relax its libc pin
+3. Wait for nushell to update (nushell 0.112+ may use a newer libc)
+4. Use the original brush-core 0.4.0 from crates.io (works, but no `env()`
+   API — back to the heuristic)
+
+### Experiment 7: Fork nushell, shared workspace with brush and shannon
+
+#### Description
+
+The libc conflict is caused by nushell pinning `libc = "=0.2.178"` in its
+workspace Cargo.toml. Brush's latest main requires `libc >= 0.2.181`. These
+are incompatible under a single resolver.
+
+Fix: fork nushell, relax the libc pin, rename all crates to `shannon-nu-*`,
+and put everything in a shared workspace. Shannon, brush, and nushell all
+resolve together with compatible deps.
+
+**Repos:**
+- `shannonshell/shannon` — main repo (already exists)
+- `shannonshell/shannon_brush` — brush fork (already exists as submodule)
+- `shannonshell/shannon_nushell` — nushell fork (just created)
+
+**Nushell fork changes (on `shannon` branch):**
+1. Relax `libc = "=0.2.178"` → `libc = "0.2"` in workspace Cargo.toml
+2. Rename all 26 nu-* crate packages to `shannon-nu-*`
+3. Add `package = "shannon-nu-*"` to all internal dependency references
+   so Rust import names stay unchanged
+
+**Shannon repo changes:**
+1. Add `shannonshell/shannon_nushell` as submodule at `nushell/`
+2. Create a root workspace Cargo.toml that includes all three:
+   `shannon/`, `brush/brush-{core,builtins,parser}`,
+   `nushell/crates/nu-*`
+3. Update `shannon/Cargo.toml` to use path deps for both nushell and brush
+4. Update `brush_engine.rs` to use `shannon_brush_core` imports and
+   `shell.env().iter_exported()`
+5. Update `nushell_engine.rs` imports if crate names change
+
+**Workspace structure:**
+```
+shannon/              (repo root)
+├── Cargo.toml        (workspace root)
+├── shannon/          (shannonshell crate)
+├── brush/            (submodule → shannonshell/shannon_brush)
+│   ├── brush-core/
+│   ├── brush-builtins/
+│   └── brush-parser/
+└── nushell/          (submodule → shannonshell/shannon_nushell)
+    └── crates/
+        ├── nu-cli/
+        ├── nu-command/
+        └── ... (26 crates)
+```
+
+#### Changes
+
+**In nushell fork (`nushell/` submodule):**
+- Relax libc pin: `"=0.2.178"` → `"0.2"`
+- Rename 26 crate packages to `shannon-nu-*`
+- Update all internal nu-* dependency references with `package = "shannon-nu-*"`
+
+**In brush fork (`brush/` submodule):**
+- Update brush's nu-* references if any (likely none — brush doesn't depend on
+  nushell)
+
+**New file: `Cargo.toml` at repo root:**
+- Workspace definition listing all members
+
+**`shannon/Cargo.toml`:**
+- Replace crates.io deps with path deps to submodule crates
+
+**`shannon/src/brush_engine.rs`:**
+- Use `shannon_brush_core` imports
+- Replace heuristic with `shell.env().iter_exported()`
+
+**`shannon/src/nushell_engine.rs`:**
+- Update imports if crate names change in Rust code (they shouldn't — we use
+  `package = "shannon-nu-*"` to keep import names as `nu_protocol` etc.)
+
+#### Verification
+
+1. All submodules cloned, `shannon` branches checked out.
+2. `cargo build` from workspace root succeeds.
+3. `cargo test` — all shannon tests pass.
+4. Manual: brush `export FOO=bar`, switch to nushell, `$env.FOO` shows `bar`.
+5. Manual: both shells handle Ctrl+C correctly (no regressions).
