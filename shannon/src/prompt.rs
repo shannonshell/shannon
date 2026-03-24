@@ -76,7 +76,7 @@ impl Prompt for ShannonPrompt {
         } else {
             String::new()
         };
-        if self.last_exit_code != 0 && self.last_exit_code < 128 {
+        if self.last_exit_code != 0 && self.last_exit_code != 130 {
             Cow::Owned(format!(" {depth_prefix}! "))
         } else {
             Cow::Owned(format!(" {depth_prefix}> "))
@@ -106,7 +106,7 @@ impl Prompt for ShannonPrompt {
     }
 
     fn get_indicator_color(&self) -> Color {
-        if self.last_exit_code != 0 && self.last_exit_code < 128 {
+        if self.last_exit_code != 0 && self.last_exit_code != 130 {
             self.error_color
         } else {
             self.indicator_color
