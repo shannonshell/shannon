@@ -66,3 +66,79 @@ management around `eval_source` too.
 - `SIGINT` / `SIG_IGN` are POSIX (macOS and Linux)
 - Windows uses a different mechanism (`SetConsoleCtrlHandler`)
 - For MVP, POSIX is sufficient (macOS + Linux)
+
+## Experiments
+
+### Experiment 1: TDD — failing test, then fix
+
+#### Description
+
+Write a test that proves SIGINT during subprocess execution kills the process
+(the bug), then fix it so the test passes.
+
+#### The test
+
+In `tests/integration.rs`, add a test that:
+
+1. Spawns a bash subprocess via `execute_command` that sleeps briefly then exits
+2. In a separate thread, sends SIGINT to our own process after a delay
+3. Verifies that `execute_command` returns normally (process survived)
+
+```rust
+#[test]
+fn test_sigint_during_subprocess() {
+    use std::thread;
+    use std::time::Duration;
+
+    let state = initial_state();
+    let pid = std::process::id();
+
+    // Send SIGINT to ourselves after 200ms
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(200));
+        unsafe { libc::kill(pid as i32, libc::SIGINT); }
+    });
+
+    // Run a command that takes 500ms — SIGINT arrives mid-execution
+    let result = execute_command(&bash_config(), "sleep 0.5", &state);
+
+    // If we get here, the process survived SIGINT
+    assert!(result.is_ok(), "execute_command should survive SIGINT");
+}
+```
+
+This test will FAIL with the current code (SIGINT kills the process).
+
+#### The fix
+
+In `executor.rs`, wrap the `Command::new(...).status()` call:
+
+```rust
+// Ignore SIGINT while child runs (let child handle it)
+unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN); }
+
+let status = Command::new(&shell_config.binary)
+    .args(["-c", &wrapper])
+    .env_clear()
+    .envs(&state.env)
+    .current_dir(&state.cwd)
+    .status();
+
+// Restore default SIGINT handling
+unsafe { libc::signal(libc::SIGINT, libc::SIG_DFL); }
+```
+
+Add `libc` as a dependency in Cargo.toml.
+
+For the nushell embedded path in `repl.rs`, wrap `engine.execute()` with the
+same signal ignore/restore. Nushell's internal signal handling should already
+manage SIGINT for external commands, but wrapping it ensures consistency.
+
+#### Verification
+
+1. Run the test WITHOUT the fix — it fails (process killed by SIGINT).
+2. Apply the fix.
+3. Run the test WITH the fix — it passes.
+4. `cargo test` — all tests pass.
+5. Manual: run `npm run dev` (or `sleep 10`) in shannon, Ctrl+C, shannon
+   survives and shows a new prompt.
