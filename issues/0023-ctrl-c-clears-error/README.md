@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-24"
+closed = "2026-03-24"
 +++
 
 # Issue 23: Ctrl+C on empty prompt should clear error state
@@ -48,3 +49,37 @@ Ok(Signal::CtrlC) => {
     continue;
 }
 ```
+
+## Experiments
+
+### Experiment 1: Reset exit code on Ctrl+C
+
+#### Description
+
+Add `state.last_exit_code = 0` to the `Signal::CtrlC` handler in `repl.rs`.
+
+#### Changes
+
+**`shannon/src/repl.rs`** — in the `Signal::CtrlC` match arm, add
+`state.last_exit_code = 0;` before `continue`.
+
+#### Verification
+
+1. `cargo test` passes.
+2. Run `false` → prompt shows `!`. Press Ctrl+C → prompt shows `>`.
+3. Run `sleep 10` + Ctrl+C → prompt shows `!`. Press Ctrl+C → prompt shows `>`.
+4. In nushell: `sleep 10sec` + Ctrl+C → prompt shows `!`. Press Ctrl+C → prompt
+   shows `>`.
+
+**Result:** Pass
+
+All verification steps confirmed. 91 tests pass.
+
+#### Conclusion
+
+One-line fix. Ctrl+C at the prompt now clears the error state.
+
+## Conclusion
+
+Ctrl+C at an empty prompt resets `last_exit_code` to 0, clearing the `!`
+indicator. Works consistently across all shells.

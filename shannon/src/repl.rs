@@ -453,6 +453,7 @@ pub fn run(
                     ai_mode = false;
                     ai_session = None;
                 }
+                state.last_exit_code = 0;
                 continue;
             }
             Err(e) => {
