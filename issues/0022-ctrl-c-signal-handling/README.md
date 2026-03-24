@@ -161,3 +161,93 @@ The integration test approach was wrong — it tested signal delivery to a
 single process, not process group behavior. The external script test
 confirms the bug still exists. Need a different fix approach in
 experiment 2.
+
+### Experiment 2: External script test + process group fix
+
+#### Description
+
+Remove the broken integration test. Use `scripts/test-sigint.sh` as the
+test. Fix the actual problem: shannon needs to either put child processes
+in their own process group, or become a session leader so that terminal
+SIGINT doesn't kill it.
+
+#### The real problem
+
+When you press Ctrl+C, the terminal sends SIGINT to the **foreground
+process group**. Shannon and its child subprocess are in the same group.
+Both receive SIGINT. `SIG_IGN` on shannon's side isn't enough because
+reedline or the Rust runtime may have their own signal handlers that
+override it.
+
+#### The fix: pre_exec to set child process group
+
+Use Rust's `Command::pre_exec` (Unix-only) to put the child in its own
+process group via `setpgid(0, 0)`. Then give the child's group foreground
+control of the terminal via `tcsetpgrp`. When Ctrl+C is pressed, SIGINT
+goes to the child's process group only. Shannon doesn't receive it.
+
+After the child exits, shannon reclaims foreground control.
+
+```rust
+use std::os::unix::process::CommandExt;
+
+let mut cmd = Command::new(&shell_config.binary);
+cmd.args(["-c", &wrapper])
+    .env_clear()
+    .envs(&state.env)
+    .current_dir(&state.cwd);
+
+unsafe {
+    cmd.pre_exec(|| {
+        // Put child in its own process group
+        libc::setpgid(0, 0);
+        Ok(())
+    });
+}
+
+let child = cmd.spawn()?;
+let child_pid = child.id() as i32;
+
+// Give the child's process group foreground control of the terminal
+unsafe {
+    libc::tcsetpgrp(libc::STDIN_FILENO, child_pid);
+}
+
+let status = child.wait();
+
+// Reclaim foreground control for shannon
+unsafe {
+    libc::tcsetpgrp(libc::STDIN_FILENO, libc::getpgrp());
+}
+```
+
+This is exactly what bash does — child gets its own process group, gets
+terminal foreground, receives SIGINT on Ctrl+C. Shell stays in background,
+never gets SIGINT.
+
+#### Changes
+
+**`shannon/src/executor.rs`**:
+
+- Replace `Command::new(...).status()` with spawn + wait pattern
+- Add `pre_exec` with `setpgid(0, 0)`
+- Add `tcsetpgrp` before and after child execution
+- Remove the `SIG_IGN`/`SIG_DFL` approach from experiment 1 (no longer needed)
+
+**`shannon/tests/integration.rs`**:
+
+- Remove `test_sigint_during_subprocess` test and the `libc`/`thread`/
+  `Duration` imports it added
+- Signal handling is tested via the external script, not integration tests
+
+**`scripts/test-sigint.sh`**:
+
+- Already exists from experiment 1
+- Should pass after the fix: shannon survives SIGINT during subprocess
+
+#### Verification
+
+1. `scripts/test-sigint.sh` passes (shannon survives SIGINT).
+2. `cargo test` passes (no regressions, broken test removed).
+3. Manual: run `sleep 10` in shannon, Ctrl+C, shannon survives.
+4. Manual: run `npm run dev`, Ctrl+C, npm stops, shannon survives.
