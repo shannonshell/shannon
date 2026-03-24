@@ -52,13 +52,25 @@ pub fn execute_command(
     let status = cmd.status();
 
     let exit_code = match &status {
-        Ok(s) => s.code().unwrap_or(1),
+        Ok(s) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt;
+                // Use 128+signal for signal-terminated processes (e.g. 130 for SIGINT)
+                s.code().unwrap_or_else(|| s.signal().map(|sig| 128 + sig).unwrap_or(1))
+            }
+            #[cfg(not(unix))]
+            s.code().unwrap_or(1)
+        }
         Err(_) => 1,
     };
 
-    // Try to read captured state; fall back to previous state on failure
+    // Try to read captured state; fall back to previous state on failure.
+    // Filter empty contents — if the child was killed by a signal, the
+    // wrapper's env capture code never ran and the temp file is empty.
     let new_state = std::fs::read_to_string(&temp_path)
         .ok()
+        .filter(|contents| !contents.trim().is_empty())
         .and_then(|contents| parse_output(&shell_config.parser, &contents))
         .map(|(env, cwd)| ShellState {
             env,

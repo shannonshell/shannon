@@ -252,56 +252,57 @@ SIGINT.
 
 **Result:** Partial
 
-Shannon now survives Ctrl+C (SIG_IGN + SIGTTOU handling works). But the
-child process (sleep) does NOT receive SIGINT — it continues running
-instead of being killed. The process group + tcsetpgrp approach is not
-correctly forwarding SIGINT to the child's group.
+Shannon now survives Ctrl+C (SIG_IGN + SIGTTOU handling works). But the child
+process (sleep) does NOT receive SIGINT — it continues running instead of being
+killed. The process group + tcsetpgrp approach is not correctly forwarding
+SIGINT to the child's group.
 
 The problem is likely:
+
 - The child's process group is set correctly (setpgid works)
 - But tcsetpgrp may not be making it the true foreground group
 - Or the wrapper bash process is absorbing/ignoring the signal
 - Or there's a race between spawn, setpgid, and tcsetpgrp
 
-91 tests pass. Broken integration test removed. Shannon survives Ctrl+C
-but child doesn't receive it — needs further investigation in experiment 3.
+91 tests pass. Broken integration test removed. Shannon survives Ctrl+C but
+child doesn't receive it — needs further investigation in experiment 3.
 
 #### Conclusion
 
-Partial progress. Shannon no longer dies from Ctrl+C (the original crash
-is fixed). But the child process doesn't receive SIGINT, so Ctrl+C
-effectively does nothing visible. Need to investigate why the child's
-process group isn't receiving the terminal's SIGINT.
+Partial progress. Shannon no longer dies from Ctrl+C (the original crash is
+fixed). But the child process doesn't receive SIGINT, so Ctrl+C effectively does
+nothing visible. Need to investigate why the child's process group isn't
+receiving the terminal's SIGINT.
 
 ### Experiment 3: Simple SIG_IGN cycle with pre_exec fix
 
 **Result:** Partial
 
 Ctrl+C now correctly kills the child process AND shannon survives. The
-`pre_exec` fix was critical — `SIG_IGN` is inherited across `fork()`, so
-the child was also ignoring SIGINT. `pre_exec` restores `SIG_DFL` in the
-child after fork but before exec.
+`pre_exec` fix was critical — `SIG_IGN` is inherited across `fork()`, so the
+child was also ignoring SIGINT. `pre_exec` restores `SIG_DFL` in the child after
+fork but before exec.
 
 Two remaining issues:
-1. The prompt shows `!` (error indicator) — because the child exited with
-   a signal (exit code 130 or similar). This may be correct behavior
-   (Ctrl+C is an error exit), but the `!` is confusing for an intentional
-   interrupt.
-2. The cwd resets to `/` — the wrapper script's env capture didn't run
-   because the child was killed by SIGINT before reaching the capture
-   code. The wrapper looks like:
+
+1. The prompt shows `!` (error indicator) — because the child exited with a
+   signal (exit code 130 or similar). This may be correct behavior (Ctrl+C is an
+   error exit), but the `!` is confusing for an intentional interrupt.
+2. The cwd resets to `/` — the wrapper script's env capture didn't run because
+   the child was killed by SIGINT before reaching the capture code. The wrapper
+   looks like:
    ```
    sleep 10
    __shannon_ec=$?
    (export -p; ...) > temp_file
    ```
-   When sleep is killed by SIGINT, bash exits immediately without running
-   the capture lines. Shannon falls back to the default state which has
-   cwd `/`.
+   When sleep is killed by SIGINT, bash exits immediately without running the
+   capture lines. Shannon falls back to the default state which has cwd `/`.
 
 #### Conclusion
 
 Core signal handling works. Two bugs remain:
+
 - `!` error indicator after Ctrl+C (cosmetic — may be acceptable)
 - cwd resets to `/` because wrapper env capture is skipped on SIGINT
 
@@ -309,12 +310,12 @@ Core signal handling works. Two bugs remain:
 
 #### Description
 
-When Ctrl+C kills a command, the wrapper's env capture code never runs.
-The temp file is empty or missing. `execute_command` falls back to a
-default state with cwd `/`. It should preserve the previous state instead.
+When Ctrl+C kills a command, the wrapper's env capture code never runs. The temp
+file is empty or missing. `execute_command` falls back to a default state with
+cwd `/`. It should preserve the previous state instead.
 
-The `!` error indicator is actually correct — Ctrl+C is a nonzero exit.
-Bash reports exit code 130 (128 + signal 2). This is standard behavior.
+The `!` error indicator is actually correct — Ctrl+C is a nonzero exit. Bash
+reports exit code 130 (128 + signal 2). This is standard behavior.
 
 #### The fix
 
@@ -328,18 +329,17 @@ In `execute_command`, the fallback when env capture fails already exists:
 })
 ```
 
-This should preserve env and cwd from the previous state. The problem is
-that `exit_code` comes from `status.code()` which may return `None` for
-signal-killed processes (the process didn't exit with a code, it was
-terminated by a signal). When `code()` returns `None`, we fall back to 1.
+This should preserve env and cwd from the previous state. The problem is that
+`exit_code` comes from `status.code()` which may return `None` for signal-killed
+processes (the process didn't exit with a code, it was terminated by a signal).
+When `code()` returns `None`, we fall back to 1.
 
-But the real issue: when the child is killed by SIGINT, bash may exit
-before writing the temp file. Let me check — does `.status()` return
-an error, or a success with a signal exit code?
+But the real issue: when the child is killed by SIGINT, bash may exit before
+writing the temp file. Let me check — does `.status()` return an error, or a
+success with a signal exit code?
 
-On Unix, `ExitStatus::code()` returns `None` for signal-terminated
-processes. `ExitStatus::signal()` returns `Some(2)` for SIGINT. Our
-current code:
+On Unix, `ExitStatus::code()` returns `None` for signal-terminated processes.
+`ExitStatus::signal()` returns `Some(2)` for SIGINT. Our current code:
 
 ```rust
 let exit_code = match &status {
@@ -348,30 +348,29 @@ let exit_code = match &status {
 };
 ```
 
-This gives exit code 1 for signal-killed processes. The env/cwd fallback
-should use the previous state. Let me verify the fallback code is
-actually working correctly — the bug might be that the temp file exists
-but is empty/corrupt, causing a parse that returns wrong data.
+This gives exit code 1 for signal-killed processes. The env/cwd fallback should
+use the previous state. Let me verify the fallback code is actually working
+correctly — the bug might be that the temp file exists but is empty/corrupt,
+causing a parse that returns wrong data.
 
 #### Changes
 
 **`shannon/src/executor.rs`**:
 
-1. Check if the process was killed by a signal. If so, use exit code
-   128 + signal number (standard convention: 130 for SIGINT).
+1. Check if the process was killed by a signal. If so, use exit code 128 +
+   signal number (standard convention: 130 for SIGINT).
 
-2. Verify the fallback preserves previous state. Add a debug print
-   temporarily to confirm the fallback path is taken.
+2. Verify the fallback preserves previous state. Add a debug print temporarily
+   to confirm the fallback path is taken.
 
-Actually — reading the code more carefully, the fallback IS correct.
-The issue might be that `parse_bash_env` succeeds on an empty temp file
-and returns an empty env with cwd `/`. Let me check:
+Actually — reading the code more carefully, the fallback IS correct. The issue
+might be that `parse_bash_env` succeeds on an empty temp file and returns an
+empty env with cwd `/`. Let me check:
 
 `parse_bash_env("")` returns `Some((empty_map, PathBuf::from("/")))`.
 
-That's the bug. An empty temp file parses successfully and returns
-cwd `/`. The fix: if the temp file is empty or missing, skip parsing
-and use the fallback.
+That's the bug. An empty temp file parses successfully and returns cwd `/`. The
+fix: if the temp file is empty or missing, skip parsing and use the fallback.
 
 ```rust
 let new_state = std::fs::read_to_string(&temp_path)
@@ -384,107 +383,26 @@ let new_state = std::fs::read_to_string(&temp_path)
 #### Verification
 
 1. `cargo test` passes.
-2. `sleep 10` + Ctrl+C → sleep dies, shannon shows prompt with
-   correct cwd (not `/`) and `!` indicator (exit code 130).
+2. `sleep 10` + Ctrl+C → sleep dies, shannon shows prompt with correct cwd (not
+   `/`) and `!` indicator (exit code 130).
 3. Normal commands still capture env and cwd correctly.
 4. `cd /tmp` then `sleep 10` + Ctrl+C → cwd stays `/tmp`.
 
-### Experiment 3: Debug and fix child SIGINT delivery
+**Result:** Pass
 
-#### Description
+All verification steps confirmed. 91 tests pass. Ctrl+C kills the child,
+shannon survives, cwd is preserved, exit code shows 130 (128 + SIGINT).
+The empty temp file filter prevents the fallback to cwd `/`.
 
-The child process isn't receiving SIGINT. Three possible causes:
+#### Conclusion
 
-1. **Race condition**: `tcsetpgrp` is called after `spawn` returns, but
-   the child may not have called `setpgid` yet. If `tcsetpgrp` runs
-   before `setpgid`, the child's group doesn't exist yet.
+The Ctrl+C fix is complete for the wrapper path (bash/fish/zsh). Three
+pieces working together:
+1. `SIG_IGN` in shannon before child spawn (shannon ignores SIGINT)
+2. `pre_exec` restores `SIG_DFL` in child (child receives SIGINT)
+3. Empty temp file filtered (previous state preserved on interrupt)
+4. `SIG_DFL` restored in REPL loop before `read_line` (reedline handles
+   Ctrl+C at prompt)
 
-2. **Bash wrapper absorbs SIGINT**: The child is `bash -c 'sleep 10; ...'`.
-   Bash may set its own signal handling for non-interactive mode.
+Remaining: verify nushell embedded path handles Ctrl+C correctly.
 
-3. **tcsetpgrp is failing silently**: We don't check return values.
-
-#### Approach: simplify
-
-Instead of the complex process group dance, try a simpler approach that
-real shells use:
-
-**Option A: Don't use process groups at all.** Just `SIG_IGN` SIGINT in
-shannon, run the child normally (same process group), and the child
-receives SIGINT from the terminal because it's in the foreground group.
-Shannon ignores it, child handles it. After child exits, restore
-`SIG_DFL`.
-
-The problem with experiment 2 was that SIG_DFL restore after child exit
-allowed a pending SIGINT to kill shannon. Fix: don't restore to SIG_DFL
-immediately. Instead, drain any pending signals first, or restore inside
-the reedline `read_line` loop where reedline handles Ctrl+C as
-`Signal::CtrlC`.
-
-Actually — reedline already handles SIGINT correctly during `read_line`
-(it returns `Signal::CtrlC`). The only time we need to ignore SIGINT is
-during command execution. After execution, reedline takes over signal
-handling again.
-
-**Option B: Forward SIGINT manually.** Keep SIG_IGN on shannon, but
-install a custom handler that forwards SIGINT to the child's PID. No
-process groups needed.
-
-#### Plan: try Option A first (simplest)
-
-1. Remove all process group code (`setpgid`, `tcsetpgrp`)
-2. Keep `SIG_IGN` before child spawn
-3. Run child with normal `.status()` (same process group as shannon)
-4. Child receives SIGINT from terminal (it's in the foreground group)
-5. Shannon ignores it (SIG_IGN)
-6. After child exits, DON'T restore SIG_DFL — let reedline handle
-   signals during `read_line`
-
-The key insight from experiment 2's failure: restoring `SIG_DFL` after
-the child exits caused a pending SIGINT to kill shannon. If we never
-restore `SIG_DFL` at the executor level, and let reedline manage signals
-during input, the problem goes away.
-
-#### Changes
-
-**`shannon/src/executor.rs`**:
-
-Remove all process group code. Simplify to:
-
-```rust
-#[cfg(unix)]
-unsafe { libc::signal(libc::SIGINT, libc::SIG_IGN); }
-
-let status = Command::new(&shell_config.binary)
-    .args(["-c", &wrapper])
-    .env_clear()
-    .envs(&state.env)
-    .current_dir(&state.cwd)
-    .status();
-
-// Don't restore SIG_DFL here — reedline handles SIGINT during read_line
-```
-
-**`shannon/src/repl.rs`**:
-
-Before each `editor.read_line()`, ensure SIGINT is restored to default
-so reedline can catch Ctrl+C at the prompt:
-
-```rust
-#[cfg(unix)]
-unsafe { libc::signal(libc::SIGINT, libc::SIG_DFL); }
-
-match editor.read_line(&prompt) { ... }
-```
-
-This creates a clean cycle:
-- At prompt → SIG_DFL (reedline handles Ctrl+C)
-- During execution → SIG_IGN (child handles Ctrl+C)
-
-#### Verification
-
-1. `cargo test` passes.
-2. `scripts/test-sigint.sh` passes.
-3. Manual: `sleep 10` + Ctrl+C → sleep dies, shannon shows prompt.
-4. Manual: at prompt, Ctrl+C → clears input (reedline behavior).
-5. Manual: `vim` + Ctrl+C → vim handles it normally.
