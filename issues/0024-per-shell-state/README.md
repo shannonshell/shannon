@@ -767,3 +767,22 @@ shannon/              (repo root)
 3. `cargo test` — all shannon tests pass.
 4. Manual: brush `export FOO=bar`, switch to nushell, `$env.FOO` shows `bar`.
 5. Manual: both shells handle Ctrl+C correctly (no regressions).
+
+**Result:** Fail
+
+The libc pin was successfully relaxed and dependency resolution passed — no more
+libc conflict. But the nushell fork is at the latest git main, which uses
+reedline features (`EditCommandDiscriminants`, `MoveLineUp`, `MoveLineDown`)
+that don't exist in reedline 0.46 from crates.io. Nushell's `[patch.crates-io]`
+section overrides reedline with a git dependency to `nushell/reedline` main
+branch. This means the nushell fork requires an unreleased version of reedline.
+
+Reedline is a separate repo (`nushell/reedline`), not part of the nushell
+monorepo. It needs the same fork treatment: fork, rename to
+`shannon-reedline`, publish to crates.io, and use it as a version dependency.
+
+#### Conclusion
+
+The nushell fork requires bleeding-edge reedline (not yet on crates.io).
+Reedline must also be forked, renamed, and published. Three forks total:
+nushell, brush, reedline.

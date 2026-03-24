@@ -1,3 +1,6 @@
 [submodule "brush"]
 	path = brush
 	url = git@github.com:shannonshell/shannon_brush.git
+[submodule "nushell"]
+	path = nushell
+	url = git@github.com:shannonshell/shannon_nushell.git
