@@ -273,6 +273,38 @@ is fixed). But the child process doesn't receive SIGINT, so Ctrl+C
 effectively does nothing visible. Need to investigate why the child's
 process group isn't receiving the terminal's SIGINT.
 
+### Experiment 3: Simple SIG_IGN cycle with pre_exec fix
+
+**Result:** Partial
+
+Ctrl+C now correctly kills the child process AND shannon survives. The
+`pre_exec` fix was critical — `SIG_IGN` is inherited across `fork()`, so
+the child was also ignoring SIGINT. `pre_exec` restores `SIG_DFL` in the
+child after fork but before exec.
+
+Two remaining issues:
+1. The prompt shows `!` (error indicator) — because the child exited with
+   a signal (exit code 130 or similar). This may be correct behavior
+   (Ctrl+C is an error exit), but the `!` is confusing for an intentional
+   interrupt.
+2. The cwd resets to `/` — the wrapper script's env capture didn't run
+   because the child was killed by SIGINT before reaching the capture
+   code. The wrapper looks like:
+   ```
+   sleep 10
+   __shannon_ec=$?
+   (export -p; ...) > temp_file
+   ```
+   When sleep is killed by SIGINT, bash exits immediately without running
+   the capture lines. Shannon falls back to the default state which has
+   cwd `/`.
+
+#### Conclusion
+
+Core signal handling works. Two bugs remain:
+- `!` error indicator after Ctrl+C (cosmetic — may be acceptable)
+- cwd resets to `/` because wrapper env capture is skipped on SIGINT
+
 ### Experiment 3: Debug and fix child SIGINT delivery
 
 #### Description

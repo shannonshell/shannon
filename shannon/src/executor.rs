@@ -23,13 +23,13 @@ pub fn execute_command(
     let init_content = read_init_file(shell_config.init.as_deref());
     let wrapper = expand_wrapper(&shell_config.wrapper, command, &temp_path, &init_content);
 
+    // Ignore SIGINT in shannon while child runs. The child is in the same
+    // process group so it receives SIGINT from the terminal directly.
+    // Shannon ignores it, child handles it. SIG_DFL is restored in the
+    // REPL loop before read_line, not here (avoids pending signal kills).
     #[cfg(unix)]
     unsafe {
-        // Ignore SIGINT and SIGTTOU while managing child process groups.
-        // SIGINT: so shannon doesn't die from Ctrl+C during child execution.
-        // SIGTTOU: so tcsetpgrp doesn't stop shannon when changing foreground group.
         libc::signal(libc::SIGINT, libc::SIG_IGN);
-        libc::signal(libc::SIGTTOU, libc::SIG_IGN);
     }
 
     let mut cmd = Command::new(&shell_config.binary);
@@ -38,46 +38,18 @@ pub fn execute_command(
         .envs(&state.env)
         .current_dir(&state.cwd);
 
-    // Put child in its own process group so terminal SIGINT goes only
-    // to the child, not to shannon.
+    // Restore SIG_DFL in the child AFTER fork but BEFORE exec.
+    // SIG_IGN is inherited across fork — without this, the child
+    // would also ignore SIGINT.
     #[cfg(unix)]
     unsafe {
         cmd.pre_exec(|| {
-            libc::setpgid(0, 0);
+            libc::signal(libc::SIGINT, libc::SIG_DFL);
             Ok(())
         });
     }
 
-    let status = match cmd.spawn() {
-        Ok(mut child) => {
-            let child_pid = child.id() as i32;
-
-            // Give the child's process group foreground control of the terminal.
-            // Now Ctrl+C sends SIGINT to the child's group, not shannon's.
-            #[cfg(unix)]
-            unsafe {
-                libc::tcsetpgrp(libc::STDIN_FILENO, child_pid);
-            }
-
-            let result = child.wait();
-
-            // Reclaim foreground control for shannon
-            #[cfg(unix)]
-            unsafe {
-                libc::tcsetpgrp(libc::STDIN_FILENO, libc::getpgrp());
-            }
-
-            result
-        }
-        Err(e) => Err(e),
-    };
-
-    // Restore default signal handling
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_DFL);
-        libc::signal(libc::SIGTTOU, libc::SIG_DFL);
-    }
+    let status = cmd.status();
 
     let exit_code = match &status {
         Ok(s) => s.code().unwrap_or(1),

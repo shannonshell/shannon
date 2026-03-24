@@ -284,6 +284,13 @@ pub fn run(
     let mut ai_session: Option<Session> = None;
 
     loop {
+        // Restore default SIGINT handling so reedline can catch Ctrl+C at the prompt.
+        // During command execution, SIGINT is set to SIG_IGN (in executor.rs).
+        #[cfg(unix)]
+        unsafe {
+            libc::signal(libc::SIGINT, libc::SIG_DFL);
+        }
+
         // Report cwd and title to terminal
         emit_osc7(&state.cwd);
         emit_osc2_idle(&shells[active_idx].0, &state.cwd);
