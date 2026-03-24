@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-24"
+closed = "2026-03-24"
 +++
 
 # Issue 22: Fix Ctrl+C killing shannon during subprocess execution
@@ -643,8 +644,8 @@ command exited nonzero, and `!` accurately reflects that.
 **`shannon/src/prompt.rs`**:
 
 Revert the `!= 130` special case in both `render_prompt_indicator` and
-`get_indicator_color`. Return to the original logic: any nonzero exit code
-shows `!`.
+`get_indicator_color`. Return to the original logic: any nonzero exit code shows
+`!`.
 
 ```rust
 // render_prompt_indicator
@@ -680,3 +681,15 @@ All verification steps confirmed. 91 tests pass. Ctrl+C now consistently shows
 Reverted the SIGINT special-casing from experiment 5. All shells now behave
 consistently: any nonzero exit code (including Ctrl+C interrupts) shows `!`.
 
+## Conclusion
+
+Ctrl+C no longer kills shannon. Eight experiments, three key fixes:
+
+1. **Wrapper path (bash/fish/zsh):** `SIG_IGN` before child spawn + `pre_exec`
+   to restore `SIG_DFL` in the child + empty temp file filter to preserve state
+   on interrupt.
+2. **Nushell embedded path:** `signal-hook` registers a SIGINT handler that sets
+   an `Arc<AtomicBool>` connected to nushell's `Signals` system. Nushell checks
+   `signals.interrupted()` internally and stops execution.
+3. **Prompt consistency:** All shells show `!` after Ctrl+C — no special-casing
+   for signal exit codes.
