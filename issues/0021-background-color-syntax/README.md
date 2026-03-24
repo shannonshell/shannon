@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-23"
+closed = "2026-03-23"
 +++
 
 # Issue 21: Add background color support to theme color syntax
@@ -80,3 +81,13 @@ mention `--background=`.
    appearance as the default.
 4. Set `ai_badge = "white --bold --background=blue"` — white bold on blue.
 5. Existing theme colors without `--background=` still work unchanged.
+
+**Result:** Pass
+
+91 tests pass. `--background=` works with named colors and hex. Docs updated.
+
+## Conclusion
+
+Issue complete. `parse_style` now supports `--background=color`, matching
+fish's syntax. The default `ai_badge` is expressible as
+`"black --background=magenta"` in config.toml.
