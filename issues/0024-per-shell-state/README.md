@@ -76,9 +76,9 @@ directories.
 #### Description
 
 Test whether nushell's embedded engine already preserves internal state (shell
-variables, custom commands) across shell switches. Since `NushellEngine` persists
-for the session and `inject_state` only sets env vars and cwd, internal nushell
-state should survive switching away and back.
+variables, custom commands) across shell switches. Since `NushellEngine`
+persists for the session and `inject_state` only sets env vars and cwd, internal
+nushell state should survive switching away and back.
 
 #### Verification
 
@@ -137,9 +137,9 @@ subprocess would need `bash -i` to get access to the hooks we need.
 
 **Available hooks for command boundaries:**
 
-- `PS0` (bash 4.4+): Expanded and printed to stderr *after* parsing but *before*
+- `PS0` (bash 4.4+): Expanded and printed to stderr _after_ parsing but _before_
   execution. Good for "command received" signal.
-- `PROMPT_COMMAND`: Runs *after* command execution and *before* the next prompt.
+- `PROMPT_COMMAND`: Runs _after_ command execution and _before_ the next prompt.
   This is the key hook for state capture — we could emit env vars here.
 - `trap DEBUG`: Fires before each command. Less useful than PROMPT_COMMAND for
   our purpose.
@@ -214,11 +214,11 @@ handles all the hard problems (stdio, signals, env capture) cleanly.
 
 #### Conclusion
 
-A persistent bash subprocess is technically possible using PTY + `PROMPT_COMMAND`
-for state capture, but the complexity is high and the benefits are marginal. The
-internal state that would be preserved (shell variables, aliases, functions set
-during the session) is rarely needed in practice — most of it comes from
-dotfiles which are already sourced.
+A persistent bash subprocess is technically possible using PTY +
+`PROMPT_COMMAND` for state capture, but the complexity is high and the benefits
+are marginal. The internal state that would be preserved (shell variables,
+aliases, functions set during the session) is rarely needed in practice — most
+of it comes from dotfiles which are already sourced.
 
 The current wrapper model is a good design for bash/fish/zsh. The nushell
 embedded model is where per-shell state really shines because it's free.
@@ -332,16 +332,16 @@ developed.
 
 #### Comparison with nushell embedding
 
-| Aspect | Nushell | Brush |
-|--------|---------|-------|
-| Creation | Sync: `EngineState::new()` | Async: `.builder().build().await` |
-| Execute | Sync: `eval_source()` | Async: `run_string()` |
-| State access | Stack + EngineState (indirect) | Direct methods on Shell |
-| Env vars | `stack.add_env_var()` | `shell.env_mut()` |
-| Exit code | i32 from eval_source | `ExecutionResult.exit_code` |
-| External cmds | Real subprocesses | Real subprocesses |
-| Stdio | Inherited | Inherited |
-| Async required | No | Yes (tokio) |
+| Aspect         | Nushell                        | Brush                             |
+| -------------- | ------------------------------ | --------------------------------- |
+| Creation       | Sync: `EngineState::new()`     | Async: `.builder().build().await` |
+| Execute        | Sync: `eval_source()`          | Async: `run_string()`             |
+| State access   | Stack + EngineState (indirect) | Direct methods on Shell           |
+| Env vars       | `stack.add_env_var()`          | `shell.env_mut()`                 |
+| Exit code      | i32 from eval_source           | `ExecutionResult.exit_code`       |
+| External cmds  | Real subprocesses              | Real subprocesses                 |
+| Stdio          | Inherited                      | Inherited                         |
+| Async required | No                             | Yes (tokio)                       |
 
 **What a `BrushEngine` would look like:**
 
@@ -387,12 +387,14 @@ cleaner than nushell's — direct methods for env, cwd, and exit code instead of
 reaching into Stack/EngineState internals.
 
 Key advantages over the wrapper model:
+
 - Persistent state (shell vars, aliases, functions survive between commands)
 - No temp file for env capture (read directly from Shell struct)
 - No wrapper script template needed
 - Signal handling can be integrated (like nushell's Signals)
 
 Key risks:
+
 - Brush is less mature than bash (compatibility gaps)
 - Async requirement adds complexity
 - Unknown how well interactive programs (vim, less) work through the embedded
@@ -400,3 +402,58 @@ Key risks:
 
 Next step: build a proof-of-concept `BrushEngine` and test it with real
 commands.
+
+### Experiment 4: Proof-of-concept BrushEngine
+
+#### Description
+
+Build a minimal `BrushEngine` that embeds brush-core, analogous to
+`NushellEngine`. Add it to shannon, wire it into the REPL as the "bash" shell
+(replacing the wrapper), and verify basic commands work.
+
+This is a spike — the goal is to prove the integration works, not to ship it. If
+it works, we'll have two embedded shells (nushell + brush) with persistent
+state, and the wrapper model becomes a fallback for fish/zsh.
+
+#### Changes
+
+**`shannon/Cargo.toml`**:
+
+- Add `brush-core` dependency (from crates.io or path to vendor)
+
+**`shannon/src/brush_engine.rs`** (new file):
+
+- `BrushEngine` struct holding `brush_core::Shell` and a tokio `Runtime`
+- `new()` — create runtime, build shell
+- `inject_state(&mut self, state: &ShellState)` — set env vars and cwd
+- `execute(&mut self, command: &str) -> ShellState` — run command via
+  `runtime.block_on(shell.run_string(...))`, capture env/cwd/exit code
+
+**`shannon/src/lib.rs`**:
+
+- Add `pub mod brush_engine;`
+
+**`shannon/src/repl.rs`**:
+
+- In `run_command`, add a branch for `shell.0 == "brush"` that uses
+  `BrushEngine` (similar to the nushell branch)
+
+**`shannon/src/main.rs`**:
+
+- Create `BrushEngine` at startup
+- Pass it to `repl::run`
+
+**Integration test**:
+
+- `test_brush_echo`, `test_brush_env_capture`, `test_brush_cwd_capture` — mirror
+  the existing nushell tests
+
+#### Verification
+
+1. `cargo build` succeeds (brush-core compiles and links).
+2. `cargo test` — new brush tests pass (echo, env capture, cwd).
+3. Manual: switch to brush in shannon, run `echo hello`, `export FOO=bar`,
+   `cd /tmp`, verify state persists between commands.
+4. Manual: run `ls`, `git status` — external commands work with real stdio.
+5. Manual: set a shell variable `FOO=bar` (no export), run another command,
+   verify it persists (this is the whole point — wrapper model loses this).
