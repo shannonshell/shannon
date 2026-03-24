@@ -2,6 +2,7 @@ use std::io;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use shannonshell::brush_engine::BrushEngine;
 use shannonshell::config::ShannonConfig;
 use shannonshell::executor::run_startup_script;
 use shannonshell::nushell_engine::NushellEngine;
@@ -37,7 +38,7 @@ fn main() -> io::Result<()> {
     let all_shells = config.shells();
     let shells = all_shells
         .into_iter()
-        .filter(|(name, cfg)| name == "nu" || repl::shell_available(&cfg.binary))
+        .filter(|(name, cfg)| name == "nu" || name == "brush" || repl::shell_available(&cfg.binary))
         .collect::<Vec<_>>();
 
     if shells.is_empty() {
@@ -50,12 +51,15 @@ fn main() -> io::Result<()> {
     // Nushell checks it via signals.interrupted() during execution.
     let interrupt = Arc::new(AtomicBool::new(false));
 
-    // Initialize nushell native engine (always embedded)
+    // Initialize embedded engines (always available)
     let nushell_engine = Some(NushellEngine::new(interrupt.clone()));
+    let brush_engine = Some(BrushEngine::new());
 
     // Build theme from config
     let theme = Theme::from_config(&config.theme);
 
     // Run the REPL
-    repl::run(shells, config.ai, state, depth, nushell_engine, theme, interrupt)
+    repl::run(
+        shells, config.ai, state, depth, nushell_engine, brush_engine, theme, interrupt,
+    )
 }

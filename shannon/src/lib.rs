@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod brush_engine;
 pub mod completer;
 pub mod completions;
 pub mod config;

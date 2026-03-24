@@ -15,6 +15,7 @@ use reedline::{
 
 use crate::ai::session::Session;
 use crate::ai::translate::translate_command;
+use crate::brush_engine::BrushEngine;
 use crate::completer::ShannonCompleter;
 use crate::config::{AiConfig, ShellConfig};
 use crate::executor::execute_command;
@@ -253,12 +254,13 @@ fn restore_sigint_handler(interrupt: &Arc<AtomicBool>) {
         .expect("failed to re-register SIGINT handler");
 }
 
-/// Execute a command using the nushell engine (for "nu") or wrapper (for others).
+/// Execute a command using an embedded engine or wrapper.
 fn run_command(
     shell: &(String, ShellConfig),
     command: &str,
     state: &mut ShellState,
     nushell_engine: &mut Option<NushellEngine>,
+    brush_engine: &mut Option<BrushEngine>,
     interrupt: &Arc<AtomicBool>,
 ) {
     if shell.0 == "nu" {
@@ -270,7 +272,14 @@ fn run_command(
             return;
         }
     }
-    // Wrapper path for bash/fish/zsh (and fallback for nu without engine)
+    if shell.0 == "brush" {
+        if let Some(ref mut engine) = brush_engine {
+            engine.inject_state(state);
+            *state = engine.execute(command);
+            return;
+        }
+    }
+    // Wrapper path for bash/fish/zsh (and fallback without engine)
     match execute_command(&shell.1, command, state) {
         Ok(new_state) => {
             *state = new_state;
@@ -293,6 +302,7 @@ pub fn run(
     mut state: ShellState,
     depth: u32,
     mut nushell_engine: Option<NushellEngine>,
+    mut brush_engine: Option<BrushEngine>,
     theme: Theme,
     interrupt: Arc<AtomicBool>,
 ) -> io::Result<()> {
@@ -401,6 +411,7 @@ pub fn run(
                                         &command,
                                         &mut state,
                                         &mut nushell_engine,
+                                        &mut brush_engine,
                                         &interrupt,
                                     );
                                     emit_osc7(&state.cwd);
@@ -442,6 +453,7 @@ pub fn run(
                         line,
                         &mut state,
                         &mut nushell_engine,
+                        &mut brush_engine,
                         &interrupt,
                     );
                     emit_osc7(&state.cwd);

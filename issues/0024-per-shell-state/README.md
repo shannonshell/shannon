@@ -457,3 +457,28 @@ state, and the wrapper model becomes a fallback for fish/zsh.
 4. Manual: run `ls`, `git status` — external commands work with real stdio.
 5. Manual: set a shell variable `FOO=bar` (no export), run another command,
    verify it persists (this is the whole point — wrapper model loses this).
+
+**Result:** Pass
+
+All verification steps confirmed. 95 tests pass (71 unit + 24 integration,
+including 4 new brush tests). Brush is embedded alongside nushell as a fully
+functional shell with persistent state.
+
+Implementation notes:
+- `brush-core` 0.4 + `brush-builtins` 0.1 from crates.io
+- `BrushEngine` mirrors `NushellEngine`: create once, inject state, execute,
+  capture state
+- Async wrapping via `runtime.block_on()` (tokio runtime created once)
+- Env capture uses a heuristic: track known keys from inject + parse command
+  text for `export` patterns, then query brush's `env_str()`/`env_var()` for
+  each key. Works for the PoC but brush-core would ideally expose
+  `iter_exported()`.
+- Builtins (export, cd, etc.) require `brush-builtins` crate with
+  `default_builtins(BashMode)`
+
+#### Conclusion
+
+Brush can be embedded in shannon exactly like nushell. The PoC is fully
+functional: echo, env capture, cwd, external commands, and state persistence
+all work. Two embedded shells (nushell + brush) now coexist with persistent
+per-shell state, while fish/zsh remain on the wrapper model.

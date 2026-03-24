@@ -138,12 +138,24 @@ fn nushell_config() -> ShellConfig {
     }
 }
 
-/// Build the full map of available shells (built-in + custom + embedded nushell).
+/// Placeholder config for brush (embedded bash — no wrapper needed).
+fn brush_config() -> ShellConfig {
+    ShellConfig {
+        binary: String::new(), // not used — embedded
+        wrapper: String::new(), // not used — embedded
+        parser: String::new(), // not used — embedded
+        highlighter: Some("bash".to_string()),
+        init: None,
+    }
+}
+
+/// Build the full map of available shells (built-in + custom + embedded).
 fn all_shells(config: &ShannonConfig) -> HashMap<String, ShellConfig> {
     let mut map = HashMap::new();
 
-    // Embedded nushell (always available)
+    // Embedded shells (always available)
     map.insert("nu".to_string(), nushell_config());
+    map.insert("brush".to_string(), brush_config());
 
     // Built-in wrapped shells
     for (name, shell_config) in builtin_shells() {
@@ -206,8 +218,8 @@ impl ShannonConfig {
 
         // No toggle list — return all shells in default order
         let mut result = Vec::new();
-        // Default order: bash, nu (embedded), fish, zsh
-        let default_order = ["bash", "nu", "fish", "zsh"];
+        // Default order: bash, nu (embedded), brush (embedded), fish, zsh
+        let default_order = ["bash", "nu", "brush", "fish", "zsh"];
         for name in default_order {
             if let Some(config) = available.get(name) {
                 result.push((name.to_string(), config.clone()));
@@ -262,11 +274,12 @@ mod tests {
     fn test_empty_config() {
         let config = ShannonConfig::default();
         let shells = config.shells();
-        assert_eq!(shells.len(), 4);
+        assert_eq!(shells.len(), 5);
         assert_eq!(shells[0].0, "bash");
         assert_eq!(shells[1].0, "nu");
-        assert_eq!(shells[2].0, "fish");
-        assert_eq!(shells[3].0, "zsh");
+        assert_eq!(shells[2].0, "brush");
+        assert_eq!(shells[3].0, "fish");
+        assert_eq!(shells[4].0, "zsh");
     }
 
     #[test]
@@ -322,7 +335,7 @@ wrapper = "{{command}}"
             toml::from_str(r#"default_shell = "nu""#).unwrap();
         let shells = config.shells();
         assert_eq!(shells[0].0, "nu");
-        assert_eq!(shells.len(), 4); // all built-ins, nu first
+        assert_eq!(shells.len(), 5); // all built-ins, nu first
     }
 
     #[test]
