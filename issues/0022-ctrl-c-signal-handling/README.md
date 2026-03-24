@@ -670,3 +670,13 @@ if self.last_exit_code != 0 {
 4. Both shells: `echo hello` → prompt shows `>`.
 5. Both shells: `false` → prompt shows `!`.
 
+**Result:** Pass
+
+All verification steps confirmed. 91 tests pass. Ctrl+C now consistently shows
+`!` in both bash and nushell.
+
+#### Conclusion
+
+Reverted the SIGINT special-casing from experiment 5. All shells now behave
+consistently: any nonzero exit code (including Ctrl+C interrupts) shows `!`.
+
