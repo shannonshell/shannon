@@ -305,6 +305,90 @@ Core signal handling works. Two bugs remain:
 - `!` error indicator after Ctrl+C (cosmetic — may be acceptable)
 - cwd resets to `/` because wrapper env capture is skipped on SIGINT
 
+### Experiment 4: Preserve state on interrupted commands
+
+#### Description
+
+When Ctrl+C kills a command, the wrapper's env capture code never runs.
+The temp file is empty or missing. `execute_command` falls back to a
+default state with cwd `/`. It should preserve the previous state instead.
+
+The `!` error indicator is actually correct — Ctrl+C is a nonzero exit.
+Bash reports exit code 130 (128 + signal 2). This is standard behavior.
+
+#### The fix
+
+In `execute_command`, the fallback when env capture fails already exists:
+
+```rust
+.unwrap_or_else(|| ShellState {
+    env: state.env.clone(),
+    cwd: state.cwd.clone(),
+    last_exit_code: exit_code,
+})
+```
+
+This should preserve env and cwd from the previous state. The problem is
+that `exit_code` comes from `status.code()` which may return `None` for
+signal-killed processes (the process didn't exit with a code, it was
+terminated by a signal). When `code()` returns `None`, we fall back to 1.
+
+But the real issue: when the child is killed by SIGINT, bash may exit
+before writing the temp file. Let me check — does `.status()` return
+an error, or a success with a signal exit code?
+
+On Unix, `ExitStatus::code()` returns `None` for signal-terminated
+processes. `ExitStatus::signal()` returns `Some(2)` for SIGINT. Our
+current code:
+
+```rust
+let exit_code = match &status {
+    Ok(s) => s.code().unwrap_or(1),
+    Err(_) => 1,
+};
+```
+
+This gives exit code 1 for signal-killed processes. The env/cwd fallback
+should use the previous state. Let me verify the fallback code is
+actually working correctly — the bug might be that the temp file exists
+but is empty/corrupt, causing a parse that returns wrong data.
+
+#### Changes
+
+**`shannon/src/executor.rs`**:
+
+1. Check if the process was killed by a signal. If so, use exit code
+   128 + signal number (standard convention: 130 for SIGINT).
+
+2. Verify the fallback preserves previous state. Add a debug print
+   temporarily to confirm the fallback path is taken.
+
+Actually — reading the code more carefully, the fallback IS correct.
+The issue might be that `parse_bash_env` succeeds on an empty temp file
+and returns an empty env with cwd `/`. Let me check:
+
+`parse_bash_env("")` returns `Some((empty_map, PathBuf::from("/")))`.
+
+That's the bug. An empty temp file parses successfully and returns
+cwd `/`. The fix: if the temp file is empty or missing, skip parsing
+and use the fallback.
+
+```rust
+let new_state = std::fs::read_to_string(&temp_path)
+    .ok()
+    .filter(|contents| !contents.is_empty())  // ← add this
+    .and_then(|contents| parse_output(...))
+    ...
+```
+
+#### Verification
+
+1. `cargo test` passes.
+2. `sleep 10` + Ctrl+C → sleep dies, shannon shows prompt with
+   correct cwd (not `/`) and `!` indicator (exit code 130).
+3. Normal commands still capture env and cwd correctly.
+4. `cd /tmp` then `sleep 10` + Ctrl+C → cwd stays `/tmp`.
+
 ### Experiment 3: Debug and fix child SIGINT delivery
 
 #### Description
