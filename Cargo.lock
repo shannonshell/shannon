@@ -748,32 +748,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "reedline"
-version = "0.46.0"
-dependencies = [
- "arboard",
- "chrono",
- "crossbeam",
- "crossterm",
- "fd-lock",
- "gethostname",
- "itertools",
- "nu-ansi-term",
- "pretty_assertions",
- "rstest",
- "rusqlite",
- "serde",
- "serde_json",
- "strip-ansi-escapes",
- "strum",
- "tempfile",
- "thiserror",
- "unicase",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
 name = "regex"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -931,6 +905,32 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "shannon-reedline"
+version = "0.46.0"
+dependencies = [
+ "arboard",
+ "chrono",
+ "crossbeam",
+ "crossterm",
+ "fd-lock",
+ "gethostname",
+ "itertools",
+ "nu-ansi-term",
+ "pretty_assertions",
+ "rstest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "strip-ansi-escapes",
+ "strum",
+ "tempfile",
+ "thiserror",
+ "unicase",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]
