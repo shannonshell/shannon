@@ -14,31 +14,27 @@ precise control, press **Shift+Tab** to drop into bash, nushell, or any other
 shell — then Shift+Tab back.
 
 ```
-[nu] ~/project > /ai
-[nu:ai] ~/project > find all rust files modified today
-  → fd --extension rs --changed-within 1d
-  [Enter] run  [Esc] cancel
-
+[nu] ~/project > ls | where size > 1mb
+...
 [nu] ~/project > <Shift+Tab>
 
-[bash] ~/project > grep -r "TODO" src/
+[brush] ~/project > grep -r "TODO" src/
 ...
-[bash] ~/project > <Shift+Tab>
+[brush] ~/project > <Shift+Tab>
 
-[fish] ~/project > ls | head -5
-...
+[ai] ~/project > how do I find rust files modified today?
+You can use `fd` or `find`:
+  fd --extension rs --changed-within 1d
 ```
 
 ## Features
 
-### AI Mode
+### AI Chat
 
-- Use `/ai` to toggle AI mode (also `/ai on`, `/ai off`)
-- Type in plain English — an LLM generates the shell command
+- Shift+Tab into the `[ai]` shell — ask questions in plain English
 - Configurable provider (Anthropic by default)
-- Review and confirm before execution
-- Context-aware — the LLM knows your shell, cwd, and OS
-- Conversational within a session — follow-up questions remember context
+- Context-aware — the LLM knows your cwd and OS
+- Conversational — follow-up questions remember context
 
 ### Poly-Shell
 

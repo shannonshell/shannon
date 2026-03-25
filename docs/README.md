@@ -1,9 +1,9 @@
 # Shannon Documentation
 
-Shannon is an AI-first poly-shell — use bash, brush, nushell, fish, zsh, and
-AI-powered natural language, all in one session. Press Shift+Tab to switch
-between shells. Your environment variables, working directory, and exit code
-carry over automatically.
+Shannon is an AI-first poly-shell — use nushell, bash (via brush), and
+AI chat, all in one session. Press Shift+Tab to switch between shells.
+Your environment variables, working directory, and exit code carry over
+automatically.
 
 ## Getting Started
 
@@ -11,7 +11,7 @@ carry over automatically.
 
 ## Features
 
-- [Shell Switching](features/01-shell-switching.md) — Shift+Tab between bash, brush, nushell, fish, zsh
+- [Shell Switching](features/01-shell-switching.md) — Shift+Tab between nu, brush, ai
 - [State Synchronization](features/02-state-sync.md) — env vars, cwd, and exit code across shells
 - [Syntax Highlighting](features/03-syntax-highlighting.md) — tree-sitter with configurable themes
 - [Command History](features/04-history.md) — shared SQLite history across shells and instances
@@ -22,8 +22,8 @@ carry over automatically.
 
 - [Keybindings](reference/01-keybindings.md) — complete list of keyboard shortcuts
 - [Configuration](reference/02-configuration.md) — config directory, theming, shell rotation
-- [Supported Shells](reference/03-supported-shells.md) — bash, brush (embedded), nushell (embedded), fish, zsh, custom
+- [Supported Shells](reference/03-supported-shells.md) — nu, brush, ai
 
 ## Architecture
 
-- [How Shannon Works](02-architecture.md) — embedded nushell + brush, subprocess wrappers, state capture
+- [How Shannon Works](02-architecture.md) — embedded engines, ShellEngine trait

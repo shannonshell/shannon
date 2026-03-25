@@ -30,8 +30,7 @@ toggle = ["nu", "bash"]
 ```
 
 This gives you nushell as default with bash as the only other option. Without
-a toggle list, all installed built-in shells are available: bash, nu, brush,
-fish, zsh.
+a toggle list, all built-in shells are available: nu, brush, ai.
 
 More examples:
 
@@ -42,8 +41,8 @@ toggle = ["nu"]
 # Reorder: fish first, then bash
 toggle = ["fish", "bash"]
 
-# All five, nushell first
-toggle = ["nu", "brush", "bash", "fish", "zsh"]
+# All three, nushell first
+toggle = ["nu", "brush", "ai"]
 ```
 
 ### Add a custom shell
@@ -159,10 +158,7 @@ hex (`"#FF79C6"`), with modifiers (`"green --bold"`, `"cyan --italic"`,
 
 Available color categories: `keyword`, `command`, `string`, `number`,
 `variable`, `operator`, `comment`, `error`, `foreground`, `type`,
-`prompt`, `hint`, `ai_badge`.
-
-The `ai_badge` controls the highlighted ` AI ` indicator that appears when
-AI mode is active. Default: black text on magenta background.
+`prompt`, `hint`.
 
 ## Environment Script (env.sh)
 
@@ -200,7 +196,6 @@ itself, not sent to the active shell.
 |---------|-------------|
 | `/switch <shell>` | Switch to a specific shell |
 | `/switch` | List available shells |
-| `/ai [on\|off\|toggle]` | Toggle AI mode |
 | `/help` | Show available commands and keybindings |
 
 If a file exists at the path (e.g. `/usr/bin/env`), the command goes to

@@ -24,18 +24,19 @@ Shannon uses reedline as its line editor. Nushell is embedded as a library via
 ### Source files (under `shannon/`)
 
 - `src/main.rs` — entry point, startup sequence
-- `src/repl.rs` — main REPL loop, shell switching, AI mode, OSC integration
+- `src/repl.rs` — main REPL loop, shell switching, OSC integration
 - `src/lib.rs` — re-exports modules for integration tests
 - `src/config.rs` — TOML config loading, built-in shell definitions, AI config
 - `src/shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
-- `src/executor.rs` — subprocess spawning, wrapper templates, env capture parsing
+- `src/executor.rs` — startup script (`env.sh`) execution
 - `src/nushell_engine.rs` — embedded nushell via `EngineState` + `eval_source()`
 - `src/brush_engine.rs` — embedded bash via brush `Shell` + tokio async runtime
 - `src/prompt.rs` — custom reedline `Prompt` impl, tilde contraction
 - `src/highlighter.rs` — tree-sitter syntax highlighting with Tokyo Night colors
 - `src/completer.rs` — `ShannonCompleter` combining command + file completion
 - `src/completions.rs` — fish completion table (loaded from build-time JSON)
-- `src/ai/` — AI mode: provider (rig-core), prompt builder, sessions, translation
+- `src/ai_engine.rs` — AI chat shell engine (LLM conversation via rig-core)
+- `src/ai/` — AI infrastructure: provider setup, session history, prompt builder
 
 ### How command execution works
 
@@ -82,16 +83,16 @@ Every new feature must include tests. No feature ships without test coverage.
 - **Vendor directory is for reference only** — vendored repos are for reading
   source code, not for building against. Use crates.io dependencies.
 
-## Modes
+## Shells
 
-Shannon has two modes, toggled via the `/ai` command:
+Shannon has three built-in shell engines, cycled via Shift+Tab:
 
-- **Normal mode** — commands go to the active shell (bash, brush, nushell,
-  fish, zsh)
-- **AI mode** — input goes to an LLM which generates a shell command. User
-  confirms before execution. Use `/ai on`, `/ai off`, or `/ai toggle`.
+- **nu** — nushell, embedded via crate API
+- **brush** — bash-compatible, embedded via brush crate
+- **ai** — AI chat powered by an LLM (Anthropic by default)
 
-Shell switching (Shift+Tab) works in both modes.
+All shells implement the `ShellEngine` trait. The `toggle` config controls
+which shells appear and their order.
 
 ## Config
 

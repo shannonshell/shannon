@@ -5,12 +5,10 @@ cycle between them.
 
 ## How It Works
 
-Shannon detects which shells are available at startup. Nushell and brush
-(embedded bash) are always available. Bash, fish, and zsh are detected by
-checking your PATH. The default rotation order is:
+Shannon has three built-in shell engines — all always available:
 
 ```
-bash → nu → brush → fish → zsh → bash → ...
+nu → brush → ai → nu → ...
 ```
 
 If a shell isn't installed, it's skipped. If only one shell is available,
