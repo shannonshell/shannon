@@ -1,6 +1,6 @@
 [package]
 name = "shannonshell"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
 license = "MIT"
@@ -28,7 +28,7 @@ name = "shannon"
 path = "src/main.rs"
 
 [dependencies]
-reedline = { path = "../reedline", package = "shannon-reedline", features = ["sqlite"] }
+reedline = { path = "../reedline", version = "0.46.0", package = "shannon-reedline", features = ["sqlite"] }
 chrono = "0.4"
 crossterm = "0.29.0"
 nu-ansi-term = "0.50.0"
@@ -48,16 +48,16 @@ tree-sitter-language = "0.1"
 tree-sitter-fish = "3.6"
 
 # Brush as a library (native bash evaluation, from forked submodule)
-brush-core = { path = "../brush/brush-core", package = "shannon-brush-core" }
-brush-builtins = { path = "../brush/brush-builtins", package = "shannon-brush-builtins" }
+brush-core = { path = "../brush/brush-core", version = "0.4.0", package = "shannon-brush-core" }
+brush-builtins = { path = "../brush/brush-builtins", version = "0.1.0", package = "shannon-brush-builtins" }
 
 # Nushell as a library (native evaluation, from forked submodule)
-nu-cli = { path = "../nushell/crates/nu-cli", package = "shannon-nu-cli", default-features = false }
-nu-engine = { path = "../nushell/crates/nu-engine", package = "shannon-nu-engine", features = ["os"] }
-nu-protocol = { path = "../nushell/crates/nu-protocol", package = "shannon-nu-protocol", features = ["os"] }
-nu-command = { path = "../nushell/crates/nu-command", package = "shannon-nu-command", default-features = false, features = ["os"] }
-nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", package = "shannon-nu-cmd-lang" }
-nu-parser = { path = "../nushell/crates/nu-parser", package = "shannon-nu-parser" }
+nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "shannon-nu-cli", default-features = false }
+nu-engine = { path = "../nushell/crates/nu-engine", version = "0.111.1", package = "shannon-nu-engine", features = ["os"] }
+nu-protocol = { path = "../nushell/crates/nu-protocol", version = "0.111.1", package = "shannon-nu-protocol", features = ["os"] }
+nu-command = { path = "../nushell/crates/nu-command", version = "0.111.1", package = "shannon-nu-command", default-features = false, features = ["os"] }
+nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", version = "0.111.1", package = "shannon-nu-cmd-lang" }
+nu-parser = { path = "../nushell/crates/nu-parser", version = "0.111.1", package = "shannon-nu-parser" }
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

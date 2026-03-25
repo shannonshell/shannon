@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-24"
+closed = "2026-03-25"
 +++
 
 # Issue 25: Publish all workspace crates to crates.io
@@ -127,3 +128,87 @@ Steps:
 1. `scripts/release.sh 0.2.0 --dry-run` passes for all crates.
 2. `scripts/release.sh 0.2.0` publishes all crates successfully.
 3. `cargo install shannonshell` works from a clean environment.
+
+**Result:** Fail
+
+Multiple blocking issues encountered:
+
+1. **crates.io rate limits:** New crate creation is limited to ~10 per time
+   window. With 37 crates to publish, the script hits rate limits repeatedly
+   and requires multiple `--resume` runs hours apart.
+2. **Dev-dependency cycles:** Cargo requires all dependencies (including
+   dev-deps) to exist on the registry during packaging. `cargo-workspaces`
+   strips dev-deps to break cycles, but this causes feature-forward errors
+   (`nu-test-support/network` referenced in features but dep stripped).
+3. **`cargo-workspaces` unreliability:** Reports "published" for rate-limited
+   crates that actually failed. Doesn't detect partial failures correctly.
+4. **Missing version fields:** Workspace dependencies need both `path` and
+   `version` for publishing, discovered incrementally through failures.
+5. **Feature forwards to dev-deps:** `nu-command` and `nu-cmd-lang` had
+   feature entries referencing `nu-test-support` which breaks when dev-deps
+   are stripped. Required manual fixes in the nushell fork.
+
+Approximately 21 of 37 crates were successfully published across multiple
+runs. The remaining 11+ crates need more rate-limit cooldown cycles.
+
+#### Conclusion
+
+The initial experiment design (manual topological ordering in `release.sh`)
+failed due to dev-dep cycles that cargo can't resolve during packaging. Switched
+to `cargo-workspaces` which strips dev-deps automatically. The rate limits
+required ~24 hours of incremental `--resume` runs to publish all crates.
+
+Despite being marked as a failure, all 37 crates were eventually published
+through persistent re-runs of `cargo workspaces publish`. The experiment
+failed as an automated process but succeeded as a manual one.
+
+### Additional fixes discovered during publishing
+
+Changes made to the nushell fork that weren't in the original experiment design:
+
+1. **Excluded plugin crates from workspace** — `nu_plugin_*` binary crates
+   broke when renamed (binary target paths changed). Not needed by shannon,
+   so removed from workspace members.
+2. **Removed feature forwards to dev-deps** — `nu-command/Cargo.toml` had
+   `nu-test-support/network` and `nu-test-support/rustls-tls` in features.
+   `nu-cmd-lang/Cargo.toml` had `nu-test-support/os`. These break when
+   `cargo-workspaces` strips dev-deps. Removed the feature forwards.
+3. **Added version to reedline workspace dep** — `reedline` in nushell's
+   `[workspace.dependencies]` had only `path`, no `version`. Cargo requires
+   `version` for publishing.
+4. **Marked root `nu` package as `publish = false`** — Prevents
+   `cargo-workspaces` from trying to publish to the real `nu` crate on
+   crates.io which we don't own.
+5. **Dual path+version pattern in shannon's Cargo.toml** — All path deps now
+   include `version` fields so local builds use paths and `cargo publish` uses
+   registry versions.
+
+### Final publish workflow
+
+For future releases, `release.sh` handles shannonshell. For the fork crates
+(only needed when they change):
+
+```bash
+cd reedline && cargo publish --allow-dirty
+cd ../nushell && cargo workspaces publish --from-git --allow-dirty --no-verify --yes
+cd ../brush && cargo publish -p shannon-brush-parser --allow-dirty && \
+  cargo publish -p shannon-brush-core --allow-dirty && \
+  cargo publish -p shannon-brush-builtins --allow-dirty
+```
+
+Future publishes update existing crates (no rate limit on updates).
+
+## Conclusion
+
+All 37 fork crates and shannonshell v0.2.0 are published on crates.io. The
+first publish took ~24 hours due to crates.io rate limits on new crate
+creation (~1 new crate per 10-minute window). This is a one-time cost —
+subsequent releases update existing crates with no rate limiting.
+
+Key infrastructure:
+- `scripts/release.sh <version>` — bumps version, tests, publishes
+  shannonshell, commits, tags, pushes. Supports `--dry-run` and `--resume`.
+- `cargo workspaces publish` — handles nushell crate ordering and dev-dep
+  cycle stripping automatically.
+- Dual `path` + `version` deps in shannon's Cargo.toml — local builds use
+  submodule paths, publishing uses registry versions.
