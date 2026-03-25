@@ -1,102 +1,8 @@
 use std::collections::HashMap;
-use std::io;
 use std::path::PathBuf;
 use std::process::Command;
 
-#[cfg(unix)]
-use std::os::unix::process::CommandExt;
-
-use crate::config::{expand_wrapper, read_init_file, ShellConfig};
 use crate::shell::ShellState;
-
-pub fn execute_command(
-    shell_config: &ShellConfig,
-    command: &str,
-    state: &ShellState,
-) -> io::Result<ShellState> {
-    let temp_file = tempfile::Builder::new()
-        .prefix("shannon_")
-        .suffix(".env")
-        .tempfile()?;
-    let temp_path = temp_file.path().to_string_lossy().to_string();
-
-    let init_content = read_init_file(shell_config.init.as_deref());
-    let wrapper = expand_wrapper(&shell_config.wrapper, command, &temp_path, &init_content);
-
-    // Ignore SIGINT in shannon while child runs. The child is in the same
-    // process group so it receives SIGINT from the terminal directly.
-    // Shannon ignores it, child handles it. SIG_DFL is restored in the
-    // REPL loop before read_line, not here (avoids pending signal kills).
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-    }
-
-    let mut cmd = Command::new(&shell_config.binary);
-    cmd.args(["-c", &wrapper])
-        .env_clear()
-        .envs(&state.env)
-        .current_dir(&state.cwd);
-
-    // Restore SIG_DFL in the child AFTER fork but BEFORE exec.
-    // SIG_IGN is inherited across fork — without this, the child
-    // would also ignore SIGINT.
-    #[cfg(unix)]
-    unsafe {
-        cmd.pre_exec(|| {
-            libc::signal(libc::SIGINT, libc::SIG_DFL);
-            Ok(())
-        });
-    }
-
-    let status = cmd.status();
-
-    let exit_code = match &status {
-        Ok(s) => {
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                // Use 128+signal for signal-terminated processes (e.g. 130 for SIGINT)
-                s.code().unwrap_or_else(|| s.signal().map(|sig| 128 + sig).unwrap_or(1))
-            }
-            #[cfg(not(unix))]
-            s.code().unwrap_or(1)
-        }
-        Err(_) => 1,
-    };
-
-    // Try to read captured state; fall back to previous state on failure.
-    // Filter empty contents — if the child was killed by a signal, the
-    // wrapper's env capture code never ran and the temp file is empty.
-    let new_state = std::fs::read_to_string(&temp_path)
-        .ok()
-        .filter(|contents| !contents.trim().is_empty())
-        .and_then(|contents| parse_output(&shell_config.parser, &contents))
-        .map(|(env, cwd)| ShellState {
-            env,
-            cwd,
-            last_exit_code: exit_code,
-        })
-        .unwrap_or_else(|| ShellState {
-            env: state.env.clone(),
-            cwd: state.cwd.clone(),
-            last_exit_code: exit_code,
-        });
-
-    // Propagate spawn errors after we've built state
-    status?;
-
-    Ok(new_state)
-}
-
-/// Dispatch to the correct parser based on the parser name.
-fn parse_output(parser: &str, contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
-    match parser {
-        "bash" => parse_bash_env(contents),
-        "nushell" => parse_nushell_env(contents),
-        _ => parse_env(contents),
-    }
-}
 
 /// Run the optional startup script at env.sh (or config.sh fallback).
 /// Captures the resulting environment and returns an updated ShellState.
@@ -136,7 +42,6 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
     };
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
-    // Use the bash wrapper template directly for the startup script
     let wrapper = format!(
         "source '{config_str}'\n__shannon_ec=$?\n(export -p; echo \"__SHANNON_CWD=$(pwd)\"; echo \"__SHANNON_EXIT=$__shannon_ec\") > '{temp_path}'\nexit $__shannon_ec"
     );
@@ -181,30 +86,7 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
     }
 }
 
-/// Parse `env` output (KEY=VALUE per line) plus __SHANNON_ markers.
-/// This is the generic parser used by fish, zsh, and any POSIX shell.
-pub fn parse_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
-    let mut env = HashMap::new();
-    let mut cwd: Option<PathBuf> = None;
-
-    for line in contents.lines() {
-        if let Some(eq_pos) = line.find('=') {
-            let key = &line[..eq_pos];
-            let value = &line[eq_pos + 1..];
-            if key == "__SHANNON_CWD" {
-                cwd = Some(PathBuf::from(value));
-            } else if key == "__SHANNON_EXIT" {
-                // Skip — we use the process exit code directly
-            } else if !key.starts_with("__SHANNON_") {
-                env.insert(key.to_string(), value.to_string());
-            }
-        }
-    }
-
-    Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
-}
-
-/// Parse bash `export -p` output plus our special __SHANNON_ markers.
+/// Parse bash `export -p` output plus __SHANNON_ markers.
 fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
     let mut env = HashMap::new();
     let mut cwd: Option<PathBuf> = None;
@@ -230,7 +112,6 @@ fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> 
     Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
 }
 
-/// Parse a single `KEY="VALUE"` or `KEY` from a declare -x line.
 fn parse_declare_line(s: &str) -> Option<(String, String)> {
     if let Some(eq_pos) = s.find('=') {
         let key = s[..eq_pos].to_string();
@@ -247,7 +128,6 @@ fn parse_declare_line(s: &str) -> Option<(String, String)> {
     }
 }
 
-/// Unescape common bash escape sequences in double-quoted strings.
 fn unescape_bash_value(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     let mut chars = s.chars();
@@ -272,173 +152,9 @@ fn unescape_bash_value(s: &str) -> String {
     result
 }
 
-/// Parse nushell JSON env output.
-fn parse_nushell_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
-    let obj: serde_json::Value = serde_json::from_str(contents).ok()?;
-    let map = obj.as_object()?;
-
-    let mut env = HashMap::new();
-    let mut cwd: Option<PathBuf> = None;
-
-    for (key, value) in map {
-        if key == "__SHANNON_CWD" {
-            if let Some(s) = value.as_str() {
-                cwd = Some(PathBuf::from(s));
-            }
-        } else if key == "__SHANNON_EXIT" {
-            // Skip
-        } else if let Some(s) = value.as_str() {
-            env.insert(key.clone(), s.to_string());
-        } else if let Some(arr) = value.as_array() {
-            let all_strings = arr.iter().all(|v| v.is_string());
-            if all_strings {
-                let joined = arr
-                    .iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(if cfg!(windows) { ";" } else { ":" });
-                env.insert(key.clone(), joined);
-            }
-        }
-    }
-
-    Some((env, cwd.unwrap_or_else(|| PathBuf::from("/"))))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- parse_bash_env ---
-
-    #[test]
-    fn test_parse_bash_env_basic() {
-        let input = r#"declare -x HOME="/Users/ryan"
-declare -x PATH="/usr/bin:/bin"
-declare -x TERM="xterm-256color"
-__SHANNON_CWD=/tmp
-__SHANNON_EXIT=0"#;
-        let (env, cwd) = parse_bash_env(input).unwrap();
-        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
-        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
-        assert_eq!(env.get("TERM").unwrap(), "xterm-256color");
-        assert_eq!(cwd, PathBuf::from("/tmp"));
-        assert!(!env.contains_key("__SHANNON_CWD"));
-        assert!(!env.contains_key("__SHANNON_EXIT"));
-    }
-
-    #[test]
-    fn test_parse_bash_env_shannon_markers_in_declare() {
-        let input = r#"declare -x FOO="bar"
-declare -x __SHANNON_CWD="/home/user"
-declare -x __SHANNON_EXIT="0""#;
-        let (env, cwd) = parse_bash_env(input).unwrap();
-        assert_eq!(env.get("FOO").unwrap(), "bar");
-        assert_eq!(cwd, PathBuf::from("/home/user"));
-        assert!(!env.contains_key("__SHANNON_CWD"));
-        assert!(!env.contains_key("__SHANNON_EXIT"));
-    }
-
-    #[test]
-    fn test_parse_bash_env_quoted_values() {
-        let input = r#"declare -x MSG="hello \"world\""
-declare -x DOLLAR="price is \$5"
-declare -x BACK="a\\b"
-__SHANNON_CWD=/"#;
-        let (env, _) = parse_bash_env(input).unwrap();
-        assert_eq!(env.get("MSG").unwrap(), r#"hello "world""#);
-        assert_eq!(env.get("DOLLAR").unwrap(), "price is $5");
-        assert_eq!(env.get("BACK").unwrap(), "a\\b");
-    }
-
-    #[test]
-    fn test_parse_bash_env_empty() {
-        let (env, cwd) = parse_bash_env("").unwrap();
-        assert!(env.is_empty());
-        assert_eq!(cwd, PathBuf::from("/"));
-    }
-
-    #[test]
-    fn test_parse_bash_env_no_value() {
-        let input = "declare -x EXPORTED_BUT_UNSET\n__SHANNON_CWD=/tmp";
-        let (env, _) = parse_bash_env(input).unwrap();
-        assert!(!env.contains_key("EXPORTED_BUT_UNSET"));
-    }
-
-    // --- unescape_bash_value ---
-
-    #[test]
-    fn test_unescape_bash_value() {
-        assert_eq!(
-            unescape_bash_value(r#"hello \"world\""#),
-            r#"hello "world""#
-        );
-        assert_eq!(unescape_bash_value(r"a\\b"), "a\\b");
-        assert_eq!(unescape_bash_value(r"\$HOME"), "$HOME");
-        assert_eq!(unescape_bash_value(r"back\`tick"), "back`tick");
-        assert_eq!(unescape_bash_value("no escapes"), "no escapes");
-        assert_eq!(unescape_bash_value(r"trailing\"), "trailing\\");
-    }
-
-    // --- parse_nushell_env ---
-
-    #[test]
-    fn test_parse_nushell_env_basic() {
-        let input = r#"{"HOME": "/Users/ryan", "TERM": "xterm", "__SHANNON_CWD": "/tmp", "__SHANNON_EXIT": "0"}"#;
-        let (env, cwd) = parse_nushell_env(input).unwrap();
-        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
-        assert_eq!(env.get("TERM").unwrap(), "xterm");
-        assert_eq!(cwd, PathBuf::from("/tmp"));
-        assert!(!env.contains_key("__SHANNON_CWD"));
-        assert!(!env.contains_key("__SHANNON_EXIT"));
-    }
-
-    #[test]
-    fn test_parse_nushell_env_arrays() {
-        let input = r#"{"PATH": ["/usr/bin", "/bin", "/usr/local/bin"], "__SHANNON_CWD": "/home"}"#;
-        let (env, _) = parse_nushell_env(input).unwrap();
-        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin:/usr/local/bin");
-    }
-
-    #[test]
-    fn test_parse_nushell_env_non_string_dropped() {
-        let input =
-            r#"{"FOO": "bar", "NUM": 42, "OBJ": {"a": 1}, "BOOL": true, "__SHANNON_CWD": "/"}"#;
-        let (env, _) = parse_nushell_env(input).unwrap();
-        assert_eq!(env.get("FOO").unwrap(), "bar");
-        assert!(!env.contains_key("NUM"));
-        assert!(!env.contains_key("OBJ"));
-        assert!(!env.contains_key("BOOL"));
-    }
-
-    #[test]
-    fn test_parse_nushell_env_invalid_json() {
-        assert!(parse_nushell_env("not json at all").is_none());
-        assert!(parse_nushell_env("").is_none());
-    }
-
-    // --- parse_env (generic KEY=VALUE) ---
-
-    #[test]
-    fn test_parse_env_basic() {
-        let input = "HOME=/Users/ryan\nPATH=/usr/bin:/bin\nTERM=xterm\n__SHANNON_CWD=/tmp\n__SHANNON_EXIT=0";
-        let (env, cwd) = parse_env(input).unwrap();
-        assert_eq!(env.get("HOME").unwrap(), "/Users/ryan");
-        assert_eq!(env.get("PATH").unwrap(), "/usr/bin:/bin");
-        assert_eq!(env.get("TERM").unwrap(), "xterm");
-        assert_eq!(cwd, PathBuf::from("/tmp"));
-        assert!(!env.contains_key("__SHANNON_CWD"));
-        assert!(!env.contains_key("__SHANNON_EXIT"));
-    }
-
-    #[test]
-    fn test_parse_env_empty() {
-        let (env, cwd) = parse_env("").unwrap();
-        assert!(env.is_empty());
-        assert_eq!(cwd, PathBuf::from("/"));
-    }
-
-    // --- run_startup_script ---
 
     fn make_startup_state(dir: &std::path::Path) -> ShellState {
         let mut env = HashMap::new();
@@ -490,8 +206,8 @@ __SHANNON_CWD=/"#;
         let state = make_startup_state(dir.path());
         let result = run_startup_script_from(state, Some(config));
         assert_eq!(result.env.get("NEW_VAR").unwrap(), "hello");
-        assert!(result.env.contains_key("HOME"), "HOME should still exist");
-        assert!(result.env.contains_key("PATH"), "PATH should still exist");
+        assert!(result.env.contains_key("HOME"));
+        assert!(result.env.contains_key("PATH"));
     }
 
     #[test]
@@ -502,7 +218,7 @@ __SHANNON_CWD=/"#;
         let state = make_startup_state(dir.path());
         let result = run_startup_script_from(state, Some(config));
         let path = result.env.get("PATH").unwrap();
-        assert!(path.contains("/custom/bin"), "PATH should contain /custom/bin, got: {path}");
-        assert!(path.contains("/usr/bin"), "PATH should still contain /usr/bin, got: {path}");
+        assert!(path.contains("/custom/bin"));
+        assert!(path.contains("/usr/bin"));
     }
 }

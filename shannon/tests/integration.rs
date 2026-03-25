@@ -1,101 +1,12 @@
 use std::path::PathBuf;
-use std::process::Command;
 
 use shannonshell::brush_engine::BrushEngine;
-use shannonshell::config::ShellConfig;
-use shannonshell::executor::execute_command;
 use shannonshell::nushell_engine::NushellEngine;
 use shannonshell::shell::ShellState;
-
-fn has_binary(binary: &str) -> bool {
-    Command::new(binary)
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok()
-}
+use shannonshell::shell_engine::ShellEngine;
 
 fn initial_state() -> ShellState {
     ShellState::from_current_env()
-}
-
-fn bash_config() -> ShellConfig {
-    shannonshell::config::ShannonConfig::default()
-        .shells()
-        .into_iter()
-        .find(|(name, _)| name == "bash")
-        .unwrap()
-        .1
-}
-
-fn fish_config() -> ShellConfig {
-    shannonshell::config::ShannonConfig::default()
-        .shells()
-        .into_iter()
-        .find(|(name, _)| name == "fish")
-        .unwrap()
-        .1
-}
-
-fn zsh_config() -> ShellConfig {
-    shannonshell::config::ShannonConfig::default()
-        .shells()
-        .into_iter()
-        .find(|(name, _)| name == "zsh")
-        .unwrap()
-        .1
-}
-
-// --- Bash tests ---
-
-#[test]
-fn test_bash_echo() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-    let result = execute_command(&bash_config(), "echo hello", &state).unwrap();
-    assert_eq!(result.last_exit_code, 0);
-}
-
-#[test]
-fn test_bash_env_capture() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-    let result = execute_command(&bash_config(), "export FOO=test_value_123", &state).unwrap();
-    assert_eq!(result.env.get("FOO").unwrap(), "test_value_123");
-}
-
-#[test]
-fn test_bash_cwd_capture() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-    let result = execute_command(&bash_config(), "cd /tmp", &state).unwrap();
-    assert!(
-        result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
-        "unexpected cwd: {:?}",
-        result.cwd
-    );
-}
-
-#[test]
-fn test_bash_exit_code() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-    let result = execute_command(&bash_config(), "false", &state).unwrap();
-    assert_ne!(result.last_exit_code, 0);
-}
-
-#[test]
-fn test_bash_env_persistence() {
-    assert!(has_binary("bash"), "bash not found");
-    let state = initial_state();
-
-    let state2 = execute_command(&bash_config(), "export PERSIST_TEST=hello", &state).unwrap();
-    assert_eq!(state2.env.get("PERSIST_TEST").unwrap(), "hello");
-
-    let state3 = execute_command(&bash_config(), "echo $PERSIST_TEST", &state2).unwrap();
-    assert_eq!(state3.last_exit_code, 0);
-    assert_eq!(state3.env.get("PERSIST_TEST").unwrap(), "hello");
 }
 
 // --- Nushell tests (embedded via NushellEngine) ---
@@ -180,132 +91,32 @@ fn test_brush_state_persistence() {
     assert_eq!(state2.env.get("PERSIST_BRUSH").unwrap(), "hello");
 }
 
-// --- Fish tests ---
+// --- Cross-engine tests ---
 
 #[test]
-fn test_fish_echo() {
-    if !has_binary("fish") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&fish_config(), "echo hello", &state).unwrap();
-    assert_eq!(result.last_exit_code, 0);
-}
+fn test_env_brush_to_nushell() {
+    let mut brush = BrushEngine::new();
+    brush.inject_state(&initial_state());
+    let brush_state = brush.execute("export CROSS=hello_from_brush");
+    assert_eq!(brush_state.env.get("CROSS").unwrap(), "hello_from_brush");
 
-#[test]
-fn test_fish_env_capture() {
-    if !has_binary("fish") {
-        return;
-    }
-    let state = initial_state();
-    let result =
-        execute_command(&fish_config(), "set -gx FOO test_value_789", &state).unwrap();
-    assert_eq!(result.env.get("FOO").unwrap(), "test_value_789");
-}
-
-#[test]
-fn test_fish_cwd_capture() {
-    if !has_binary("fish") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&fish_config(), "cd /tmp", &state).unwrap();
-    assert!(
-        result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
-        "unexpected cwd: {:?}",
-        result.cwd
-    );
-}
-
-#[test]
-fn test_fish_exit_code() {
-    if !has_binary("fish") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&fish_config(), "false", &state).unwrap();
-    assert_ne!(result.last_exit_code, 0);
-}
-
-// --- Zsh tests ---
-
-#[test]
-fn test_zsh_echo() {
-    if !has_binary("zsh") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&zsh_config(), "echo hello", &state).unwrap();
-    assert_eq!(result.last_exit_code, 0);
-}
-
-#[test]
-fn test_zsh_env_capture() {
-    if !has_binary("zsh") {
-        return;
-    }
-    let state = initial_state();
-    let result =
-        execute_command(&zsh_config(), "export FOO=test_value_zsh", &state).unwrap();
-    assert_eq!(result.env.get("FOO").unwrap(), "test_value_zsh");
-}
-
-#[test]
-fn test_zsh_cwd_capture() {
-    if !has_binary("zsh") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&zsh_config(), "cd /tmp", &state).unwrap();
-    assert!(
-        result.cwd == PathBuf::from("/tmp") || result.cwd == PathBuf::from("/private/tmp"),
-        "unexpected cwd: {:?}",
-        result.cwd
-    );
-}
-
-#[test]
-fn test_zsh_exit_code() {
-    if !has_binary("zsh") {
-        return;
-    }
-    let state = initial_state();
-    let result = execute_command(&zsh_config(), "false", &state).unwrap();
-    assert_ne!(result.last_exit_code, 0);
-}
-
-// --- Cross-shell tests ---
-
-#[test]
-fn test_env_bash_to_nushell() {
-    assert!(has_binary("bash"), "bash not found");
-
-    let state = initial_state();
-
-    let bash_state =
-        execute_command(&bash_config(), "export CROSS=hello_from_bash", &state).unwrap();
-    assert_eq!(bash_state.env.get("CROSS").unwrap(), "hello_from_bash");
-
-    // Nushell is embedded — inject bash state into engine
-    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
-    engine.inject_state(&bash_state);
-    let nu_state = engine.execute("echo $env.CROSS");
+    // Inject brush state into nushell engine
+    let mut nu = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    nu.inject_state(&brush_state);
+    let nu_state = nu.execute("echo $env.CROSS");
     assert_eq!(nu_state.last_exit_code, 0);
-    assert_eq!(nu_state.env.get("CROSS").unwrap(), "hello_from_bash");
+    assert_eq!(nu_state.env.get("CROSS").unwrap(), "hello_from_brush");
 }
 
 #[test]
-fn test_cwd_bash_to_nushell() {
-    assert!(has_binary("bash"), "bash not found");
+fn test_cwd_brush_to_nushell() {
+    let mut brush = BrushEngine::new();
+    brush.inject_state(&initial_state());
+    let brush_state = brush.execute("cd /tmp");
 
-    let state = initial_state();
-
-    let bash_state = execute_command(&bash_config(), "cd /tmp", &state).unwrap();
-
-    // Nushell is embedded — inject bash state into engine
-    let mut engine = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
-    engine.inject_state(&bash_state);
-    let nu_state = engine.execute("pwd");
+    let mut nu = NushellEngine::new(std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)));
+    nu.inject_state(&brush_state);
+    let nu_state = nu.execute("pwd");
     assert!(
         nu_state.cwd == PathBuf::from("/tmp") || nu_state.cwd == PathBuf::from("/private/tmp"),
         "unexpected cwd: {:?}",
@@ -313,28 +124,4 @@ fn test_cwd_bash_to_nushell() {
     );
 }
 
-#[test]
-fn test_env_bash_to_fish() {
-    if !has_binary("bash") || !has_binary("fish") {
-        return;
-    }
-
-    let state = initial_state();
-
-    let bash_state =
-        execute_command(&bash_config(), "export CROSS_FISH=hello_from_bash", &state).unwrap();
-    assert_eq!(
-        bash_state.env.get("CROSS_FISH").unwrap(),
-        "hello_from_bash"
-    );
-
-    let fish_state =
-        execute_command(&fish_config(), "echo $CROSS_FISH", &bash_state).unwrap();
-    assert_eq!(fish_state.last_exit_code, 0);
-    assert_eq!(
-        fish_state.env.get("CROSS_FISH").unwrap(),
-        "hello_from_bash"
-    );
-}
-
-// SIGINT handling is tested via scripts/test-sigint.sh (not integration tests).
+// SIGINT handling is tested manually (not integration tests).

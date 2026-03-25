@@ -1,6 +1,5 @@
 use std::io;
 use std::io::Write;
-use std::process::Command;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
@@ -15,27 +14,15 @@ use reedline::{
 
 use crate::ai::session::Session;
 use crate::ai::translate::translate_command;
-use crate::brush_engine::BrushEngine;
 use crate::completer::ShannonCompleter;
-use crate::config::{AiConfig, ShellConfig};
-use crate::executor::execute_command;
+use crate::config::AiConfig;
 use crate::highlighter::TreeSitterHighlighter;
-use crate::nushell_engine::NushellEngine;
 use crate::prompt::{tilde_contract, ShannonPrompt};
 use crate::shell::{self, ShellState};
+use crate::shell_engine::ShellSlot;
 use crate::theme::Theme;
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
-
-
-pub fn shell_available(binary: &str) -> bool {
-    Command::new(binary)
-        .arg("--version")
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok()
-}
 
 /// Completer that returns available shells for the Ctrl+Tab picker menu.
 struct ShellSwitchCompleter {
@@ -61,7 +48,7 @@ impl Completer for ShellSwitchCompleter {
 }
 
 fn build_editor(
-    shell_config: &ShellConfig,
+    highlighter_name: Option<&str>,
     session_id: Option<HistorySessionId>,
     ai_mode: bool,
     theme: &Theme,
@@ -110,7 +97,7 @@ fn build_editor(
     let highlighter = if ai_mode {
         TreeSitterHighlighter::new(None, theme)
     } else {
-        TreeSitterHighlighter::new(shell_config.highlighter.as_deref(), theme)
+        TreeSitterHighlighter::new(highlighter_name, theme)
     };
 
     let hinter = DefaultHinter::default().with_style(theme.hint);
@@ -197,7 +184,7 @@ fn emit_osc2_command(shell_name: &str, cwd: &std::path::PathBuf, command: &str) 
 /// Handle a `/` meta-command. Returns true if handled, false if the shell should run it.
 fn handle_meta_command(
     line: &str,
-    shells: &[(String, ShellConfig)],
+    shells: &[ShellSlot],
     active_idx: &mut usize,
     editor: &mut Reedline,
     session_id: Option<HistorySessionId>,
@@ -218,10 +205,10 @@ fn handle_meta_command(
 
     match cmd {
         "/switch" => {
-            if let Some(idx) = shells.iter().position(|(n, _)| n == arg) {
+            if let Some(idx) = shells.iter().position(|s| s.name == arg) {
                 *active_idx = idx;
                 *editor = build_editor(
-                    &shells[*active_idx].1,
+                    shells[*active_idx].highlighter.as_deref(),
                     session_id,
                     *ai_mode,
                     theme,
@@ -231,7 +218,7 @@ fn handle_meta_command(
             } else if !arg.is_empty() {
                 eprintln!("shannon: unknown shell: {arg}");
             } else {
-                let names: Vec<&str> = shells.iter().map(|(n, _)| n.as_str()).collect();
+                let names: Vec<&str> = shells.iter().map(|s| s.name.as_str()).collect();
                 eprintln!("Available shells: {}", names.join(", "));
             }
             true
@@ -260,7 +247,7 @@ fn handle_meta_command(
                 }
             }
             *editor = build_editor(
-                &shells[*active_idx].1,
+                shells[*active_idx].highlighter.as_deref(),
                 session_id,
                 *ai_mode,
                 theme,
@@ -282,75 +269,23 @@ fn handle_meta_command(
     }
 }
 
-/// Re-register signal-hook's SIGINT handler.
-///
-/// Called after wrapper execution (bash/fish/zsh) because executor.rs sets
-/// SIG_IGN which overwrites signal-hook's handler. This restores it so
-/// nushell's Signals system works on the next nushell command.
-#[cfg(unix)]
-fn restore_sigint_handler(interrupt: &Arc<AtomicBool>) {
-    signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
-        .expect("failed to re-register SIGINT handler");
-}
-
-/// Execute a command using an embedded engine or wrapper.
-fn run_command(
-    shell: &(String, ShellConfig),
-    command: &str,
-    state: &mut ShellState,
-    nushell_engine: &mut Option<NushellEngine>,
-    brush_engine: &mut Option<BrushEngine>,
-    interrupt: &Arc<AtomicBool>,
-) {
-    if shell.0 == "nu" {
-        if let Some(ref mut engine) = nushell_engine {
-            // Re-register signal-hook before execution. Something (likely
-            // reedline/crossterm) overwrites the SIGINT handler during read_line.
-            #[cfg(unix)]
-            restore_sigint_handler(interrupt);
-            engine.inject_state(state);
-            *state = engine.execute(command);
-            return;
-        }
-    }
-    if shell.0 == "brush" {
-        if let Some(ref mut engine) = brush_engine {
-            #[cfg(unix)]
-            restore_sigint_handler(interrupt);
-            engine.inject_state(state);
-            *state = engine.execute(command);
-            return;
-        }
-    }
-    // Wrapper path for bash/fish/zsh (and fallback without engine)
-    match execute_command(&shell.1, command, state) {
-        Ok(new_state) => {
-            *state = new_state;
-        }
-        Err(e) => {
-            eprintln!("shannon: {e}");
-            state.last_exit_code = 1;
-        }
-    }
-    // executor.rs sets SIG_IGN which overwrites signal-hook's handler.
-    // Re-register it so nushell's signal system works next time.
-    #[cfg(unix)]
-    restore_sigint_handler(interrupt);
+/// Execute a command via the active shell engine.
+fn run_command(shell: &mut ShellSlot, command: &str, state: &mut ShellState) {
+    shell.engine.inject_state(state);
+    *state = shell.engine.execute(command);
 }
 
 /// Run the main read-eval-print loop.
 pub fn run(
-    shells: Vec<(String, ShellConfig)>,
+    mut shells: Vec<ShellSlot>,
     ai_config: AiConfig,
     mut state: ShellState,
     depth: u32,
-    mut nushell_engine: Option<NushellEngine>,
-    mut brush_engine: Option<BrushEngine>,
     theme: Theme,
     interrupt: Arc<AtomicBool>,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
-    let shell_names: Vec<String> = shells.iter().map(|(n, _)| n.clone()).collect();
+    let shell_names: Vec<String> = shells.iter().map(|s| s.name.clone()).collect();
 
     // Register signal-hook's SIGINT handler. This replaces SIG_DFL with a
     // handler that sets the AtomicBool. Shannon won't die from SIGINT.
@@ -370,17 +305,23 @@ pub fn run(
 
     let mut active_idx = 0;
     let mut ai_mode = false;
-    let mut editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
+    let mut editor = build_editor(
+        shells[active_idx].highlighter.as_deref(),
+        session_id,
+        ai_mode,
+        &theme,
+        &shell_names,
+        &interrupt,
+    );
     let mut ai_session: Option<Session> = None;
 
     loop {
-
         // Report cwd and title to terminal
         emit_osc7(&state.cwd);
-        emit_osc2_idle(&shells[active_idx].0, &state.cwd);
+        emit_osc2_idle(&shells[active_idx].name, &state.cwd);
 
         let prompt = ShannonPrompt {
-            shell_name: shells[active_idx].0.clone(),
+            shell_name: shells[active_idx].name.clone(),
             cwd: state.cwd.clone(),
             last_exit_code: state.last_exit_code,
             depth,
@@ -396,13 +337,20 @@ pub fn run(
                 // Shift+Tab: cycle to next shell
                 if line == SWITCH_COMMAND {
                     active_idx = (active_idx + 1) % shells.len();
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
+                    editor = build_editor(
+                        shells[active_idx].highlighter.as_deref(),
+                        session_id,
+                        ai_mode,
+                        &theme,
+                        &shell_names,
+                        &interrupt,
+                    );
                     continue;
                 }
 
                 let line = line.trim();
 
-                // Meta-commands: /switch, /help, etc.
+                // Meta-commands: /switch, /help, /ai, etc.
                 if line.starts_with('/') {
                     if handle_meta_command(
                         line,
@@ -438,7 +386,7 @@ pub fn run(
 
                     let session = ai_session.as_mut().unwrap();
                     let cwd = state.cwd.to_string_lossy().to_string();
-                    let shell_name = &shells[active_idx].0;
+                    let shell_name = &shells[active_idx].name;
 
                     match translate_command(&ai_config, session, shell_name, &cwd, line) {
                         Ok(command) => {
@@ -450,15 +398,15 @@ pub fn run(
                             match read_confirmation()? {
                                 KeyCode::Enter => {
                                     eprintln!(); // newline after confirmation
-                                    // Run the command through the active shell
-                                    emit_osc2_command(&shells[active_idx].0, &state.cwd, &command);
+                                    emit_osc2_command(
+                                        &shells[active_idx].name,
+                                        &state.cwd,
+                                        &command,
+                                    );
                                     run_command(
-                                        &shells[active_idx],
+                                        &mut shells[active_idx],
                                         &command,
                                         &mut state,
-                                        &mut nushell_engine,
-                                        &mut brush_engine,
-                                        &interrupt,
                                     );
                                     emit_osc7(&state.cwd);
 
@@ -466,7 +414,7 @@ pub fn run(
                                     ai_mode = false;
                                     ai_session = None;
                                     editor = build_editor(
-                                        &shells[active_idx].1,
+                                        shells[active_idx].highlighter.as_deref(),
                                         session_id,
                                         ai_mode,
                                         &theme,
@@ -494,15 +442,8 @@ pub fn run(
                         c
                     });
 
-                    emit_osc2_command(&shells[active_idx].0, &state.cwd, line);
-                    run_command(
-                        &shells[active_idx],
-                        line,
-                        &mut state,
-                        &mut nushell_engine,
-                        &mut brush_engine,
-                        &interrupt,
-                    );
+                    emit_osc2_command(&shells[active_idx].name, &state.cwd, line);
+                    run_command(&mut shells[active_idx], line, &mut state);
                     emit_osc7(&state.cwd);
                 }
             }

@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 
 use crate::shell::config_dir;
@@ -11,8 +9,6 @@ pub struct ShannonConfig {
     pub toggle: Option<Vec<String>>,
     /// Deprecated: use `toggle` instead. Kept for backward compat.
     pub default_shell: Option<String>,
-    #[serde(default)]
-    pub shells: HashMap<String, ShellConfig>,
     /// AI mode configuration.
     #[serde(default)]
     pub ai: AiConfig,
@@ -52,123 +48,11 @@ pub struct ThemeConfig {
     pub ai_badge: Option<String>,
 }
 
-/// Configuration for a single shell.
-#[derive(Deserialize, Clone)]
-pub struct ShellConfig {
-    pub binary: String,
-    pub wrapper: String,
-    #[serde(default = "default_parser")]
-    pub parser: String,
-    pub highlighter: Option<String>,
-    pub init: Option<String>,
-}
-
-fn default_parser() -> String {
-    "env".to_string()
-}
-
-// --- Built-in defaults ---
-
-const BASH_WRAPPER: &str = r#"{{init}}
-{{command}}
-__shannon_ec=$?
-(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{{temp_path}}'
-exit $__shannon_ec"#;
-
-const ENV_WRAPPER: &str = r#"{{init}}
-{{command}}
-__shannon_ec=$?
-env > '{{temp_path}}'
-echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
-echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
-exit $__shannon_ec"#;
-
-const FISH_WRAPPER: &str = r#"{{init}}
-{{command}}
-set __shannon_ec $status
-env > '{{temp_path}}'
-echo "__SHANNON_CWD="(pwd) >> '{{temp_path}}'
-echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
-exit $__shannon_ec"#;
-
-fn builtin_shells() -> Vec<(String, ShellConfig)> {
-    vec![
-        (
-            "bash".to_string(),
-            ShellConfig {
-                binary: "bash".to_string(),
-                wrapper: BASH_WRAPPER.to_string(),
-                parser: "bash".to_string(),
-                highlighter: Some("bash".to_string()),
-                init: None,
-            },
-        ),
-        (
-            "fish".to_string(),
-            ShellConfig {
-                binary: "fish".to_string(),
-                wrapper: FISH_WRAPPER.to_string(),
-                parser: "env".to_string(),
-                highlighter: Some("fish".to_string()),
-                init: None,
-            },
-        ),
-        (
-            "zsh".to_string(),
-            ShellConfig {
-                binary: "zsh".to_string(),
-                wrapper: ENV_WRAPPER.to_string(),
-                parser: "env".to_string(),
-                highlighter: Some("bash".to_string()),
-                init: None,
-            },
-        ),
-    ]
-}
-
-/// Nushell is embedded via crates — no binary, no wrapper needed.
-/// This ShellConfig is a placeholder for the toggle/shell list.
-fn nushell_config() -> ShellConfig {
-    ShellConfig {
-        binary: String::new(), // not used — embedded
-        wrapper: String::new(), // not used — embedded
-        parser: String::new(), // not used — embedded
-        highlighter: Some("nushell".to_string()),
-        init: None,
-    }
-}
-
-/// Placeholder config for brush (embedded bash — no wrapper needed).
-fn brush_config() -> ShellConfig {
-    ShellConfig {
-        binary: String::new(), // not used — embedded
-        wrapper: String::new(), // not used — embedded
-        parser: String::new(), // not used — embedded
-        highlighter: Some("bash".to_string()),
-        init: None,
-    }
-}
-
-/// Build the full map of available shells (built-in + custom + embedded).
-fn all_shells(config: &ShannonConfig) -> HashMap<String, ShellConfig> {
-    let mut map = HashMap::new();
-
-    // Embedded shells (always available)
-    map.insert("nu".to_string(), nushell_config());
-    map.insert("brush".to_string(), brush_config());
-
-    // Built-in wrapped shells
-    for (name, shell_config) in builtin_shells() {
-        map.insert(name, shell_config);
-    }
-
-    // User overrides and custom shells
-    for (name, shell_config) in &config.shells {
-        map.insert(name.clone(), shell_config.clone());
-    }
-
-    map
-}
+/// Built-in shell names and their highlighters.
+const BUILTIN_SHELLS: &[(&str, &str)] = &[
+    ("nu", "nushell"),
+    ("brush", "bash"),
+];
 
 impl ShannonConfig {
     /// Load config from config.toml. Returns defaults if file doesn't exist.
@@ -195,20 +79,15 @@ impl ShannonConfig {
         }
     }
 
-    /// Returns the ordered list of shells for the Shift+Tab rotation.
-    ///
-    /// If `toggle` is set, returns those shells in order (duplicates allowed).
-    /// If only `default_shell` is set (backward compat), puts that shell first.
-    /// If neither is set, returns all built-in + custom shells in default order.
-    pub fn shells(&self) -> Vec<(String, ShellConfig)> {
-        let available = all_shells(self);
+    /// Returns the ordered list of shell names for the Shift+Tab rotation.
+    pub fn shell_order(&self) -> Vec<String> {
+        let known: Vec<&str> = BUILTIN_SHELLS.iter().map(|(name, _)| *name).collect();
 
         if let Some(toggle) = &self.toggle {
-            // Toggle list: return shells in the specified order
             let mut result = Vec::new();
             for name in toggle {
-                if let Some(config) = available.get(name) {
-                    result.push((name.clone(), config.clone()));
+                if known.contains(&name.as_str()) {
+                    result.push(name.clone());
                 } else {
                     eprintln!("shannon: unknown shell in toggle list: {name}");
                 }
@@ -216,25 +95,12 @@ impl ShannonConfig {
             return result;
         }
 
-        // No toggle list — return all shells in default order
-        let mut result = Vec::new();
-        // Default order: bash, nu (embedded), brush (embedded), fish, zsh
-        let default_order = ["bash", "nu", "brush", "fish", "zsh"];
-        for name in default_order {
-            if let Some(config) = available.get(name) {
-                result.push((name.to_string(), config.clone()));
-            }
-        }
-        // Custom shells after
-        for (name, config) in &self.shells {
-            if !result.iter().any(|(n, _)| n == name) {
-                result.push((name.clone(), config.clone()));
-            }
-        }
+        // Default order
+        let mut result: Vec<String> = known.iter().map(|s| s.to_string()).collect();
 
         // Backward compat: default_shell moves that shell to front
         if let Some(default_name) = &self.default_shell {
-            if let Some(pos) = result.iter().position(|(n, _)| n == default_name) {
+            if let Some(pos) = result.iter().position(|n| n == default_name) {
                 let shell = result.remove(pos);
                 result.insert(0, shell);
             }
@@ -242,28 +108,14 @@ impl ShannonConfig {
 
         result
     }
-}
 
-/// Expand a wrapper template by replacing placeholders.
-pub fn expand_wrapper(
-    wrapper: &str,
-    command: &str,
-    temp_path: &str,
-    init_content: &str,
-) -> String {
-    wrapper
-        .replace("{{command}}", command)
-        .replace("{{temp_path}}", temp_path)
-        .replace("{{init}}", init_content)
-}
-
-/// Read the init file for a shell, returning its contents or empty string.
-pub fn read_init_file(init_path: Option<&str>) -> String {
-    let path = match init_path {
-        Some(p) => config_dir().join(p),
-        None => return String::new(),
-    };
-    std::fs::read_to_string(&path).unwrap_or_default()
+    /// Get the highlighter name for a built-in shell.
+    pub fn highlighter_for(name: &str) -> Option<String> {
+        BUILTIN_SHELLS
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, h)| h.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -273,134 +125,51 @@ mod tests {
     #[test]
     fn test_empty_config() {
         let config = ShannonConfig::default();
-        let shells = config.shells();
-        assert_eq!(shells.len(), 5);
-        assert_eq!(shells[0].0, "bash");
-        assert_eq!(shells[1].0, "nu");
-        assert_eq!(shells[2].0, "brush");
-        assert_eq!(shells[3].0, "fish");
-        assert_eq!(shells[4].0, "zsh");
+        let shells = config.shell_order();
+        assert_eq!(shells.len(), 2);
+        assert_eq!(shells[0], "nu");
+        assert_eq!(shells[1], "brush");
     }
 
     #[test]
     fn test_toggle_list() {
-        let config: ShannonConfig = toml::from_str(r#"toggle = ["nu", "bash"]"#).unwrap();
-        let shells = config.shells();
+        let config: ShannonConfig =
+            toml::from_str(r#"toggle = ["brush", "nu"]"#).unwrap();
+        let shells = config.shell_order();
         assert_eq!(shells.len(), 2);
-        assert_eq!(shells[0].0, "nu");
-        assert_eq!(shells[1].0, "bash");
+        assert_eq!(shells[0], "brush");
+        assert_eq!(shells[1], "nu");
     }
 
     #[test]
     fn test_toggle_unknown_shell() {
         let config: ShannonConfig =
-            toml::from_str(r#"toggle = ["nu", "nonexistent", "bash"]"#).unwrap();
-        let shells = config.shells();
+            toml::from_str(r#"toggle = ["nu", "nonexistent", "brush"]"#).unwrap();
+        let shells = config.shell_order();
         assert_eq!(shells.len(), 2);
-        assert_eq!(shells[0].0, "nu");
-        assert_eq!(shells[1].0, "bash");
-    }
-
-    #[test]
-    fn test_toggle_duplicates() {
-        let config: ShannonConfig =
-            toml::from_str(r#"toggle = ["fish", "bash", "fish"]"#).unwrap();
-        let shells = config.shells();
-        assert_eq!(shells.len(), 3);
-        assert_eq!(shells[0].0, "fish");
-        assert_eq!(shells[1].0, "bash");
-        assert_eq!(shells[2].0, "fish");
-    }
-
-    #[test]
-    fn test_toggle_with_custom_shell() {
-        let toml_str = r#"
-toggle = ["zsh", "nu"]
-
-[shells.elvish]
-binary = "elvish"
-wrapper = "{{command}}"
-"#;
-        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
-        let shells = config.shells();
-        // elvish is defined but not in toggle, so not returned
-        assert_eq!(shells.len(), 2);
-        assert_eq!(shells[0].0, "zsh");
-        assert_eq!(shells[1].0, "nu");
+        assert_eq!(shells[0], "nu");
+        assert_eq!(shells[1], "brush");
     }
 
     #[test]
     fn test_default_shell_backward_compat() {
         let config: ShannonConfig =
-            toml::from_str(r#"default_shell = "nu""#).unwrap();
-        let shells = config.shells();
-        assert_eq!(shells[0].0, "nu");
-        assert_eq!(shells.len(), 5); // all built-ins, nu first
-    }
-
-    #[test]
-    fn test_custom_shell_in_toggle() {
-        let toml_str = r#"
-toggle = ["elvish", "bash"]
-
-[shells.elvish]
-binary = "elvish"
-wrapper = "{{command}}"
-"#;
-        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
-        let shells = config.shells();
+            toml::from_str(r#"default_shell = "brush""#).unwrap();
+        let shells = config.shell_order();
+        assert_eq!(shells[0], "brush");
         assert_eq!(shells.len(), 2);
-        assert_eq!(shells[0].0, "elvish");
-        assert_eq!(shells[0].1.binary, "elvish");
-        assert_eq!(shells[1].0, "bash");
     }
 
     #[test]
-    fn test_override_builtin() {
-        let toml_str = r#"
-[shells.bash]
-binary = "/custom/bash"
-wrapper = "custom {{command}}"
-parser = "bash"
-highlighter = "bash"
-"#;
-        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
-        let shells = config.shells();
-        assert_eq!(shells[0].1.binary, "/custom/bash");
-    }
-
-    #[test]
-    fn test_expand_wrapper() {
-        let result = expand_wrapper(
-            "{{init}}\n{{command}}\nenv > '{{temp_path}}'",
-            "echo hello",
-            "/tmp/test.env",
-            "# init",
+    fn test_highlighter_for() {
+        assert_eq!(
+            ShannonConfig::highlighter_for("nu"),
+            Some("nushell".to_string())
         );
-        assert!(result.contains("echo hello"));
-        assert!(result.contains("/tmp/test.env"));
-        assert!(result.contains("# init"));
-    }
-
-    #[test]
-    fn test_expand_wrapper_empty_init() {
-        let result = expand_wrapper("{{init}}{{command}}", "ls", "/tmp/t", "");
-        assert_eq!(result, "ls");
-    }
-
-    #[test]
-    fn test_toml_parse_toggle() {
-        let toml_str = r#"
-toggle = ["nu", "fish"]
-
-[shells.zsh]
-binary = "zsh"
-wrapper = "{{command}}"
-parser = "env"
-highlighter = "bash"
-"#;
-        let config: ShannonConfig = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.toggle.as_deref(), Some(&["nu".to_string(), "fish".to_string()][..]));
-        assert!(config.shells.contains_key("zsh"));
+        assert_eq!(
+            ShannonConfig::highlighter_for("brush"),
+            Some("bash".to_string())
+        );
+        assert_eq!(ShannonConfig::highlighter_for("unknown"), None);
     }
 }

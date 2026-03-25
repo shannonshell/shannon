@@ -8,13 +8,14 @@ use shannonshell::executor::run_startup_script;
 use shannonshell::nushell_engine::NushellEngine;
 use shannonshell::repl;
 use shannonshell::shell::ShellState;
+use shannonshell::shell_engine::ShellSlot;
 use shannonshell::theme::Theme;
 
 fn main() -> io::Result<()> {
     // Load config.toml (or use built-in defaults)
     let config = ShannonConfig::load();
 
-    // Run env script first so PATH is complete before shell detection
+    // Run env script first so PATH is complete
     let mut state = run_startup_script(ShellState::from_current_env());
 
     // Track nesting depth for nested shannon instances
@@ -29,37 +30,44 @@ fn main() -> io::Result<()> {
         .insert("SHANNON_DEPTH".to_string(), depth.to_string());
     std::env::set_var("SHANNON_DEPTH", depth.to_string());
 
-    // Update process PATH so shell_available() can find binaries
+    // Update process PATH
     if let Some(path) = state.env.get("PATH") {
         std::env::set_var("PATH", path);
     }
 
-    // Get ordered shell list from config, filter to installed shells
-    let all_shells = config.shells();
-    let shells = all_shells
-        .into_iter()
-        .filter(|(name, cfg)| name == "nu" || name == "brush" || repl::shell_available(&cfg.binary))
-        .collect::<Vec<_>>();
+    // Shared interrupt flag for signal handling.
+    let interrupt = Arc::new(AtomicBool::new(false));
+
+    // Build shell engines keyed by name
+    let mut engines: Vec<(&str, Box<dyn shannonshell::shell_engine::ShellEngine>)> = vec![
+        ("nu", Box::new(NushellEngine::new(interrupt.clone()))),
+        ("brush", Box::new(BrushEngine::new())),
+    ];
+
+    // Get ordered shell names from config
+    let shell_order = config.shell_order();
+
+    // Build ShellSlot list in config order
+    let mut shells: Vec<ShellSlot> = Vec::new();
+    for name in &shell_order {
+        if let Some(pos) = engines.iter().position(|(n, _)| *n == name.as_str()) {
+            let (_, engine) = engines.remove(pos);
+            shells.push(ShellSlot {
+                name: name.clone(),
+                highlighter: ShannonConfig::highlighter_for(name),
+                engine,
+            });
+        }
+    }
 
     if shells.is_empty() {
         eprintln!("shannon: no supported shells found");
         std::process::exit(1);
     }
 
-    // Shared interrupt flag for nushell's signal system.
-    // signal-hook registers a SIGINT handler that sets this flag.
-    // Nushell checks it via signals.interrupted() during execution.
-    let interrupt = Arc::new(AtomicBool::new(false));
-
-    // Initialize embedded engines (always available)
-    let nushell_engine = Some(NushellEngine::new(interrupt.clone()));
-    let brush_engine = Some(BrushEngine::new());
-
     // Build theme from config
     let theme = Theme::from_config(&config.theme);
 
     // Run the REPL
-    repl::run(
-        shells, config.ai, state, depth, nushell_engine, brush_engine, theme, interrupt,
-    )
+    repl::run(shells, config.ai, state, depth, theme, interrupt)
 }

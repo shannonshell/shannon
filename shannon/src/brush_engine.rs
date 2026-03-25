@@ -4,6 +4,7 @@ use brush_builtins::ShellBuilderExt;
 use brush_core::{ExecutionExitCode, Shell, ShellValue, ShellVariable, SourceInfo};
 
 use crate::shell::ShellState;
+use crate::shell_engine::ShellEngine;
 
 pub struct BrushEngine {
     shell: Shell,
@@ -28,8 +29,7 @@ impl BrushEngine {
         BrushEngine { shell, runtime }
     }
 
-    /// Inject shannon's ShellState into the brush shell before evaluation.
-    pub fn inject_state(&mut self, state: &ShellState) {
+    fn do_inject_state(&mut self, state: &ShellState) {
         // Set cwd
         let _ = self.shell.set_working_dir(&state.cwd);
 
@@ -41,8 +41,7 @@ impl BrushEngine {
         }
     }
 
-    /// Execute a bash command natively and return updated state.
-    pub fn execute(&mut self, command: &str) -> ShellState {
+    fn do_execute(&mut self, command: &str) -> ShellState {
         let params = self.shell.default_exec_params();
 
         let result = self
@@ -89,5 +88,15 @@ impl BrushEngine {
         }
 
         env
+    }
+}
+
+impl ShellEngine for BrushEngine {
+    fn inject_state(&mut self, state: &ShellState) {
+        self.do_inject_state(state);
+    }
+
+    fn execute(&mut self, command: &str) -> ShellState {
+        self.do_execute(command)
     }
 }

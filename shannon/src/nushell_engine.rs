@@ -8,6 +8,7 @@ use nu_protocol::engine::{EngineState, Stack, StateWorkingSet};
 use nu_protocol::{PipelineData, Signals, Span, Value};
 
 use crate::shell::ShellState;
+use crate::shell_engine::ShellEngine;
 
 pub struct NushellEngine {
     engine_state: EngineState,
@@ -44,8 +45,7 @@ impl NushellEngine {
         }
     }
 
-    /// Inject shannon's ShellState into the nushell engine before evaluation.
-    pub fn inject_state(&mut self, state: &ShellState) {
+    fn do_inject_state(&mut self, state: &ShellState) {
         // Set cwd
         let _ = self.stack.set_cwd(&state.cwd);
 
@@ -58,8 +58,7 @@ impl NushellEngine {
         }
     }
 
-    /// Execute a nushell command natively and return updated state.
-    pub fn execute(&mut self, command: &str) -> ShellState {
+    fn do_execute(&mut self, command: &str) -> ShellState {
         // Reset interrupt flag before each command
         self.engine_state.reset_signals();
 
@@ -110,5 +109,15 @@ impl NushellEngine {
             cwd,
             last_exit_code: exit_code,
         }
+    }
+}
+
+impl ShellEngine for NushellEngine {
+    fn inject_state(&mut self, state: &ShellState) {
+        self.do_inject_state(state);
+    }
+
+    fn execute(&mut self, command: &str) -> ShellState {
+        self.do_execute(command)
     }
 }
