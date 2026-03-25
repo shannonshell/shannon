@@ -7,9 +7,9 @@ use chrono::Utc;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 use reedline::{
-    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu, Completer,
+    default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu,
     DefaultHinter, EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent,
-    ReedlineMenu, Signal, Span, SqliteBackedHistory, Suggestion, Vi,
+    ReedlineMenu, Signal, SqliteBackedHistory, Vi,
 };
 
 use crate::ai::session::Session;
@@ -24,35 +24,11 @@ use crate::theme::Theme;
 
 const SWITCH_COMMAND: &str = "__shannon_switch";
 
-/// Completer that returns available shells for the Ctrl+Tab picker menu.
-struct ShellSwitchCompleter {
-    shells: Vec<String>,
-}
-
-impl Completer for ShellSwitchCompleter {
-    fn complete(&mut self, _line: &str, _pos: usize) -> Vec<Suggestion> {
-        self.shells
-            .iter()
-            .map(|name| Suggestion {
-                value: format!("/switch {name}"),
-                display_override: Some(name.clone()),
-                description: None,
-                style: None,
-                extra: None,
-                span: Span::new(0, 0),
-                append_whitespace: false,
-                match_indices: None,
-            })
-            .collect()
-    }
-}
-
 fn build_editor(
     highlighter_name: Option<&str>,
     session_id: Option<HistorySessionId>,
     ai_mode: bool,
     theme: &Theme,
-    shell_names: &[String],
     interrupt: &Arc<AtomicBool>,
 ) -> Reedline {
     let mut insert_keybindings = default_vi_insert_keybindings();
@@ -71,11 +47,6 @@ fn build_editor(
                 ReedlineEvent::Menu("completion_menu".to_string()),
                 ReedlineEvent::MenuNext,
             ]),
-        );
-        kb.add_binding(
-            KeyModifiers::CONTROL,
-            KeyCode::Char('s'),
-            ReedlineEvent::Menu("shell_menu".to_string()),
         );
     }
 
@@ -105,17 +76,6 @@ fn build_editor(
     let completer = Box::new(ShannonCompleter::new());
     let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
 
-    let shell_menu = ReedlineMenu::WithCompleter {
-        menu: Box::new(
-            reedline::IdeMenu::default()
-                .with_name("shell_menu")
-                .with_default_border(),
-        ),
-        completer: Box::new(ShellSwitchCompleter {
-            shells: shell_names.to_vec(),
-        }),
-    };
-
     Reedline::create()
         .with_edit_mode(edit_mode)
         .with_history(Box::new(history))
@@ -124,7 +84,6 @@ fn build_editor(
         .with_hinter(Box::new(hinter))
         .with_completer(completer)
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
-        .with_menu(shell_menu)
         .with_break_signal(interrupt.clone())
         .use_bracketed_paste(true)
 }
@@ -191,7 +150,6 @@ fn handle_meta_command(
     ai_mode: &mut bool,
     ai_session: &mut Option<Session>,
     theme: &Theme,
-    shell_names: &[String],
     interrupt: &Arc<AtomicBool>,
 ) -> bool {
     let parts: Vec<&str> = line.splitn(2, ' ').collect();
@@ -212,7 +170,6 @@ fn handle_meta_command(
                     session_id,
                     *ai_mode,
                     theme,
-                    shell_names,
                     interrupt,
                 );
             } else if !arg.is_empty() {
@@ -251,7 +208,6 @@ fn handle_meta_command(
                 session_id,
                 *ai_mode,
                 theme,
-                shell_names,
                 interrupt,
             );
             true
@@ -267,7 +223,6 @@ fn handle_meta_command(
             eprintln!("  /version         — show version");
             eprintln!("  /help            — show this help");
             eprintln!("  Shift+Tab        — cycle to next shell");
-            eprintln!("  Ctrl+S           — shell picker menu");
             true
         }
         _ => false,
@@ -290,7 +245,6 @@ pub fn run(
     interrupt: Arc<AtomicBool>,
 ) -> io::Result<()> {
     let session_id = Reedline::create_history_session_id();
-    let shell_names: Vec<String> = shells.iter().map(|s| s.name.clone()).collect();
 
     // Register signal-hook's SIGINT handler. This replaces SIG_DFL with a
     // handler that sets the AtomicBool. Shannon won't die from SIGINT.
@@ -315,7 +269,6 @@ pub fn run(
         session_id,
         ai_mode,
         &theme,
-        &shell_names,
         &interrupt,
     );
     let mut ai_session: Option<Session> = None;
@@ -347,7 +300,6 @@ pub fn run(
                         session_id,
                         ai_mode,
                         &theme,
-                        &shell_names,
                         &interrupt,
                     );
                     continue;
@@ -366,7 +318,6 @@ pub fn run(
                         &mut ai_mode,
                         &mut ai_session,
                         &theme,
-                        &shell_names,
                         &interrupt,
                     ) {
                         continue;
@@ -423,7 +374,6 @@ pub fn run(
                                         session_id,
                                         ai_mode,
                                         &theme,
-                                        &shell_names,
                                         &interrupt,
                                     );
                                 }

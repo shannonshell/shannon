@@ -11,7 +11,6 @@ These work in both insert and normal mode:
 | Key       | Action                              |
 | --------- | ----------------------------------- |
 | Shift+Tab | Cycle to next shell                 |
-| Ctrl+S    | Shell picker menu                   |
 | Tab       | Command/file completion             |
 | Right     | Accept autosuggestion (insert mode) |
 | Enter     | Clear error state (on empty line)    |

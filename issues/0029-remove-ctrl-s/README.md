@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-25"
+closed = "2026-03-25"
 +++
 
 # Issue 29: Remove Ctrl+S shell picker menu
@@ -54,3 +55,16 @@ Remove all Ctrl+S / shell menu code. Pure deletion.
 3. Shift+Tab still cycles shells.
 4. `/switch brush` still works.
 5. `/help` does not mention Ctrl+S.
+
+**Result:** Pass
+
+All verification steps confirmed. 63 tests pass.
+
+#### Conclusion
+
+Ctrl+S and shell picker menu removed. Shell switching via Shift+Tab and
+`/switch` only.
+
+## Conclusion
+
+Ctrl+S removed. Less UI, less code, less complexity.
