@@ -40,3 +40,74 @@ control. AI mode should follow the same pattern.
 Empty Enter should reset `last_exit_code` to 0 (clearing the `!` indicator if
 present) and continue the loop. This preserves the behavior from issue 23 where
 Ctrl+C clears error state — empty Enter does the same.
+
+## Experiments
+
+### Experiment 1: Replace Enter toggle with /ai command
+
+#### Description
+
+Remove the empty-Enter AI toggle. Add `/ai` to `handle_meta_command`. Update
+`/help`.
+
+#### Changes
+
+**`shannon/src/repl.rs`** — `handle_meta_command`:
+
+Add `/ai` case:
+
+```rust
+"/ai" => {
+    match arg {
+        "on" => {
+            ai_mode = true;
+            ai_session = Some(Session::new());
+        }
+        "off" => {
+            ai_mode = false;
+            ai_session = None;
+        }
+        "" | "toggle" => {
+            if ai_mode {
+                ai_mode = false;
+                ai_session = None;
+            } else {
+                ai_mode = true;
+                ai_session = Some(Session::new());
+            }
+        }
+        _ => {
+            eprintln!("Usage: /ai [on|off|toggle]");
+        }
+    }
+    // Rebuild editor to toggle highlighting
+    *editor = build_editor(...);
+    true
+}
+```
+
+This requires `ai_mode` and `ai_session` to be passed to `handle_meta_command`.
+
+**`shannon/src/repl.rs`** — empty line handler:
+
+Replace the AI toggle block with:
+
+```rust
+if line.is_empty() {
+    state.last_exit_code = 0;
+    continue;
+}
+```
+
+**`shannon/src/repl.rs`** — `/help` output:
+
+Replace `"  Enter (empty)    — toggle AI mode"` with
+`"  /ai [on|off]     — toggle AI mode"`.
+
+#### Verification
+
+1. `cargo test` passes.
+2. `/ai` toggles AI mode on and off.
+3. `/ai on` and `/ai off` work explicitly.
+4. Empty Enter clears error state, does not toggle AI mode.
+5. `/help` shows the new command.
