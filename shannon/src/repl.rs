@@ -256,10 +256,15 @@ fn handle_meta_command(
             );
             true
         }
+        "/version" => {
+            eprintln!("shannon {}", env!("CARGO_PKG_VERSION"));
+            true
+        }
         "/help" => {
             eprintln!("Shannon commands:");
             eprintln!("  /switch <shell>  — switch to a shell");
             eprintln!("  /ai [on|off]     — toggle AI mode");
+            eprintln!("  /version         — show version");
             eprintln!("  /help            — show this help");
             eprintln!("  Shift+Tab        — cycle to next shell");
             eprintln!("  Ctrl+S           — shell picker menu");
