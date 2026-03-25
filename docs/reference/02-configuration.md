@@ -30,8 +30,8 @@ toggle = ["nu", "bash"]
 ```
 
 This gives you nushell as default with bash as the only other option. Without
-a toggle list, all installed built-in shells are available: bash, nu, fish,
-zsh.
+a toggle list, all installed built-in shells are available: bash, nu, brush,
+fish, zsh.
 
 More examples:
 
@@ -42,8 +42,8 @@ toggle = ["nu"]
 # Reorder: fish first, then bash
 toggle = ["fish", "bash"]
 
-# All four, nushell first
-toggle = ["nu", "bash", "fish", "zsh"]
+# All five, nushell first
+toggle = ["nu", "brush", "bash", "fish", "zsh"]
 ```
 
 ### Add a custom shell
@@ -200,6 +200,7 @@ itself, not sent to the active shell.
 |---------|-------------|
 | `/switch <shell>` | Switch to a specific shell |
 | `/switch` | List available shells |
+| `/ai [on\|off\|toggle]` | Toggle AI mode |
 | `/help` | Show available commands and keybindings |
 
 If a file exists at the path (e.g. `/usr/bin/env`), the command goes to

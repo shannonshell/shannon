@@ -17,9 +17,9 @@ run from there.
 
 ## Architecture
 
-Shannon uses reedline (from crates.io) as its line editor. Bash, fish, and zsh
-run as subprocesses via wrapper scripts. Nushell is embedded as a library via
-`eval_source()` from the `nu-cli` crate.
+Shannon uses reedline as its line editor. Nushell is embedded as a library via
+`eval_source()` from the `nu-cli` crate. Bash is embedded via the brush crate's
+`Shell` API. Fish and zsh run as subprocesses via wrapper scripts.
 
 ### Source files (under `shannon/`)
 
@@ -30,6 +30,7 @@ run as subprocesses via wrapper scripts. Nushell is embedded as a library via
 - `src/shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
 - `src/executor.rs` — subprocess spawning, wrapper templates, env capture parsing
 - `src/nushell_engine.rs` — embedded nushell via `EngineState` + `eval_source()`
+- `src/brush_engine.rs` — embedded bash via brush `Shell` + tokio async runtime
 - `src/prompt.rs` — custom reedline `Prompt` impl, tilde contraction
 - `src/highlighter.rs` — tree-sitter syntax highlighting with Tokyo Night colors
 - `src/completer.rs` — `ShannonCompleter` combining command + file completion
@@ -44,6 +45,13 @@ run as subprocesses via wrapper scripts. Nushell is embedded as a library via
 3. Subprocess runs with inherited stdio
 4. After exit, shannon reads captured state from a temp file
 5. State is injected into the next command's subprocess
+
+**Brush (embedded bash via brush crate):**
+1. User types a command
+2. Shannon calls `shell.run_string()` via tokio `block_on`
+3. Output goes directly to the terminal
+4. Shannon reads env vars from `shell.env().iter_exported()` and cwd from
+   `shell.working_dir()` after evaluation
 
 **Nushell (embedded model):**
 1. User types a command
@@ -64,8 +72,9 @@ Every new feature must include tests. No feature ships without test coverage.
 
 - **Strings only** — only env vars (strings), cwd, and exit code cross the
   shell boundary. No shell-internal data structures.
-- **Nushell embedded, others wrapped** — nushell runs natively via crate API
-  for full compatibility. Bash/fish/zsh use subprocess wrappers.
+- **Nushell and brush embedded, others wrapped** — nushell and brush (bash)
+  run natively via crate APIs. Bash, fish, and zsh also available as subprocess
+  wrappers.
 - **Config-driven shells** — shells are defined in `config.toml` with wrapper
   templates. Adding a new shell requires no code changes.
 - **Fish completions baked in** — 983 commands parsed from fish completion
@@ -75,11 +84,12 @@ Every new feature must include tests. No feature ships without test coverage.
 
 ## Modes
 
-Shannon has two modes, toggled by pressing Enter on an empty line:
+Shannon has two modes, toggled via the `/ai` command:
 
-- **Normal mode** — commands go to the active shell (bash, nushell, fish, zsh)
+- **Normal mode** — commands go to the active shell (bash, brush, nushell,
+  fish, zsh)
 - **AI mode** — input goes to an LLM which generates a shell command. User
-  confirms before execution. Prompt shows `[nu:ai]`.
+  confirms before execution. Use `/ai on`, `/ai off`, or `/ai toggle`.
 
 Shell switching (Shift+Tab) works in both modes.
 

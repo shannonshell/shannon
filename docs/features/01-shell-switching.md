@@ -5,12 +5,12 @@ cycle between them.
 
 ## How It Works
 
-Shannon detects which shells are available at startup. Nushell is always
-available (it's embedded). Bash, fish, and zsh are detected by checking your
-PATH. The default rotation order is:
+Shannon detects which shells are available at startup. Nushell and brush
+(embedded bash) are always available. Bash, fish, and zsh are detected by
+checking your PATH. The default rotation order is:
 
 ```
-bash → nu → fish → zsh → bash → ...
+bash → nu → brush → fish → zsh → bash → ...
 ```
 
 If a shell isn't installed, it's skipped. If only one shell is available,

@@ -14,7 +14,7 @@ precise control, press **Shift+Tab** to drop into bash, nushell, or any other
 shell — then Shift+Tab back.
 
 ```
-[nu] ~/project >                    ← press Enter on empty line
+[nu] ~/project > /ai
 [nu:ai] ~/project > find all rust files modified today
   → fd --extension rs --changed-within 1d
   [Enter] run  [Esc] cancel
@@ -33,7 +33,7 @@ shell — then Shift+Tab back.
 
 ### AI Mode
 
-- Press **Enter on empty line** to toggle AI mode
+- Use `/ai` to toggle AI mode (also `/ai on`, `/ai off`)
 - Type in plain English — an LLM generates the shell command
 - Configurable provider (Anthropic by default)
 - Review and confirm before execution
@@ -42,8 +42,8 @@ shell — then Shift+Tab back.
 
 ### Poly-Shell
 
-- **Shift+Tab** to cycle between shells (bash, nushell, fish, zsh)
-- **Nushell embedded** — nushell runs natively via library, not as a subprocess
+- **Shift+Tab** to cycle between shells (bash, brush, nushell, fish, zsh)
+- **Nushell and brush embedded** — nushell and brush run natively via library, not as subprocesses
 - **Syntax highlighting** for each shell (Tokyo Night theme, tree-sitter)
 - **Command-aware tab completion** — 983 commands with subcommands and flags
 - **Autosuggestions** — ghost text from history as you type
@@ -55,15 +55,18 @@ shell — then Shift+Tab back.
   and new-pane-in-same-directory
 - Not a new language — zero new syntax to learn
 
-### Nushell as a First-Class Citizen
+### Nushell and Brush as First-Class Citizens
 
 Nushell is embedded via its crate API (`eval_source`), not wrapped in a
-subprocess. This means:
+subprocess. Brush (a bash-compatible shell written in Rust) is also embedded
+via its crate API (`Shell::builder()` + `run_string()`). This means:
 
 - `pwd`, `ls`, and other builtins auto-print their results
 - Interactive programs like `vim` and `htop` work correctly
 - Nushell variables and functions persist across commands
-- No system `nu` binary required — nushell is always available
+- Bash variables, functions, and aliases persist across commands (via brush)
+- No system `nu` binary required — nushell and brush are always available
+- Bash is also available as a traditional subprocess wrapper if installed
 
 ## Configuration
 

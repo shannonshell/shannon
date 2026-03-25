@@ -3,9 +3,9 @@
 This document explains how shannon works under the hood. It's aimed at someone
 who wants to understand the design, not just use the shell.
 
-## Two Execution Models
+## Three Execution Models
 
-Shannon uses two different models depending on the shell:
+Shannon uses three different models depending on the shell:
 
 ### Nushell: Embedded via Library
 
@@ -16,6 +16,16 @@ inside shannon's process. This means builtins auto-print, interactive programs
 
 After each command, shannon reads the resulting env vars and cwd from nushell's
 `Stack` object.
+
+### Brush: Embedded Bash via Library
+
+Brush is a Rust reimplementation of bash, embedded via the `brush-core` crate.
+Commands are evaluated by `shell.run_string()` in a tokio async runtime. Like
+nushell, brush runs inside shannon's process — bash variables, functions, and
+aliases persist across commands.
+
+After each command, shannon reads env vars from `shell.env().iter_exported()`
+and cwd from `shell.working_dir()`.
 
 ### Bash/Fish/Zsh: Subprocess Wrappers
 
@@ -117,18 +127,20 @@ predictable.
 
 ## Why Not Persistent Sessions for All Shells?
 
-Nushell uses a persistent engine (embedded via library). For bash/fish/zsh,
-we use the subprocess-per-command model instead. Why not embed those too?
+Nushell and brush use persistent engines (embedded via library). For
+bash/fish/zsh, we use the subprocess-per-command model. Why not embed those too?
 
 - Nushell exposes a clean Rust crate API (`eval_source`) that makes embedding
   straightforward.
-- Bash, fish, and zsh don't expose equivalent library APIs. They're designed
-  to run as standalone processes.
-- The subprocess model works well for these shells — the overhead is
-  negligible for interactive use.
+- Brush (a Rust bash reimplementation) exposes a similar API via
+  `Shell::builder()` and `run_string()`.
+- Fish and zsh don't expose equivalent library APIs. They're designed to run
+  as standalone processes.
+- Bash is available both as an embedded engine (via brush) and as a subprocess
+  wrapper (via the system `bash` binary). The wrapper is kept for compatibility.
 
-The subprocess-per-command model is simpler and more reliable. The overhead of
-spawning a process is negligible for interactive use.
+The subprocess-per-command model is simpler and more reliable for shells that
+don't offer a library API.
 
 ## Line Editor
 

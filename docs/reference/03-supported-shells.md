@@ -1,6 +1,6 @@
 # Supported Shells
 
-Shannon ships with built-in support for four shells. Any additional shell can
+Shannon ships with built-in support for five shells. Any additional shell can
 be added via [config.toml](02-configuration.md).
 
 ## Built-in Shells
@@ -12,6 +12,21 @@ be added via [config.toml](02-configuration.md).
 - **Parser:** `bash` (reads `declare -x` output)
 
 Bash is available on virtually every Unix system.
+
+### Brush (embedded bash)
+
+- **Highlighting:** tree-sitter-bash grammar
+- **Execution:** native via `Shell::builder()` and `run_string()` — no
+  subprocess, no wrapper
+- **Always available** — built into shannon, no system binary required
+
+Brush is a Rust reimplementation of bash, embedded as a library. Commands are
+evaluated directly by brush's engine, not wrapped in a subprocess. This means:
+
+- Builtins auto-print their results
+- Interactive programs like `vim` work correctly
+- Variables, functions, and aliases persist across commands
+- Bash-compatible syntax with POSIX semantics
 
 ### Nushell (embedded)
 
@@ -88,5 +103,5 @@ the binary isn't found in PATH, the shell is silently skipped. If no shells
 are available, shannon exits with an error.
 
 Without a `toggle` list, all installed built-in shells are available in
-default order: bash, nu, fish, zsh. With a `toggle` list, only the listed
+default order: bash, nu, brush, fish, zsh. With a `toggle` list, only the listed
 shells appear, in the specified order.
