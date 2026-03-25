@@ -26,3 +26,31 @@ the menu UI is clunky.
 
 6. Remove Ctrl+S from `docs/reference/01-keybindings.md`
 7. Remove Ctrl+S mention from `/help` output
+
+## Experiments
+
+### Experiment 1: Remove Ctrl+S and shell picker menu
+
+#### Description
+
+Remove all Ctrl+S / shell menu code. Pure deletion.
+
+#### Changes
+
+**`shannon/src/repl.rs`:**
+- Remove Ctrl+S keybinding from `build_editor()`
+- Remove `ShellSwitchCompleter` struct and `Completer` impl
+- Remove `shell_menu` variable and `.with_menu(shell_menu)` from builder
+- Remove `shell_names` parameter from `build_editor()` and all call sites
+- Remove `Ctrl+S` line from `/help` output
+
+**`docs/reference/01-keybindings.md`:**
+- Remove Ctrl+S row from the keybindings table
+
+#### Verification
+
+1. `cargo test` passes.
+2. Ctrl+S does nothing (no menu appears).
+3. Shift+Tab still cycles shells.
+4. `/switch brush` still works.
+5. `/help` does not mention Ctrl+S.
