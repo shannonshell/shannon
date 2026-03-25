@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-25"
+closed = "2026-03-25"
 +++
 
 # Issue 26: Replace Enter-toggle with /ai command for AI mode
@@ -111,3 +112,16 @@ Replace `"  Enter (empty)    — toggle AI mode"` with
 3. `/ai on` and `/ai off` work explicitly.
 4. Empty Enter clears error state, does not toggle AI mode.
 5. `/help` shows the new command.
+
+**Result:** Pass
+
+All verification steps confirmed. 95 tests pass.
+
+#### Conclusion
+
+`/ai` command works. Empty Enter no longer toggles AI mode.
+
+## Conclusion
+
+AI mode is now controlled via `/ai [on|off|toggle]`. Empty Enter clears error
+state. No more accidental mode switches.

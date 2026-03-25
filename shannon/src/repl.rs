@@ -201,7 +201,8 @@ fn handle_meta_command(
     active_idx: &mut usize,
     editor: &mut Reedline,
     session_id: Option<HistorySessionId>,
-    ai_mode: bool,
+    ai_mode: &mut bool,
+    ai_session: &mut Option<Session>,
     theme: &Theme,
     shell_names: &[String],
     interrupt: &Arc<AtomicBool>,
@@ -222,7 +223,7 @@ fn handle_meta_command(
                 *editor = build_editor(
                     &shells[*active_idx].1,
                     session_id,
-                    ai_mode,
+                    *ai_mode,
                     theme,
                     shell_names,
                     interrupt,
@@ -235,13 +236,46 @@ fn handle_meta_command(
             }
             true
         }
+        "/ai" => {
+            match arg {
+                "on" => {
+                    *ai_mode = true;
+                    *ai_session = Some(Session::new());
+                }
+                "off" => {
+                    *ai_mode = false;
+                    *ai_session = None;
+                }
+                "" | "toggle" => {
+                    if *ai_mode {
+                        *ai_mode = false;
+                        *ai_session = None;
+                    } else {
+                        *ai_mode = true;
+                        *ai_session = Some(Session::new());
+                    }
+                }
+                _ => {
+                    eprintln!("Usage: /ai [on|off|toggle]");
+                }
+            }
+            *editor = build_editor(
+                &shells[*active_idx].1,
+                session_id,
+                *ai_mode,
+                theme,
+                shell_names,
+                interrupt,
+            );
+            true
+        }
         "/help" => {
             eprintln!("Shannon commands:");
             eprintln!("  /switch <shell>  — switch to a shell");
+            eprintln!("  /ai [on|off]     — toggle AI mode");
             eprintln!("  /help            — show this help");
             eprintln!("  Shift+Tab        — cycle to next shell");
             eprintln!("  Ctrl+S           — shell picker menu");
-            eprintln!("  Enter (empty)    — toggle AI mode");
             true
         }
         _ => false,
@@ -270,6 +304,10 @@ fn run_command(
 ) {
     if shell.0 == "nu" {
         if let Some(ref mut engine) = nushell_engine {
+            // Re-register signal-hook before execution. Something (likely
+            // reedline/crossterm) overwrites the SIGINT handler during read_line.
+            #[cfg(unix)]
+            restore_sigint_handler(interrupt);
             engine.inject_state(state);
             *state = engine.execute(command);
             return;
@@ -277,6 +315,8 @@ fn run_command(
     }
     if shell.0 == "brush" {
         if let Some(ref mut engine) = brush_engine {
+            #[cfg(unix)]
+            restore_sigint_handler(interrupt);
             engine.inject_state(state);
             *state = engine.execute(command);
             return;
@@ -319,6 +359,14 @@ pub fn run(
     signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
         .expect("failed to register SIGINT handler");
 
+    // WORKAROUND: A single signal_hook::flag::register call is unreliable —
+    // something during startup (crossterm, tokio, or reedline) appears to
+    // overwrite the SIGINT handler. Registering twice re-installs it.
+    // This is a known workaround; the root cause needs investigation.
+    // See: issues/0024-per-shell-state, experiment 12.
+    #[cfg(unix)]
+    signal_hook::flag::register(signal_hook::consts::SIGINT, interrupt.clone())
+        .expect("failed to register second SIGINT flag");
 
     let mut active_idx = 0;
     let mut ai_mode = false;
@@ -362,7 +410,8 @@ pub fn run(
                         &mut active_idx,
                         &mut editor,
                         session_id,
-                        ai_mode,
+                        &mut ai_mode,
+                        &mut ai_session,
                         &theme,
                         &shell_names,
                         &interrupt,
@@ -372,17 +421,9 @@ pub fn run(
                     // Not a known meta-command — fall through to shell
                 }
 
-                // Empty line toggles AI mode
+                // Empty line: clear error state and redraw prompt
                 if line.is_empty() {
-                    if ai_mode {
-                        ai_mode = false;
-                        ai_session = None;
-                    } else {
-                        ai_mode = true;
-                        ai_session = Some(Session::new());
-                    }
-                    // Rebuild editor to toggle highlighting
-                    editor = build_editor(&shells[active_idx].1, session_id, ai_mode, &theme, &shell_names, &interrupt);
+                    state.last_exit_code = 0;
                     continue;
                 }
 
