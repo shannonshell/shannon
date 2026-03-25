@@ -27,3 +27,21 @@ command fits the existing meta-command pattern (`/switch`, `/ai`, `/help`).
    }
    ```
 2. Add `/version` to `/help` output.
+
+## Experiments
+
+### Experiment 1: Add /version meta-command
+
+#### Description
+
+Add `/version` to `handle_meta_command` and update `/help`.
+
+#### Changes
+
+**`shannon/src/repl.rs`** — add `/version` case and update `/help`.
+
+#### Verification
+
+1. `cargo test` passes.
+2. `/version` prints `shannon 0.2.1` (or current version).
+3. `/help` lists `/version`.
