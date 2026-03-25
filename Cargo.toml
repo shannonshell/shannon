@@ -173,7 +173,7 @@ ratatui = { version = "0.30", default-features = false, features = [
   #"underline-color" # leave out so we don't bring in termwiz
 ] }
 rayon = "1.11"
-reedline = { path = "../reedline", package = "shannon-reedline" }
+reedline = { path = "../reedline", version = "0.46.0", package = "shannon-reedline" }
 rmp = "0.8.15"
 rmp-serde = "1.3.1"
 roxmltree = "0.20.0"
