@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-25"
+closed = "2026-03-25"
 +++
 
 # Issue 28: Add /version meta-command
@@ -45,3 +46,15 @@ Add `/version` to `handle_meta_command` and update `/help`.
 1. `cargo test` passes.
 2. `/version` prints `shannon 0.2.1` (or current version).
 3. `/help` lists `/version`.
+
+**Result:** Pass
+
+All verification steps confirmed. 63 tests pass.
+
+#### Conclusion
+
+`/version` prints the compile-time version via `env!("CARGO_PKG_VERSION")`.
+
+## Conclusion
+
+`/version` meta-command added. One-line implementation.
