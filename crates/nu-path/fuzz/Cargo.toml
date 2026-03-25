@@ -11,6 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 
 [dependencies.nu-path]
+package = "shannon-nu-path"
 path = ".."
 
 # Prevent this from interfering with workspaces

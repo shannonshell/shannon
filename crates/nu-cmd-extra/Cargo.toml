@@ -3,7 +3,7 @@ authors = ["The Nushell Project Developers"]
 description = "Nushell's extra commands that are not part of the 1.0 api standard."
 edition = "2024"
 license = "MIT"
-name = "nu-cmd-extra"
+name = "shannon-nu-cmd-extra"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-cmd-extra"
 version = "0.111.1"
 autotests = false
@@ -23,13 +23,13 @@ path = "tests/main.rs"
 harness = false
 
 [dependencies]
-nu-cmd-base = { path = "../nu-cmd-base", version = "0.111.1" }
-nu-engine = { path = "../nu-engine", version = "0.111.1", default-features = false }
-nu-json = { version = "0.111.1", path = "../nu-json" }
-nu-parser = { path = "../nu-parser", version = "0.111.1" }
-nu-pretty-hex = { version = "0.111.1", path = "../nu-pretty-hex" }
-nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false }
-nu-utils = { path = "../nu-utils", version = "0.111.1", default-features = false }
+nu-cmd-base = { path = "../nu-cmd-base", version = "0.111.1", package = "shannon-nu-cmd-base"}
+nu-engine = { path = "../nu-engine", version = "0.111.1", default-features = false, package = "shannon-nu-engine"}
+nu-json = { version = "0.111.1", path = "../nu-json", package = "shannon-nu-json"}
+nu-parser = { path = "../nu-parser", version = "0.111.1", package = "shannon-nu-parser"}
+nu-pretty-hex = { version = "0.111.1", path = "../nu-pretty-hex", package = "shannon-nu-pretty-hex"}
+nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false, package = "shannon-nu-protocol"}
+nu-utils = { path = "../nu-utils", version = "0.111.1", default-features = false, package = "shannon-nu-utils"}
 
 # Potential dependencies for extras
 heck = { workspace = true }
@@ -43,12 +43,12 @@ itertools = { workspace = true }
 mime = { workspace = true }
 
 [dev-dependencies]
-nu-cmd-lang = { path = "../nu-cmd-lang", version = "0.111.1" }
-nu-command = { path = "../nu-command", version = "0.111.1" }
-nu-test-support = { path = "../nu-test-support", version = "0.111.1" }
+nu-cmd-lang = { path = "../nu-cmd-lang", version = "0.111.1", package = "shannon-nu-cmd-lang"}
+nu-command = { path = "../nu-command", version = "0.111.1", package = "shannon-nu-command"}
+nu-test-support = { path = "../nu-test-support", version = "0.111.1", package = "shannon-nu-test-support"}
 
 [build-dependencies]
-nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false }
+nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false, package = "shannon-nu-protocol"}
 
 serde = { workspace = true }
 serde_json = { workspace = true }
