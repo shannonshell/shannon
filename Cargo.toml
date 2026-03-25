@@ -12,6 +12,7 @@ name = "nu"
 repository = "https://github.com/nushell/nushell"
 rust-version = "1.92.0"
 version = "0.111.1"
+publish = false
 autotests = false
 
 [[test]]
