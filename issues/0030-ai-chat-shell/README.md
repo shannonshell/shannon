@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-25"
+closed = "2026-03-25"
 +++
 
 # Issue 30: Replace AI mode with a chat shell engine
@@ -155,3 +156,25 @@ returns the full response text (no code fence stripping, no command extraction).
 6. `/switch ai` works.
 7. `/switch nu` returns to nushell with state intact.
 8. Old `/ai` command no longer exists.
+
+**Result:** Pass
+
+All verification steps confirmed. 63 tests pass. Chat works with
+conversational follow-ups, context awareness (cwd, OS), and markdown
+formatting. API key is read from the injected shell state (set via env.sh).
+
+One fix during implementation: `AiEngine` initially read the API key from
+`std::env::var()`, but the key is set in shannon's shell state (via env.sh),
+not the process environment. Fixed to read from `last_state.env` first.
+
+#### Conclusion
+
+AI is now a shell engine. The REPL has no AI-specific code — it's just another
+`run_command()` call. The old AI mode (`/ai`, confirmation UI, command
+translation) is gone.
+
+## Conclusion
+
+AI mode replaced with an AI chat shell. Shift+Tab cycles through nu, brush,
+and ai. The REPL is shell-agnostic — every shell (including AI) goes through
+the same `ShellEngine` trait. Conversation history persists within the session.

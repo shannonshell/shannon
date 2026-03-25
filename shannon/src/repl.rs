@@ -1,21 +1,16 @@
 use std::io;
-use std::io::Write;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use chrono::Utc;
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use crossterm::terminal;
+use crossterm::event::{KeyCode, KeyModifiers};
 use reedline::{
     default_vi_insert_keybindings, default_vi_normal_keybindings, ColumnarMenu,
     DefaultHinter, EditCommand, HistorySessionId, MenuBuilder, Reedline, ReedlineEvent,
     ReedlineMenu, Signal, SqliteBackedHistory, Vi,
 };
 
-use crate::ai::session::Session;
-use crate::ai::translate::translate_command;
 use crate::completer::ShannonCompleter;
-use crate::config::AiConfig;
 use crate::highlighter::TreeSitterHighlighter;
 use crate::prompt::{tilde_contract, ShannonPrompt};
 use crate::shell::{self, ShellState};
@@ -27,7 +22,6 @@ const SWITCH_COMMAND: &str = "__shannon_switch";
 fn build_editor(
     highlighter_name: Option<&str>,
     session_id: Option<HistorySessionId>,
-    ai_mode: bool,
     theme: &Theme,
     interrupt: &Arc<AtomicBool>,
 ) -> Reedline {
@@ -65,11 +59,7 @@ fn build_editor(
     let history = SqliteBackedHistory::with_file(history_db, session_id, Some(Utc::now()))
         .expect("failed to create history database");
 
-    let highlighter = if ai_mode {
-        TreeSitterHighlighter::new(None, theme)
-    } else {
-        TreeSitterHighlighter::new(highlighter_name, theme)
-    };
+    let highlighter = TreeSitterHighlighter::new(highlighter_name, theme);
 
     let hinter = DefaultHinter::default().with_style(theme.hint);
 
@@ -86,23 +76,6 @@ fn build_editor(
         .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
         .with_break_signal(interrupt.clone())
         .use_bracketed_paste(true)
-}
-
-/// Read a single keypress from the terminal (Enter or Esc).
-fn read_confirmation() -> io::Result<KeyCode> {
-    terminal::enable_raw_mode()?;
-    let result = loop {
-        if let Event::Key(key_event) = event::read()? {
-            match key_event.code {
-                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('e') => {
-                    break Ok(key_event.code);
-                }
-                _ => continue,
-            }
-        }
-    };
-    terminal::disable_raw_mode()?;
-    result
 }
 
 /// Emit OSC 7 to report the current working directory to the terminal.
@@ -147,8 +120,6 @@ fn handle_meta_command(
     active_idx: &mut usize,
     editor: &mut Reedline,
     session_id: Option<HistorySessionId>,
-    ai_mode: &mut bool,
-    ai_session: &mut Option<Session>,
     theme: &Theme,
     interrupt: &Arc<AtomicBool>,
 ) -> bool {
@@ -168,7 +139,6 @@ fn handle_meta_command(
                 *editor = build_editor(
                     shells[*active_idx].highlighter.as_deref(),
                     session_id,
-                    *ai_mode,
                     theme,
                     interrupt,
                 );
@@ -180,38 +150,6 @@ fn handle_meta_command(
             }
             true
         }
-        "/ai" => {
-            match arg {
-                "on" => {
-                    *ai_mode = true;
-                    *ai_session = Some(Session::new());
-                }
-                "off" => {
-                    *ai_mode = false;
-                    *ai_session = None;
-                }
-                "" | "toggle" => {
-                    if *ai_mode {
-                        *ai_mode = false;
-                        *ai_session = None;
-                    } else {
-                        *ai_mode = true;
-                        *ai_session = Some(Session::new());
-                    }
-                }
-                _ => {
-                    eprintln!("Usage: /ai [on|off|toggle]");
-                }
-            }
-            *editor = build_editor(
-                shells[*active_idx].highlighter.as_deref(),
-                session_id,
-                *ai_mode,
-                theme,
-                interrupt,
-            );
-            true
-        }
         "/version" => {
             eprintln!("shannon {}", env!("CARGO_PKG_VERSION"));
             true
@@ -219,7 +157,6 @@ fn handle_meta_command(
         "/help" => {
             eprintln!("Shannon commands:");
             eprintln!("  /switch <shell>  — switch to a shell");
-            eprintln!("  /ai [on|off]     — toggle AI mode");
             eprintln!("  /version         — show version");
             eprintln!("  /help            — show this help");
             eprintln!("  Shift+Tab        — cycle to next shell");
@@ -238,7 +175,6 @@ fn run_command(shell: &mut ShellSlot, command: &str, state: &mut ShellState) {
 /// Run the main read-eval-print loop.
 pub fn run(
     mut shells: Vec<ShellSlot>,
-    ai_config: AiConfig,
     mut state: ShellState,
     depth: u32,
     theme: Theme,
@@ -263,15 +199,12 @@ pub fn run(
         .expect("failed to register second SIGINT flag");
 
     let mut active_idx = 0;
-    let mut ai_mode = false;
     let mut editor = build_editor(
         shells[active_idx].highlighter.as_deref(),
         session_id,
-        ai_mode,
         &theme,
         &interrupt,
     );
-    let mut ai_session: Option<Session> = None;
 
     loop {
         // Report cwd and title to terminal
@@ -283,11 +216,9 @@ pub fn run(
             cwd: state.cwd.clone(),
             last_exit_code: state.last_exit_code,
             depth,
-            ai_mode,
             prompt_color: theme.prompt,
             indicator_color: theme.prompt_indicator,
             error_color: theme.prompt_error,
-            ai_badge_style: theme.ai_badge,
         };
 
         match editor.read_line(&prompt) {
@@ -298,7 +229,6 @@ pub fn run(
                     editor = build_editor(
                         shells[active_idx].highlighter.as_deref(),
                         session_id,
-                        ai_mode,
                         &theme,
                         &interrupt,
                     );
@@ -307,7 +237,7 @@ pub fn run(
 
                 let line = line.trim();
 
-                // Meta-commands: /switch, /help, /ai, etc.
+                // Meta-commands: /switch, /help, /version
                 if line.starts_with('/') {
                     if handle_meta_command(
                         line,
@@ -315,8 +245,6 @@ pub fn run(
                         &mut active_idx,
                         &mut editor,
                         session_id,
-                        &mut ai_mode,
-                        &mut ai_session,
                         &theme,
                         &interrupt,
                     ) {
@@ -335,84 +263,25 @@ pub fn run(
                     break;
                 }
 
-                if ai_mode {
-                    // AI mode: translate natural language to command
-                    eprint!("  Thinking...");
-                    io::stderr().flush().ok();
+                // Execute command in the active shell engine
+                let cwd = state.cwd.to_string_lossy().to_string();
+                let _ = editor.update_last_command_context(&|mut c| {
+                    c.start_timestamp = Some(Utc::now());
+                    c.cwd = Some(cwd.clone());
+                    c
+                });
 
-                    let session = ai_session.as_mut().unwrap();
-                    let cwd = state.cwd.to_string_lossy().to_string();
-                    let shell_name = &shells[active_idx].name;
-
-                    match translate_command(&ai_config, session, shell_name, &cwd, line) {
-                        Ok(command) => {
-                            // Clear "Thinking..." and show the command
-                            eprint!("\r\x1b[K");
-                            eprintln!("  \x1b[36m→\x1b[0m {command}");
-                            eprintln!("  \x1b[90m[Enter] run  [Esc] cancel\x1b[0m");
-
-                            match read_confirmation()? {
-                                KeyCode::Enter => {
-                                    eprintln!(); // newline after confirmation
-                                    emit_osc2_command(
-                                        &shells[active_idx].name,
-                                        &state.cwd,
-                                        &command,
-                                    );
-                                    run_command(
-                                        &mut shells[active_idx],
-                                        &command,
-                                        &mut state,
-                                    );
-                                    emit_osc7(&state.cwd);
-
-                                    // Exit AI mode after execution
-                                    ai_mode = false;
-                                    ai_session = None;
-                                    editor = build_editor(
-                                        shells[active_idx].highlighter.as_deref(),
-                                        session_id,
-                                        ai_mode,
-                                        &theme,
-                                        &interrupt,
-                                    );
-                                }
-                                KeyCode::Esc => {
-                                    // Cancel — stay in AI mode
-                                }
-                                _ => {}
-                            }
-                        }
-                        Err(e) => {
-                            eprint!("\r\x1b[K");
-                            eprintln!("  shannon: {e}");
-                        }
-                    }
-                } else {
-                    // Normal mode: execute command directly
-                    let cwd = state.cwd.to_string_lossy().to_string();
-                    let _ = editor.update_last_command_context(&|mut c| {
-                        c.start_timestamp = Some(Utc::now());
-                        c.cwd = Some(cwd.clone());
-                        c
-                    });
-
-                    emit_osc2_command(&shells[active_idx].name, &state.cwd, line);
-                    run_command(&mut shells[active_idx], line, &mut state);
-                    emit_osc7(&state.cwd);
-                }
+                emit_osc2_command(&shells[active_idx].name, &state.cwd, line);
+                run_command(&mut shells[active_idx], line, &mut state);
+                emit_osc7(&state.cwd);
             }
             Ok(Signal::CtrlD) => break,
             Ok(Signal::CtrlC) => {
-                if ai_mode {
-                    ai_mode = false;
-                    ai_session = None;
-                }
                 state.last_exit_code = 0;
                 continue;
             }
             Ok(Signal::ExternalBreak(_)) => continue,
-            Ok(_) => continue, // future Signal variants
+            Ok(_) => continue,
             Err(e) => {
                 eprintln!("shannon: {e}");
                 break;

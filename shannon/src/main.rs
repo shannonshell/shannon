@@ -2,6 +2,7 @@ use std::io;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use shannonshell::ai_engine::AiEngine;
 use shannonshell::brush_engine::BrushEngine;
 use shannonshell::config::ShannonConfig;
 use shannonshell::executor::run_startup_script;
@@ -42,6 +43,7 @@ fn main() -> io::Result<()> {
     let mut engines: Vec<(&str, Box<dyn shannonshell::shell_engine::ShellEngine>)> = vec![
         ("nu", Box::new(NushellEngine::new(interrupt.clone()))),
         ("brush", Box::new(BrushEngine::new())),
+        ("ai", Box::new(AiEngine::new(config.ai.clone()))),
     ];
 
     // Get ordered shell names from config
@@ -69,5 +71,5 @@ fn main() -> io::Result<()> {
     let theme = Theme::from_config(&config.theme);
 
     // Run the REPL
-    repl::run(shells, config.ai, state, depth, theme, interrupt)
+    repl::run(shells, state, depth, theme, interrupt)
 }

@@ -18,6 +18,7 @@ pub fn history_db() -> PathBuf {
     config_dir().join("history.db")
 }
 
+#[derive(Clone)]
 pub struct ShellState {
     pub env: HashMap<String, String>,
     pub cwd: PathBuf,

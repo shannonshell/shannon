@@ -48,10 +48,11 @@ pub struct ThemeConfig {
     pub ai_badge: Option<String>,
 }
 
-/// Built-in shell names and their highlighters.
-const BUILTIN_SHELLS: &[(&str, &str)] = &[
-    ("nu", "nushell"),
-    ("brush", "bash"),
+/// Built-in shell names and their highlighters (None for non-code shells like AI).
+const BUILTIN_SHELLS: &[(&str, Option<&str>)] = &[
+    ("nu", Some("nushell")),
+    ("brush", Some("bash")),
+    ("ai", None),
 ];
 
 impl ShannonConfig {
@@ -114,7 +115,7 @@ impl ShannonConfig {
         BUILTIN_SHELLS
             .iter()
             .find(|(n, _)| *n == name)
-            .map(|(_, h)| h.to_string())
+            .and_then(|(_, h)| h.map(|s| s.to_string()))
     }
 }
 
@@ -126,9 +127,10 @@ mod tests {
     fn test_empty_config() {
         let config = ShannonConfig::default();
         let shells = config.shell_order();
-        assert_eq!(shells.len(), 2);
+        assert_eq!(shells.len(), 3);
         assert_eq!(shells[0], "nu");
         assert_eq!(shells[1], "brush");
+        assert_eq!(shells[2], "ai");
     }
 
     #[test]
@@ -157,7 +159,7 @@ mod tests {
             toml::from_str(r#"default_shell = "brush""#).unwrap();
         let shells = config.shell_order();
         assert_eq!(shells[0], "brush");
-        assert_eq!(shells.len(), 2);
+        assert_eq!(shells.len(), 3);
     }
 
     #[test]
@@ -170,6 +172,7 @@ mod tests {
             ShannonConfig::highlighter_for("brush"),
             Some("bash".to_string())
         );
+        assert_eq!(ShannonConfig::highlighter_for("ai"), None);
         assert_eq!(ShannonConfig::highlighter_for("unknown"), None);
     }
 }
