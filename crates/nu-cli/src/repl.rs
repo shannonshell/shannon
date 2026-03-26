@@ -639,9 +639,43 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 );
             }
 
+            // Shannon mode dispatch — intercept non-nushell modes
+            let mut shannon_handled = false;
+            if let Some(ref dispatcher) = mode_dispatcher {
+                let mode = stack
+                    .get_env_var(engine_state, "SHANNON_MODE")
+                    .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "nu".to_string());
+                if mode != "nu" {
+                    let env_strings = env_to_strings(engine_state, &stack).unwrap_or_default();
+                    let cwd = stack
+                        .get_env_var(engine_state, "PWD")
+                        .and_then(|v| v.as_str().ok())
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                    let result = dispatcher.lock().unwrap().execute(
+                        &mode,
+                        &repl_cmd_line_text,
+                        env_strings,
+                        cwd,
+                    );
+                    // Write env back to nushell stack
+                    for (key, value) in &result.env {
+                        stack.add_env_var(
+                            key.clone(),
+                            Value::string(value, Span::unknown()),
+                        );
+                    }
+                    let _ = stack.set_cwd(&result.cwd);
+                    let _ = std::env::set_current_dir(&result.cwd);
+                    shannon_handled = true;
+                }
+            }
+
             // Actual command execution logic starts from here
             let cmd_execution_start_time = Instant::now();
 
+            if !shannon_handled {
             match parse_operation(repl_cmd_line_text.clone(), engine_state, &stack) {
                 Ok(operation) => match operation {
                     ReplOperation::AutoCd { cwd, target, span } => {
@@ -679,6 +713,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 },
                 Err(ref e) => error!("Error parsing operation: {e}"),
             }
+            } // end if !shannon_handled
             let cmd_duration = cmd_execution_start_time.elapsed();
 
             stack.add_env_var(
