@@ -792,3 +792,50 @@ as nushell.
 8. env.sh loaded at startup
 9. Config dir is `~/.config/shannon/`
 10. `cargo test` passes
+
+**Result:** Pass
+
+All verification steps confirmed except Ctrl+Z (pre-existing limitation).
+
+**What works:**
+
+- Nushell mode: full nushell experience (ls, cd, pipes, tables, etc.)
+- Brush mode: bash commands (`echo hello && echo world`, `export`, `cd`)
+- AI mode: conversational chat with context awareness
+- Shift+Tab cycles nu → brush → ai → nu
+- Env propagation both directions (nu→brush via `env_to_strings`, brush→nu via
+  `add_env_var`)
+- Cwd propagation both directions
+- Ctrl+C kills running processes in both nushell and brush
+- env.sh loaded at startup, vars available in all modes
+- Config dir is `~/.config/shannon/` (`$nu.config-path` confirms)
+- Prompt shows active mode `[nu]`, `[brush]`, `[ai]`
+- Exit works in all modes
+- No syntax highlighting errors in brush/AI mode (NoOpHighlighter)
+
+**What doesn't work (pre-existing, not regressions):**
+
+- Ctrl+Z job control — doesn't work in nushell mode (shannon launches inside
+  another shell, terminal ownership issue). Brush Ctrl+Z freezes the process but
+  `fg` fails with EINVAL (process group issue).
+- No syntax highlighting in brush mode (NoOpHighlighter shows plain text)
+- Nushell validator still active in brush mode (may reject valid bash multiline
+  syntax)
+
+**Future work (separate issues):**
+
+- Ctrl+Z job control — needs terminal ownership investigation
+- Bash syntax highlighting in brush mode (tree-sitter-bash)
+- Disable nushell validator in non-nu modes
+- Phase 7: cleanup docs, build scripts, CLAUDE.md
+- Nushell banner says "Nushell" — should say "Shannon"
+- `$env.SHANNON_CONFIG` structured record (from experiment 4 research)
+- Custom nushell commands (`shannon-switch` as proper command vs host cmd)
+
+#### Conclusion
+
+The rearchitecture works. Shannon IS nushell with brush and AI modes. The nu
+binary source (~4,600 lines) was copied into shannon and modified with ~100
+lines of glue code. The nushell fork got ~80 lines added (trait, dispatch hook,
+keybinding). Env propagation, mode switching, and all three engines work
+correctly.
