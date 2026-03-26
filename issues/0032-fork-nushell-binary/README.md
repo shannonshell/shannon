@@ -723,217 +723,72 @@ This confirms the bridge between nushell and brush is straightforward:
 - `apply_state_to_stack` = write `Value::string()` for each env var +
   `set_cwd()`
 
-### Experiment 6: Implement via abstract trait injection
+### Experiment 6: Copy nu binary into shannon, add mode dispatch
 
 #### Description
 
-Shannon stays the primary binary and depends on nushell (unchanged dependency
-direction). The nushell fork gets a small hook: `loop_iteration()` accepts an
-optional `ModeDispatcher` trait object. When the mode isn't "nu", it calls the
-dispatcher instead of nushell's parser. Shannon implements the dispatcher with
-brush and AI engines.
+Copy ALL nu binary source files (~4,600 lines, 11 files) directly into shannon.
+Maintain a complete fork of the nu binary. No picking and choosing — simpler to
+keep everything and modify what we need. No visibility issues, no import
+problems — everything is in the same crate.
 
-**Architecture:**
+**Copy from `nushell/src/` into `shannon/src/`:**
 
-```
-shannon binary (main repo, primary package)
-├── src/main.rs         — replicates nu's startup, calls evaluate_repl()
-├── src/dispatcher.rs   — implements ModeDispatcher for brush + AI
-├── src/brush_engine.rs — BrushEngine (unchanged)
-├── src/ai_engine.rs    — AiEngine (unchanged)
-└── depends on:
-    ├── nushell fork (nu-cli, nu-protocol, etc.)
-    └── brush fork
+All 11 files: `main.rs`, `command.rs`, `command_context.rs`, `config_files.rs`,
+`experimental_options.rs`, `ide.rs`, `logger.rs`, `run.rs`, `signals.rs`,
+`terminal.rs`, `test_bins.rs`.
 
-nushell fork (submodule, dependency)
-└── crates/nu-cli/src/repl.rs
-    └── loop_iteration() accepts Option<&mut dyn ModeDispatcher>
-        └── if mode != "nu", calls dispatcher.execute(line, stack)
-```
+Shannon's `main.rs` IS nu's `main.rs` with modifications.
 
-**The trait (defined in nu-cli or nu-protocol so both sides can see it):**
+**Modifications to the copied code:**
 
-```rust
-pub trait ModeDispatcher {
-    /// Called when the active mode is not "nu".
-    /// Returns the updated env vars and cwd.
-    fn execute(
-        &mut self,
-        mode: &str,
-        command: &str,
-        env_vars: HashMap<String, String>,
-        cwd: PathBuf,
-    ) -> ModeResult;
-}
+1. `main.rs` — add ModeDispatcher creation, env.sh loading, SHANNON_MODE
+   default, change config dir to `~/.config/shannon/`
+2. `config_files.rs` — add env.sh loading step before env.nu
+3. `run.rs` — pass dispatcher to `evaluate_repl()`
+4. `terminal.rs` — change "nushell" error messages to "shannon"
+5. `signals.rs` — no changes needed
 
-pub struct ModeResult {
-    pub env: HashMap<String, String>,
-    pub cwd: PathBuf,
-    pub exit_code: i32,
-}
-```
+**What stays in shannon's existing code:**
 
-The dispatcher takes string env vars (already converted by
-`env_to_strings()`) and returns strings. Nushell's REPL writes them back
-to the Stack. The dispatcher never touches nushell internals directly.
+- `brush_engine.rs`, `ai_engine.rs`, `shell_engine.rs`, `shell.rs`,
+  `executor.rs`, `ai/` — unchanged
+- `dispatcher.rs` — NEW, implements ModeDispatcher
 
-**Nushell fork diff is minimal:**
-- Add `ModeDispatcher` trait to nu-cli (or nu-protocol)
-- Add `mode_dispatcher: Option<&mut dyn ModeDispatcher>` to `LoopContext`
-- Add ~20 lines in `loop_iteration()`: check mode, call dispatcher, write
-  back env vars
-- Thread the parameter through `evaluate_repl()` and `run_repl()`
+**What gets deleted:**
 
-**Shannon stays the binary** and replicates nu's `main.rs` startup:
-- Create EngineState, add command context
-- Set up signals and terminal (copy from nu's terminal.rs/signals.rs)
-- Load env.sh via brush, inject into Stack
-- Load config (call nu-cli's setup_config)
-- Create ModeDispatcher with brush + AI engines
-- Call `evaluate_repl()` with the dispatcher
+- `repl.rs`, `config.rs`, `prompt.rs`, `highlighter.rs`, `completer.rs`,
+  `completions.rs`, `theme.rs`, `nushell_engine.rs`
+- `tree_sitter_nu/`, `build.rs`, `completions/`, `themes/`
 
-This is broken into phases that can be verified independently.
+#### Phases
 
-#### Phase 1: Define ModeDispatcher trait in nushell fork
+**Phase 1:** Already done — ModeDispatcher trait added to nu-cli fork.
 
-**`nushell/crates/nu-cli/src/mode_dispatcher.rs`** (new file):
-```rust
-pub trait ModeDispatcher {
-    fn execute(
-        &mut self,
-        mode: &str,
-        command: &str,
-        env_vars: HashMap<String, String>,
-        cwd: PathBuf,
-    ) -> ModeResult;
-}
+**Phase 2:** Copy nu binary source into `shannon/src/nu_binary/`. Modify
+shannon's `main.rs` to call the copied startup code. Verify: builds and starts
+as nushell.
 
-pub struct ModeResult {
-    pub env: HashMap<String, String>,
-    pub cwd: PathBuf,
-    pub exit_code: i32,
-}
-```
+**Phase 3:** Add `dispatcher.rs`, wire mode dispatch into the copied `run.rs` →
+`evaluate_repl()`. Verify: brush and AI modes work.
 
-**`nushell/crates/nu-cli/src/repl.rs`:**
-- Add `mode_dispatcher: Option<&'a mut dyn ModeDispatcher>` to `LoopContext`
-- After `Signal::Success(line)`, before parse/eval:
-  ```rust
-  if let Some(dispatcher) = &mut ctx.mode_dispatcher {
-      let mode = stack.get_env_var(engine_state, "SHANNON_MODE")...;
-      if mode != "nu" {
-          let env_strings = env_to_strings(engine_state, &stack)?;
-          let cwd = /* read PWD */;
-          let result = dispatcher.execute(&mode, &line, env_strings, cwd);
-          // Write result.env back to stack
-          // Update cwd
-          // Continue to next iteration
-      }
-  }
-  // Fall through to normal nushell eval
-  ```
+**Phase 4:** Keybinding (Shift+Tab) and prompt per mode.
 
-**`nushell/crates/nu-cli/src/repl.rs`** — signatures:
-- `evaluate_repl()` gets `mode_dispatcher: Option<&mut dyn ModeDispatcher>`
-- `loop_iteration()` gets it via `LoopContext`
-- When called without a dispatcher (standalone nushell), everything works
-  as before — the `if let Some` guard skips the dispatch
+**Phase 5:** Highlighter/completer per mode.
 
-**`nushell/crates/nu-cli/src/lib.rs`:**
-- Export `ModeDispatcher`, `ModeResult`
+**Phase 6:** env.sh loading, `~/.config/shannon/` config dir.
 
-Verify: nushell fork builds. Passing `None` for dispatcher = normal nushell.
-
-#### Phase 2: Shannon main.rs — replicate nu's startup
-
-Shannon's `main.rs` does what nushell's `main.rs` does, then adds the
-dispatcher:
-
-1. Create EngineState, add command context (from nu-cmd-lang, nu-command)
-2. Set up signals (copy pattern from nu's signals.rs)
-3. Set up terminal (copy pattern from nu's terminal.rs)
-4. Set config paths for `~/.config/shannon/`
-5. Load env.sh via brush, inject into Stack
-6. Call `setup_config()` to load env.nu + config.nu
-7. Set `$env.SHANNON_MODE = "nu"` default
-8. Set default `$env.SHANNON_CONFIG` if not defined
-9. Create `ShannonDispatcher` (holds BrushEngine + AiEngine)
-10. Call `evaluate_repl(engine_state, stack, ..., Some(&mut dispatcher))`
-
-Shannon still depends on nu-cli, nu-protocol, nu-command, etc. — same as
-today. It just calls `evaluate_repl()` instead of building its own REPL.
-
-Verify: shannon binary starts, nushell mode works.
-
-#### Phase 3: Implement ShannonDispatcher
-
-**`shannon/src/dispatcher.rs`** (new file):
-```rust
-impl ModeDispatcher for ShannonDispatcher {
-    fn execute(&mut self, mode: &str, command: &str, env: HashMap<String, String>, cwd: PathBuf) -> ModeResult {
-        let state = ShellState { env, cwd, last_exit_code: 0 };
-        match mode {
-            "brush" => {
-                self.brush.inject_state(&state);
-                let result = self.brush.execute(command);
-                ModeResult { env: result.env, cwd: result.cwd, exit_code: result.last_exit_code }
-            }
-            "ai" => {
-                self.ai.inject_state(&state);
-                self.ai.execute(command);
-                ModeResult { env: state.env, cwd: state.cwd, exit_code: 0 }
-            }
-            _ => ModeResult { env: state.env, cwd: state.cwd, exit_code: 127 }
-        }
-    }
-}
-```
-
-Verify: `$env.SHANNON_MODE = "brush"` then run bash commands. Switch to
-"ai", ask a question.
-
-#### Phase 4: Keybinding and prompt
-
-Register `shannon-switch` as a custom nushell command that cycles
-`$env.SHANNON_MODE`. Add default Shift+Tab keybinding. Set default prompt
-that shows `[mode]`.
-
-Verify: Shift+Tab cycles modes. Prompt updates.
-
-#### Phase 5: Highlighter/completer per mode
-
-In `loop_iteration()`, check mode when creating highlighter and completer.
-Use no-op for non-nu modes (or bash highlighter for brush).
-
-Verify: brush mode doesn't show nushell syntax errors.
-
-#### Phase 6: env.sh loading and config directory
-
-Load `~/.config/shannon/env.sh` via brush before env.nu. Change config
-directory to `~/.config/shannon/`.
-
-Verify: env.sh vars available in all modes.
-
-#### Phase 7: Strip shannon crate, update build system
-
-Delete files replaced by nushell's REPL (old repl.rs, config.rs, prompt.rs,
-highlighter.rs, completer.rs, etc.). Update build scripts. Update docs.
-
-Verify: full end-to-end test suite passes.
+**Phase 7:** Delete old REPL files, update build system, update docs.
 
 #### Verification (end to end)
 
-1. `cargo build` from `shannon/` produces a `shannon` binary
-2. Shannon starts, shows `[nu]` prompt
-3. Shift+Tab → `[brush]` → bash commands work
-4. Shift+Tab → `[ai]` → chat works
-5. Shift+Tab → `[nu]` → back to nushell
-6. `export FOO=bar` in brush → switch to nu → `$env.FOO` shows `bar`
-7. `$env.BAZ = "qux"` in nu → switch to brush → `echo $BAZ` shows `qux`
-8. `cd /tmp` in brush → switch to nu → `pwd` shows `/tmp`
-9. Ctrl+Z job control works in nushell mode
-10. Ctrl+C works in all modes
-11. env.sh loaded at startup, vars available in all modes
-12. Config dir is `~/.config/shannon/`
-13. `$env.SHANNON_CONFIG` record is readable
-14. `cargo test` passes
+1. `cargo build` produces a `shannon` binary
+2. Shannon starts, shows nushell prompt
+3. Shift+Tab cycles nu → brush → ai
+4. Env vars propagate across modes
+5. cd propagates across modes
+6. Ctrl+C works in all modes
+7. Ctrl+Z works in nushell mode
+8. env.sh loaded at startup
+9. Config dir is `~/.config/shannon/`
+10. `cargo test` passes
