@@ -416,3 +416,87 @@ Fork the binary. The 22-feature gap between shannon's REPL and nushell's is too
 large to reimplement. The maintenance cost of tracking nushell's REPL changes is
 lower than the development cost of building all missing features. Next
 experiment: implement the fork.
+
+### Experiment 3: Scope the implementation
+
+#### Description
+
+Map out every change needed to make this work, across both repos. The goal: the
+nushell binary IS shannon, with brush and AI as switchable modes.
+
+#### Architecture
+
+```
+nushell/ (submodule, shannon branch)
+├── Cargo.toml          — adds shannon crate as dependency
+├── src/main.rs         — builds as "shannon" binary, adds env.sh loading
+└── crates/nu-cli/
+    └── src/repl.rs     — loop_iteration() checks SHANNON_MODE env var,
+                          dispatches to brush/ai engines when active
+
+shannon/ (library crate)
+├── src/lib.rs          — exports BrushEngine, AiEngine, ShellEngine trait
+├── src/brush_engine.rs — BrushEngine (unchanged)
+├── src/ai_engine.rs    — AiEngine (unchanged)
+├── src/shell_engine.rs — ShellEngine trait (unchanged)
+└── src/executor.rs     — run_startup_script / env.sh loading (unchanged)
+
+brush/ (submodule, unchanged)
+reedline/ (submodule, unchanged)
+```
+
+Shannon's current `main.rs`, `repl.rs`, `config.rs`, `prompt.rs`,
+`highlighter.rs`, `completer.rs` are deleted — nushell provides all of that.
+
+#### Changes needed
+
+**In the nushell fork (`nushell/` submodule):**
+
+1. **`Cargo.toml` (root)** — add `shannonshell` as a dependency so the binary
+   can import BrushEngine/AiEngine
+2. **`src/main.rs`** — change binary name to "shannon", add env.sh loading
+   before config setup, initialize BrushEngine and AiEngine, store them in
+   EngineState (or a side channel)
+3. **`crates/nu-cli/src/repl.rs`** — in `loop_iteration()`, after `read_line()`
+   returns `Signal::Success(line)`:
+   - Check `$env.SHANNON_MODE` (or equivalent)
+   - If "brush": send line to BrushEngine, skip nushell parse/eval
+   - If "ai": send line to AiEngine, skip nushell parse/eval
+   - If "nu" (default): normal nushell evaluation
+4. **`crates/nu-cli/src/repl.rs`** — in highlighter/completer setup:
+   - If brush mode: use a bash tree-sitter highlighter, file completer
+   - If ai mode: use no-op highlighter, no completer
+   - If nu mode: normal nushell highlighter/completer
+5. **Keybinding setup** — add default Shift+Tab binding that cycles
+   `$env.SHANNON_MODE` between "nu", "brush", "ai"
+6. **Prompt** — modify prompt to show `[nu]`, `[brush]`, or `[ai]` based on
+   mode. Could be done via default `PROMPT_COMMAND` that checks the mode var.
+
+**In the shannon crate (`shannon/`):**
+
+7. **Delete** — `main.rs`, `repl.rs`, `config.rs`, `prompt.rs`,
+   `highlighter.rs`, `completer.rs`, `completions.rs`, `theme.rs`, `shell.rs`,
+   `tree_sitter_nu.rs`
+8. **Keep** — `lib.rs`, `brush_engine.rs`, `ai_engine.rs`, `shell_engine.rs`,
+   `executor.rs` (for env.sh), `ai/` module
+9. **`lib.rs`** — re-export only what the nushell binary needs
+10. **`Cargo.toml`** — remove reedline, crossterm, tree-sitter, nu-ansi-term and
+    other deps that the REPL used. Keep brush, AI, tokio, rig-core.
+
+**Config integration:**
+
+11. Shannon config (`config.toml`) may be replaced by nushell's config system.
+    Or keep env.sh for bash env loading and use nushell's `config.nu` for
+    everything else.
+
+#### Scope estimate
+
+- Nushell fork changes: ~200-300 lines modified across 3-4 files
+- Shannon crate: mostly deletion (~2000 lines removed), ~50 lines of lib.rs
+  changes
+- New code: ~100 lines (mode dispatch in loop_iteration, env.sh integration)
+- Net effect: shannon shrinks dramatically, nushell fork gains ~200 lines
+
+#### Verification
+
+Scope documented. No code changes in this experiment.
