@@ -4,23 +4,19 @@ use reedline::{Completer, Span, Suggestion};
 
 use crate::completions::CompletionTable;
 
-pub struct ShannonCompleter {
-    cwd: PathBuf,
-}
+pub struct ShannonCompleter;
 
 impl ShannonCompleter {
     pub fn new() -> Self {
-        Self {
-            cwd: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        }
+        Self
     }
 
-    #[cfg(test)]
-    fn with_cwd(cwd: PathBuf) -> Self {
-        Self { cwd }
+    fn cwd() -> PathBuf {
+        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
     }
 
     fn complete_file(&self, line: &str, pos: usize) -> Vec<Suggestion> {
+        let cwd = Self::cwd();
         let line = &line[..pos];
         let word_start = line.rfind(' ').map(|i| i + 1).unwrap_or(0);
         let word = &line[word_start..];
@@ -50,11 +46,11 @@ impl ShannonCompleter {
             let resolved = if Path::new(dir).is_absolute() {
                 PathBuf::from(dir)
             } else {
-                self.cwd.join(dir)
+                cwd.join(dir)
             };
             (resolved, format!("{dir}/"))
         } else {
-            (self.cwd.clone(), String::new())
+            (cwd.clone(), String::new())
         };
 
         let filename_prefix = if word == "~" {
@@ -209,7 +205,10 @@ mod tests {
     #[test]
     fn test_complete_partial_filename() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("cat Car", 7);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&"Cargo.lock"), "expected Cargo.lock in {values:?}");
@@ -220,7 +219,10 @@ mod tests {
     #[test]
     fn test_complete_directory_contents() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("ls src/", 7);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&"src/lib.rs"), "expected src/lib.rs in {values:?}");
@@ -231,7 +233,10 @@ mod tests {
     #[test]
     fn test_complete_directory_trailing_slash() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("cd sr", 5);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].value, "src/");
@@ -241,7 +246,10 @@ mod tests {
     #[test]
     fn test_complete_file_appends_space() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("cat notes", 9);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].value, "notes.txt");
@@ -251,7 +259,10 @@ mod tests {
     #[test]
     fn test_hidden_files_excluded() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("ls C", 4);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         for v in &values {
@@ -262,7 +273,10 @@ mod tests {
     #[test]
     fn test_hidden_files_included_with_dot_prefix() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("ls .", 4);
         let values: Vec<&str> = results.iter().map(|s| s.value.as_str()).collect();
         assert!(values.contains(&".gitignore"), "expected .gitignore in {values:?}");
@@ -272,7 +286,10 @@ mod tests {
     #[test]
     fn test_no_matches() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         let results = c.complete("cat zzz", 7);
         assert!(results.is_empty());
     }
@@ -280,7 +297,10 @@ mod tests {
     #[test]
     fn test_sort_order() {
         let dir = setup_test_dir();
-        let mut c = ShannonCompleter::with_cwd(dir.path().to_path_buf());
+        let mut c = {
+            std::env::set_current_dir(dir.path()).unwrap();
+            ShannonCompleter::new()
+        };
         // Use "myapp" (not in fish completions) to test pure file completion
         let results = c.complete("myapp Car", 9);
         assert_eq!(results[0].value, "Cargo.lock");

@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-25"
+closed = "2026-03-25"
 +++
 
 # Issue 31: Completer uses stale cwd for file completions
@@ -72,3 +73,16 @@ fix it to call `current_dir()` on each completion instead of caching.
 2. Start shannon, `cd /tmp`, tab-complete a file in `/tmp` — works.
 3. `cd ~`, tab-complete a file in home — works.
 4. Open a fresh shannon pane — completions work from the start.
+
+**Result:** Pass
+
+All verification steps confirmed. 63 tests pass.
+
+#### Conclusion
+
+Process cwd now synced after every command. Completer reads live cwd.
+
+## Conclusion
+
+File completions now use the correct working directory. The process cwd is
+synced via `set_current_dir` after each command, matching how bash works.

@@ -170,6 +170,8 @@ fn handle_meta_command(
 fn run_command(shell: &mut ShellSlot, command: &str, state: &mut ShellState) {
     shell.engine.inject_state(state);
     *state = shell.engine.execute(command);
+    // Keep process cwd in sync so completions and relative paths work
+    let _ = std::env::set_current_dir(&state.cwd);
 }
 
 /// Run the main read-eval-print loop.
