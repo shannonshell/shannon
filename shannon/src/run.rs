@@ -207,6 +207,17 @@ pub(crate) fn run_repl(
         .get(engine_state);
     perf!("setup_config", start_time, use_color);
 
+    // Set default SHANNON_MODE
+    stack.add_env_var(
+        "SHANNON_MODE".to_string(),
+        nu_protocol::Value::string("nu", nu_protocol::Span::unknown()),
+    );
+
+    // Create the Shannon mode dispatcher with brush + AI engines
+    let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
+    let dispatcher: std::sync::Arc<std::sync::Mutex<Box<dyn nu_cli::ModeDispatcher>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(Box::new(dispatcher)));
+
     let start_time = std::time::Instant::now();
     let ret_val = evaluate_repl(
         engine_state,
@@ -214,7 +225,7 @@ pub(crate) fn run_repl(
         parsed_nu_cli_args.execute,
         parsed_nu_cli_args.no_std_lib,
         entire_start_time,
-        None, // No mode dispatcher — standalone nushell
+        Some(dispatcher),
     );
     perf!("evaluate_repl", start_time, use_color);
 
