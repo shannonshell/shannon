@@ -6,7 +6,16 @@ use rig::completion::Message as RigMessage;
 use rig::providers::anthropic;
 
 use crate::ai::session::Session;
-use crate::config::AiConfig;
+/// Configuration for AI mode.
+#[derive(serde::Deserialize, Default, Clone)]
+pub struct AiConfig {
+    /// LLM provider (default: "anthropic")
+    pub provider: Option<String>,
+    /// Model name (default: "claude-sonnet-4-20250514")
+    pub model: Option<String>,
+    /// Environment variable name for the API key (default: "ANTHROPIC_API_KEY")
+    pub api_key_env: Option<String>,
+}
 use crate::shell::ShellState;
 use crate::shell_engine::ShellEngine;
 

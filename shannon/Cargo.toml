@@ -1,65 +1,76 @@
 [package]
 name = "shannonshell"
 version = "0.2.4"
-edition = "2021"
+edition = "2024"
 description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
 license = "MIT"
-repository = "https://github.com/user/shannon"
+repository = "https://github.com/shannonshell/shannon"
 readme = "README.md"
 keywords = ["shell", "nushell", "bash", "ai", "terminal"]
 categories = ["command-line-utilities"]
-include = [
-    "src/**/*.rs",
-    "tests/**/*.rs",
-    "build.rs",
-    "completions/**/*.fish",
-    "themes/**/*.theme",
-    "tree-sitter-nu/**/*.c",
-    "tree-sitter-nu/**/*.h",
-    "tree-sitter-nu/**/*.json",
-    "tree-sitter-nu/LICENSE",
-    "Cargo.toml",
-    "LICENSE",
-    "README.md",
-]
 
 [[bin]]
 name = "shannon"
 path = "src/main.rs"
 
 [dependencies]
-reedline = { path = "../reedline", version = "0.46.0", package = "shannon-reedline", features = ["sqlite"] }
-chrono = "0.4"
-crossterm = "0.29.0"
-nu-ansi-term = "0.50.0"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8"
-tokio = { version = "1", features = ["rt-multi-thread"] }
-rig-core = { version = "0.33", default-features = false, features = ["reqwest-rustls"] }
-uuid = { version = "1", features = ["v4"] }
-tempfile = "3"
-libc = "0.2"
-signal-hook = "0.3"
-dirs = "6"
-tree-sitter = "0.26"
-tree-sitter-bash = "0.23"
-tree-sitter-language = "0.1"
-tree-sitter-fish = "3.6"
+# Reedline line editor
+reedline = { path = "../reedline", version = "0.46.0", package = "shannon-reedline", features = ["sqlite", "bashisms"] }
 
-# Brush as a library (native bash evaluation, from forked submodule)
+# Nushell library crates
+nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "shannon-nu-cli", default-features = false, features = ["plugin"] }
+nu-cmd-base = { path = "../nushell/crates/nu-cmd-base", version = "0.111.1", package = "shannon-nu-cmd-base" }
+nu-cmd-extra = { path = "../nushell/crates/nu-cmd-extra", version = "0.111.1", package = "shannon-nu-cmd-extra" }
+nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", version = "0.111.1", package = "shannon-nu-cmd-lang" }
+nu-command = { path = "../nushell/crates/nu-command", version = "0.111.1", package = "shannon-nu-command", default-features = false, features = ["os"] }
+nu-engine = { path = "../nushell/crates/nu-engine", version = "0.111.1", package = "shannon-nu-engine", features = ["os"] }
+nu-explore = { path = "../nushell/crates/nu-explore", version = "0.111.1", package = "shannon-nu-explore" }
+nu-experimental = { path = "../nushell/crates/nu-experimental", version = "0.111.1", package = "shannon-nu-experimental" }
+nu-lsp = { path = "../nushell/crates/nu-lsp", version = "0.111.1", package = "shannon-nu-lsp" }
+nu-parser = { path = "../nushell/crates/nu-parser", version = "0.111.1", package = "shannon-nu-parser" }
+nu-path = { path = "../nushell/crates/nu-path", version = "0.111.1", package = "shannon-nu-path" }
+nu-protocol = { path = "../nushell/crates/nu-protocol", version = "0.111.1", package = "shannon-nu-protocol", features = ["os"] }
+nu-std = { path = "../nushell/crates/nu-std", version = "0.111.1", package = "shannon-nu-std" }
+nu-system = { path = "../nushell/crates/nu-system", version = "0.111.1", package = "shannon-nu-system" }
+nu-utils = { path = "../nushell/crates/nu-utils", version = "0.111.1", package = "shannon-nu-utils" }
+
+# Optional nushell crates
+nu-cmd-plugin = { path = "../nushell/crates/nu-cmd-plugin", version = "0.111.1", package = "shannon-nu-cmd-plugin", optional = true }
+nu-plugin-engine = { path = "../nushell/crates/nu-plugin-engine", version = "0.111.1", package = "shannon-nu-plugin-engine", optional = true }
+nu-mcp = { path = "../nushell/crates/nu-mcp", version = "0.111.1", package = "shannon-nu-mcp", optional = true }
+
+# Brush (embedded bash)
 brush-core = { path = "../brush/brush-core", version = "0.4.0", package = "shannon-brush-core" }
 brush-builtins = { path = "../brush/brush-builtins", version = "0.1.0", package = "shannon-brush-builtins" }
 
-# Nushell as a library (native evaluation, from forked submodule)
-nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "shannon-nu-cli", default-features = false }
-nu-engine = { path = "../nushell/crates/nu-engine", version = "0.111.1", package = "shannon-nu-engine", features = ["os"] }
-nu-protocol = { path = "../nushell/crates/nu-protocol", version = "0.111.1", package = "shannon-nu-protocol", features = ["os"] }
-nu-command = { path = "../nushell/crates/nu-command", version = "0.111.1", package = "shannon-nu-command", default-features = false, features = ["os"] }
-nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", version = "0.111.1", package = "shannon-nu-cmd-lang" }
-nu-parser = { path = "../nushell/crates/nu-parser", version = "0.111.1", package = "shannon-nu-parser" }
+# AI provider
+rig-core = { version = "0.33", default-features = false, features = ["reqwest-rustls"] }
 
-[build-dependencies]
+# Core deps
+crossterm = "0.29.0"
+ctrlc = "3.5"
+chrono = "0.4"
+dirs = "6"
+lexopt = "0.3"
+libc = "0.2"
+log = "0.4"
+miette = { version = "7.6", features = ["fancy-no-backtrace", "fancy"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
-cc = "1"
+simplelog = "0.12"
+tempfile = "3"
+time = "0.3"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+same-file = "1.0"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(target_family = "unix")'.dependencies]
+nix = { version = "0.30", default-features = false, features = ["signal", "process", "fs", "term"] }
+
+[features]
+default = ["plugin", "sqlite", "trash-support"]
+plugin = ["nu-cmd-plugin", "nu-plugin-engine"]
+sqlite = ["nu-command/sqlite"]
+trash-support = ["nu-command/trash-support"]
+mcp = ["nu-mcp"]
+network = ["nu-command/network"]

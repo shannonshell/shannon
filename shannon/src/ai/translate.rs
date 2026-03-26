@@ -5,7 +5,7 @@ use rig::providers::anthropic;
 
 use crate::ai::prompt::PromptBuilder;
 use crate::ai::session::Session;
-use crate::config::AiConfig;
+use crate::ai_engine::AiConfig;
 
 #[derive(Debug)]
 pub enum AiError {

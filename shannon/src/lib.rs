@@ -1,15 +1,7 @@
 pub mod ai;
 pub mod ai_engine;
 pub mod brush_engine;
-pub mod completer;
-pub mod completions;
-pub mod config;
+pub mod dispatcher;
 pub mod executor;
-pub mod highlighter;
-pub mod nushell_engine;
-pub mod prompt;
-pub mod repl;
 pub mod shell;
 pub mod shell_engine;
-pub mod theme;
-pub mod tree_sitter_nu;
