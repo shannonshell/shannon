@@ -1,6 +1,6 @@
 [package]
 name = "shannonshell"
-version = "0.2.4"
+version = "0.3.0"
 edition = "2024"
 description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
 license = "MIT"
@@ -18,26 +18,26 @@ path = "src/main.rs"
 reedline = { path = "../reedline", version = "0.46.0", package = "shannon-reedline", features = ["sqlite", "bashisms"] }
 
 # Nushell library crates
-nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.1", package = "shannon-nu-cli", default-features = false, features = ["plugin"] }
-nu-cmd-base = { path = "../nushell/crates/nu-cmd-base", version = "0.111.1", package = "shannon-nu-cmd-base" }
-nu-cmd-extra = { path = "../nushell/crates/nu-cmd-extra", version = "0.111.1", package = "shannon-nu-cmd-extra" }
-nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", version = "0.111.1", package = "shannon-nu-cmd-lang" }
-nu-command = { path = "../nushell/crates/nu-command", version = "0.111.1", package = "shannon-nu-command", default-features = false, features = ["os"] }
-nu-engine = { path = "../nushell/crates/nu-engine", version = "0.111.1", package = "shannon-nu-engine", features = ["os"] }
-nu-explore = { path = "../nushell/crates/nu-explore", version = "0.111.1", package = "shannon-nu-explore" }
-nu-experimental = { path = "../nushell/crates/nu-experimental", version = "0.111.1", package = "shannon-nu-experimental" }
-nu-lsp = { path = "../nushell/crates/nu-lsp", version = "0.111.1", package = "shannon-nu-lsp" }
-nu-parser = { path = "../nushell/crates/nu-parser", version = "0.111.1", package = "shannon-nu-parser" }
-nu-path = { path = "../nushell/crates/nu-path", version = "0.111.1", package = "shannon-nu-path" }
-nu-protocol = { path = "../nushell/crates/nu-protocol", version = "0.111.1", package = "shannon-nu-protocol", features = ["os"] }
-nu-std = { path = "../nushell/crates/nu-std", version = "0.111.1", package = "shannon-nu-std" }
-nu-system = { path = "../nushell/crates/nu-system", version = "0.111.1", package = "shannon-nu-system" }
-nu-utils = { path = "../nushell/crates/nu-utils", version = "0.111.1", package = "shannon-nu-utils" }
+nu-cli = { path = "../nushell/crates/nu-cli", version = "0.111.2", package = "shannon-nu-cli", default-features = false, features = ["plugin"] }
+nu-cmd-base = { path = "../nushell/crates/nu-cmd-base", version = "0.111.2", package = "shannon-nu-cmd-base" }
+nu-cmd-extra = { path = "../nushell/crates/nu-cmd-extra", version = "0.111.2", package = "shannon-nu-cmd-extra" }
+nu-cmd-lang = { path = "../nushell/crates/nu-cmd-lang", version = "0.111.2", package = "shannon-nu-cmd-lang" }
+nu-command = { path = "../nushell/crates/nu-command", version = "0.111.2", package = "shannon-nu-command", default-features = false, features = ["os"] }
+nu-engine = { path = "../nushell/crates/nu-engine", version = "0.111.2", package = "shannon-nu-engine", features = ["os"] }
+nu-explore = { path = "../nushell/crates/nu-explore", version = "0.111.2", package = "shannon-nu-explore" }
+nu-experimental = { path = "../nushell/crates/nu-experimental", version = "0.111.2", package = "shannon-nu-experimental" }
+nu-lsp = { path = "../nushell/crates/nu-lsp", version = "0.111.2", package = "shannon-nu-lsp" }
+nu-parser = { path = "../nushell/crates/nu-parser", version = "0.111.2", package = "shannon-nu-parser" }
+nu-path = { path = "../nushell/crates/nu-path", version = "0.111.2", package = "shannon-nu-path" }
+nu-protocol = { path = "../nushell/crates/nu-protocol", version = "0.111.2", package = "shannon-nu-protocol", features = ["os"] }
+nu-std = { path = "../nushell/crates/nu-std", version = "0.111.2", package = "shannon-nu-std" }
+nu-system = { path = "../nushell/crates/nu-system", version = "0.111.2", package = "shannon-nu-system" }
+nu-utils = { path = "../nushell/crates/nu-utils", version = "0.111.2", package = "shannon-nu-utils" }
 
 # Optional nushell crates
-nu-cmd-plugin = { path = "../nushell/crates/nu-cmd-plugin", version = "0.111.1", package = "shannon-nu-cmd-plugin", optional = true }
-nu-plugin-engine = { path = "../nushell/crates/nu-plugin-engine", version = "0.111.1", package = "shannon-nu-plugin-engine", optional = true }
-nu-mcp = { path = "../nushell/crates/nu-mcp", version = "0.111.1", package = "shannon-nu-mcp", optional = true }
+nu-cmd-plugin = { path = "../nushell/crates/nu-cmd-plugin", version = "0.111.2", package = "shannon-nu-cmd-plugin", optional = true }
+nu-plugin-engine = { path = "../nushell/crates/nu-plugin-engine", version = "0.111.2", package = "shannon-nu-plugin-engine", optional = true }
+nu-mcp = { path = "../nushell/crates/nu-mcp", version = "0.111.2", package = "shannon-nu-mcp", optional = true }
 
 # Brush (embedded bash)
 brush-core = { path = "../brush/brush-core", version = "0.4.0", package = "shannon-brush-core" }

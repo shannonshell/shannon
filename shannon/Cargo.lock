@@ -4677,7 +4677,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cli"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "chrono",
  "crossterm",
@@ -4710,7 +4710,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cmd-base"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "indexmap",
  "miette",
@@ -4722,7 +4722,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cmd-extra"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "fancy-regex",
  "heck",
@@ -4746,7 +4746,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cmd-lang"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "itertools 0.14.0",
  "shadow-rs",
@@ -4760,7 +4760,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cmd-plugin"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "itertools 0.14.0",
  "shannon-nu-engine",
@@ -4771,7 +4771,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-color-config"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "nu-ansi-term",
  "serde",
@@ -4782,7 +4782,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-command"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "alphanumeric-sort",
  "arboard",
@@ -4892,7 +4892,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-derive-value"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -4903,7 +4903,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-engine"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "fancy-regex",
  "log",
@@ -4916,7 +4916,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-experimental"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "itertools 0.14.0",
  "thiserror 2.0.18",
@@ -4924,7 +4924,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-explore"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "ansi-str",
  "anyhow",
@@ -4953,11 +4953,11 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-glob"
-version = "0.111.1"
+version = "0.111.2"
 
 [[package]]
 name = "shannon-nu-json"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "linked-hash-map",
  "num-traits",
@@ -4968,7 +4968,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-lsp"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "crossbeam-channel",
  "fancy-regex",
@@ -4990,7 +4990,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-mcp"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "bytes",
  "chrono",
@@ -5015,7 +5015,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-parser"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "bytesize",
  "chrono",
@@ -5031,7 +5031,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-path"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "dirs",
  "omnipath",
@@ -5041,7 +5041,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-plugin-core"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "interprocess",
  "log",
@@ -5055,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-plugin-engine"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "log",
  "serde",
@@ -5070,7 +5070,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-plugin-protocol"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "rmp-serde",
  "semver",
@@ -5082,14 +5082,14 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-pretty-hex"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "nu-ansi-term",
 ]
 
 [[package]]
 name = "shannon-nu-protocol"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "brotli",
  "bytes",
@@ -5127,7 +5127,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-std"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "log",
  "miette",
@@ -5138,7 +5138,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-system"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "chrono",
  "itertools 0.14.0",
@@ -5157,7 +5157,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-table"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "fancy-regex",
  "nu-ansi-term",
@@ -5170,7 +5170,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-term-grid"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "shannon-nu-utils",
  "unicode-width 0.2.2",
@@ -5178,7 +5178,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-utils"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "byteyarn",
  "crossterm",
@@ -5200,7 +5200,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nuon"
-version = "0.111.1"
+version = "0.111.2"
 dependencies = [
  "shannon-nu-engine",
  "shannon-nu-parser",
@@ -5230,7 +5230,7 @@ dependencies = [
 
 [[package]]
 name = "shannonshell"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "crossterm",
