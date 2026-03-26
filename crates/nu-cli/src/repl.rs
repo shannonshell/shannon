@@ -401,11 +401,20 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         // try to enable bracketed paste
         // It doesn't work on windows system: https://github.com/crossterm-rs/crossterm/issues/737
         .use_bracketed_paste(cfg!(not(target_os = "windows")) && config.bracketed_paste)
-        .with_highlighter(Box::new(NuHighlighter {
-            engine_state: engine_reference.clone(),
-            // STACK-REFERENCE 1
-            stack: stack_arc.clone(),
-        }))
+        // Shannon: use no-op highlighter in non-nu modes to avoid false syntax errors
+        ;
+        let shannon_mode = stack_arc.get_env_var(engine_state, "SHANNON_MODE")
+            .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+            .unwrap_or_else(|| "nu".to_string());
+        line_editor = if shannon_mode == "nu" {
+            line_editor.with_highlighter(Box::new(NuHighlighter {
+                engine_state: engine_reference.clone(),
+                // STACK-REFERENCE 1
+                stack: stack_arc.clone(),
+            }))
+        } else {
+            line_editor.with_highlighter(Box::<NoOpHighlighter>::default())
+        }
         .with_validator(Box::new(NuValidator {
             engine_state: engine_reference.clone(),
         }))
