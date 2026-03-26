@@ -648,3 +648,77 @@ Shannon config lives in `$env.SHANNON_CONFIG` as a nushell record. No
 config.toml, no config.nu modifications needed. Set it in env.nu. Rust reads it
 via `stack.get_env_var("SHANNON_CONFIG")` → `.as_record()` → navigate fields.
 Uppercase naming follows nushell convention for env vars.
+
+### Experiment 5: Research env var conversion between nushell and brush
+
+#### Description
+
+Nushell stores some env vars as typed values (e.g., PATH is a list). External
+processes need strings. Nushell has `ENV_CONVERSIONS` — closures that convert
+between types and strings. When switching to brush, we need string env vars.
+When switching back, we need to convert strings back to nushell types.
+
+Research question: does nushell already have functions we can reuse for this, or
+do we need to build our own?
+
+#### Findings
+
+**Nushell already has exactly what we need.**
+
+**Nu → Brush (typed values to strings):**
+
+`nu_engine::env_to_strings(engine_state, stack)` returns
+`Result<HashMap<String, String>>`. It:
+
+1. Checks `ENV_CONVERSIONS` for a `to_string` closure — uses it if found
+2. Falls back to `value.coerce_string()` for simple types (bool, int, string)
+3. Special-cases PATH: joins list elements with the OS path separator
+4. Silently skips vars that can't be converted to strings
+
+This is the same function nushell uses when spawning external commands
+(`run_external.rs` line 178). It's `pub` and exported from `nu-engine`.
+
+**Brush → Nu (strings back to typed values):**
+
+`nu_engine::env::convert_env_values(engine_state, stack)` applies `from_string`
+closures from `ENV_CONVERSIONS` to convert string env vars back to typed values.
+It's called during nushell initialization to convert the inherited OS
+environment.
+
+**The integration pattern:**
+
+```rust
+// Nu → Brush: get all env vars as strings
+let env_strings = nu_engine::env_to_strings(engine_state, &stack)?;
+let state = ShellState {
+    env: env_strings,
+    cwd: /* from PWD */,
+    last_exit_code: 0,
+};
+brush_engine.inject_state(&state);
+
+// Brush → Nu: write string env vars back to stack
+let new_state = brush_engine.execute(&command);
+for (key, value) in &new_state.env {
+    stack.add_env_var(key.clone(), Value::string(value, Span::unknown()));
+}
+// Then trigger from_string conversions for vars that have them
+```
+
+The `from_string` conversion happens automatically when nushell's env merging
+runs at the top of the next REPL iteration — we don't need to call it manually.
+
+**Result:** Research complete.
+
+#### Conclusion
+
+No custom conversion code needed. `nu_engine::env_to_strings()` gives us all env
+vars as strings for brush. Writing strings back to the Stack with
+`add_env_var(Value::string(...))` is sufficient — nushell's REPL iteration
+handles `from_string` conversions automatically on the next loop.
+
+This confirms the bridge between nushell and brush is straightforward:
+
+- `capture_nu_state` = `env_to_strings()` + read PWD
+- `apply_state_to_stack` = write `Value::string()` for each env var +
+  `set_cwd()`
