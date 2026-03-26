@@ -34,3 +34,41 @@ instead), so `std::env::current_dir()` is always the startup directory.
    a way to update a completer after creation.
 
 Option 1 is cleanest. Option 2 is simplest but has broader implications.
+
+### Research
+
+Bash calls `chdir()` syscall when the user runs `cd` — the process cwd is always
+the real cwd. Nushell does NOT call chdir — it only updates its internal Stack.
+Shannon should follow bash's approach: update the process cwd after every
+command so everything (completions, relative paths, subprocesses) works.
+
+## Experiments
+
+### Experiment 1: Update process cwd after each command
+
+#### Description
+
+Add `std::env::set_current_dir(&state.cwd)` in the REPL loop after each
+`run_command` call. This makes the process cwd always match `ShellState.cwd`.
+The completer's `std::env::current_dir()` in `new()` is still stale, but we also
+fix it to call `current_dir()` on each completion instead of caching.
+
+#### Changes
+
+**`shannon/src/repl.rs`:**
+
+- After each `run_command` call, add
+  `let _ = std::env::set_current_dir(&state.cwd);`
+
+**`shannon/src/completer.rs`:**
+
+- Change `complete_file` to use `std::env::current_dir()` instead of `self.cwd`,
+  since the process cwd is now always correct
+- Remove the `cwd` field from `ShannonCompleter` (no longer needed)
+
+#### Verification
+
+1. `cargo test` passes.
+2. Start shannon, `cd /tmp`, tab-complete a file in `/tmp` — works.
+3. `cd ~`, tab-complete a file in home — works.
+4. Open a fresh shannon pane — completions work from the start.
