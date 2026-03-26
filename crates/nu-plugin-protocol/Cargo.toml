@@ -5,7 +5,7 @@ repository = "https://github.com/nushell/nushell/tree/main/crates/nu-plugin-prot
 edition = "2024"
 license = "MIT"
 name = "shannon-nu-plugin-protocol"
-version = "0.111.1"
+version = "0.111.2"
 
 [lib]
 bench = false

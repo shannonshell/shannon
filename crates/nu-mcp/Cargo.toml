@@ -1,6 +1,6 @@
 [package]
 name = "shannon-nu-mcp"
-version = "0.111.1"
+version = "0.111.2"
 edition = "2024"
 authors = ["The Nushell Project Developers"]
 description = "Modules to run a model context protocol (MCP) server that provides Nushell as a tool."

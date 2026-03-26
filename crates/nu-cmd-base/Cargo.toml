@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 name = "shannon-nu-cmd-base"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-cmd-base"
-version = "0.111.1"
+version = "0.111.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
