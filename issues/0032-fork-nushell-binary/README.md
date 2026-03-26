@@ -500,3 +500,169 @@ Shannon's current `main.rs`, `repl.rs`, `config.rs`, `prompt.rs`,
 #### Verification
 
 Scope documented. No code changes in this experiment.
+
+### Experiment 4: Implement the fork
+
+#### Description
+
+Implement the nushell binary fork with brush and AI mode switching. This is the
+big refactor — shannon becomes a thin library, the nushell binary becomes the
+shell.
+
+#### Critical requirement: environment propagation
+
+When switching between modes, all exported environment variable strings and the
+cwd MUST be preserved. This is shannon's core value proposition.
+
+**Nu → Brush transition:**
+
+1. Read env vars from nushell's Stack via `stack.get_env_vars(engine_state)`
+2. Read cwd from Stack's PWD
+3. Call `brush_engine.inject_state(state)` with the captured state
+
+**Brush → Nu transition:**
+
+1. `brush_engine.execute()` returns `ShellState` with updated env/cwd
+2. Write env vars back to nushell's Stack via `stack.add_env_var()`
+3. Update Stack's cwd via `stack.set_cwd()`
+
+**AI → anything:** AI doesn't change env/cwd, so the state from whichever real
+shell was last active is preserved.
+
+This sync must happen on EVERY mode switch AND after every brush command (since
+brush may change env vars).
+
+#### Changes
+
+**Phase 1: Nushell fork — add shannon dependency and mode dispatch**
+
+**`nushell/Cargo.toml` (root package):**
+
+- Add dependency: `shannonshell = { path = "../shannon" }`
+- Change binary name from "nu" to "shannon"
+
+**`nushell/src/main.rs`:**
+
+- Import shannonshell::{BrushEngine, AiEngine, ShellEngine}
+- After EngineState setup, create BrushEngine and AiEngine
+- Store engines in a global or thread-local (since loop_iteration doesn't have
+  custom params — investigate passing via EngineState or side channel)
+- Add env.sh loading: run brush to source env.sh, inject vars into Stack before
+  config loading
+- Set `$env.SHANNON_MODE = "nu"` as initial mode
+
+**`nushell/crates/nu-cli/src/repl.rs` — loop_iteration():**
+
+After `line_editor.read_line()` returns `Signal::Success(line)`:
+
+```rust
+// Check mode
+let mode = stack.get_env_var(engine_state, "SHANNON_MODE")
+    .and_then(|v| v.as_str().ok())
+    .unwrap_or("nu");
+
+match mode {
+    "brush" => {
+        // Capture nushell state
+        let state = capture_nu_state(engine_state, stack);
+        // Execute in brush
+        let engines = get_shannon_engines();  // however we access them
+        engines.brush.inject_state(&state);
+        let new_state = engines.brush.execute(&line);
+        // Write back to nushell stack
+        apply_state_to_stack(stack, engine_state, &new_state);
+    }
+    "ai" => {
+        let state = capture_nu_state(engine_state, stack);
+        let engines = get_shannon_engines();
+        engines.ai.inject_state(&state);
+        engines.ai.execute(&line);
+        // AI doesn't change state, nothing to write back
+    }
+    _ => {
+        // Normal nushell evaluation (existing code)
+        // ... parse_operation, do_run_cmd, etc.
+    }
+}
+```
+
+**`nushell/crates/nu-cli/src/repl.rs` — highlighter/completer per mode:**
+
+In the section that creates the highlighter (line ~400):
+
+```rust
+let mode = stack.get_env_var(engine_state, "SHANNON_MODE")...;
+let highlighter: Box<dyn Highlighter> = match mode {
+    "brush" => Box::new(BashHighlighter::new(theme)),  // or tree-sitter-bash
+    "ai" => Box::new(NoOpHighlighter),
+    _ => Box::new(NuHighlighter { engine_state, stack }),
+};
+```
+
+Same pattern for the completer.
+
+**`nushell/crates/nu-cli/src/repl.rs` — keybinding for Shift+Tab:**
+
+Add a default keybinding in the config setup that cycles SHANNON_MODE:
+
+```rust
+// Register a custom nushell command "shannon-switch" that cycles the mode
+```
+
+Or: add it as a built-in keybinding in `create_keybindings()`.
+
+**Phase 2: Shannon crate — strip to library**
+
+**Delete from `shannon/`:**
+
+- `src/main.rs` (binary entry point — nushell binary replaces it)
+- `src/repl.rs` (REPL loop — nushell's REPL replaces it)
+- `src/config.rs` (config loading — nushell's config replaces it)
+- `src/prompt.rs` (prompt — nushell's prompt replaces it)
+- `src/highlighter.rs` (highlighting — nushell's highlighter replaces it)
+- `src/completer.rs` (completions — nushell's completer replaces it)
+- `src/completions.rs` (fish completion table — nushell has its own)
+- `src/theme.rs` (theme — nushell's color config replaces it)
+- `src/shell.rs` (ShellState, config_dir — partially kept for ShellState)
+- `tree_sitter_nu/` (nushell highlights natively)
+- `build.rs` (tree-sitter compilation — no longer needed)
+- `completions/` (fish completions data)
+- `themes/` (theme files)
+
+**Keep in `shannon/`:**
+
+- `src/lib.rs` — re-exports ShellEngine, BrushEngine, AiEngine
+- `src/shell_engine.rs` — ShellEngine trait
+- `src/brush_engine.rs` — BrushEngine (unchanged)
+- `src/ai_engine.rs` — AiEngine (unchanged)
+- `src/ai/` — AI session, provider, prompt (unchanged)
+- `src/executor.rs` — run_startup_script for env.sh (unchanged)
+- `src/shell.rs` — ShellState struct (keep), config_dir (keep)
+
+**`shannon/Cargo.toml`:**
+
+- Remove: reedline, crossterm, tree-sitter-*, nu-ansi-term, chrono
+- Remove: `[[bin]]` section (no longer a binary)
+- Keep: brush-core, brush-builtins, rig-core, tokio, signal-hook, serde,
+  serde_json, uuid, tempfile, dirs
+
+**Phase 3: Build system**
+
+- `scripts/build.sh` — change to build `nushell/` instead of `shannon/`
+- `scripts/install.sh` — install the nushell binary as `shannon`
+- `scripts/release.sh` — publish shannonshell as library, then publish from
+  nushell fork (or just publish shannonshell and let users build from source)
+
+#### Verification
+
+1. `cargo build` from `nushell/` produces a `shannon` binary.
+2. Shannon starts, shows nushell prompt `[nu]`.
+3. Shift+Tab switches to `[brush]` — bash commands work.
+4. Shift+Tab switches to `[ai]` — chat works.
+5. `export FOO=bar` in brush → Shift+Tab to nu → `$env.FOO` shows `bar`.
+6. `$env.BAZ = "qux"` in nu → Shift+Tab to brush → `echo $BAZ` shows `qux`.
+7. `cd /tmp` in brush → Shift+Tab to nu → `pwd` shows `/tmp`.
+8. Ctrl+Z job control works in nushell mode.
+9. Ctrl+C works in all modes.
+10. env.sh is loaded at startup, vars available in all modes.
+11. `cargo test` passes for the shannon library crate.
