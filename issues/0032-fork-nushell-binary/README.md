@@ -92,3 +92,30 @@ exactly as standalone nushell. In brush mode, the command goes through
    shannon-specific settings (brush, AI, toggle)?
 6. **What's the migration path?** Can we do this incrementally, or is it a full
    rewrite?
+7. **How do we integrate brush?** When in brush mode, where does the command
+   go? Does it bypass nushell's parser entirely and route to `BrushEngine`?
+   How does brush receive the raw command string before nushell tries to
+   parse it?
+8. **How do we integrate AI?** Same question — AI mode receives plain English,
+   not nushell syntax. How do we intercept the input before nushell's parser?
+9. **How do we handle Shift+Tab?** Nushell uses reedline keybindings. Can we
+   add a custom keybinding that triggers a mode switch without modifying
+   reedline? Does nushell's `ExecuteHostCommand` mechanism work for this?
+10. **Syntax highlighting per mode** — Nushell highlights nushell syntax.
+    When in brush mode, we need bash highlighting. When in AI mode, no
+    highlighting. Can we swap the highlighter dynamically? Does nushell
+    rebuild the editor on mode switch?
+11. **Completions per mode** — Nushell has nushell-aware completions. Brush
+    mode needs bash/file completions. AI mode needs no completions (or
+    different ones). Can we swap the completer dynamically?
+12. **Prompt per mode** — The prompt needs to show `[nu]`, `[brush]`, or
+    `[ai]`. Can we change nushell's prompt dynamically from within the REPL
+    loop?
+13. **How do we support env.sh?** Shannon currently runs a bash script
+    (`env.sh`) at startup to load PATH, API keys, and other env vars. This
+    is critical — tutorials and AI always give instructions as "add this to
+    your .bashrc." Shannon's `env.sh` lets users follow those instructions
+    directly. Nushell uses `env.nu` (nushell syntax) instead. How do we
+    preserve bash-based env loading in a nushell-based architecture? Options:
+    run `env.sh` via brush at startup and inject the result into nushell's
+    env, or source `.bashrc` via brush and propagate.
