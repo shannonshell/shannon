@@ -722,3 +722,234 @@ This confirms the bridge between nushell and brush is straightforward:
 - `capture_nu_state` = `env_to_strings()` + read PWD
 - `apply_state_to_stack` = write `Value::string()` for each env var +
   `set_cwd()`
+
+### Experiment 6: Implement the nushell binary fork
+
+#### Description
+
+The full implementation. Shannon becomes a nushell fork with brush and AI
+modes. The shannon crate becomes a thin library. This is broken into phases
+that can be verified independently.
+
+#### Phase 1: Nushell fork — minimal viable shannon binary
+
+Goal: the nushell binary builds as "shannon" with `~/.config/shannon/` as
+the config directory. No mode switching yet — just nushell that says
+"shannon" and uses its own config dir.
+
+**`nushell/crates/nu-path/src/helpers.rs`:**
+- Line 24: `p.push("nushell")` → `p.push("shannon")`
+
+**`nushell/Cargo.toml`:**
+- Line 11: `name = "nu"` → `name = "shannon"`
+- Line 397: `name = "nu"` → `name = "shannon"`
+- Add `publish = false` (already done)
+
+Verify: `cargo build` produces a `shannon` binary. It starts, behaves
+like nushell, uses `~/.config/shannon/`.
+
+#### Phase 2: Add shannon crate as dependency
+
+Goal: the nushell binary can import BrushEngine and AiEngine.
+
+**`nushell/Cargo.toml` (root):**
+- Add to `[dependencies]`: `shannonshell = { path = "../shannon" }`
+
+**`nushell/crates/nu-cli/Cargo.toml`:**
+- Add to `[dependencies]`: `shannonshell = { path = "../../shannon" }`
+
+**Shannon crate cleanup (`shannon/`):**
+
+Strip to library only. Delete:
+- `src/main.rs`, `src/repl.rs`, `src/config.rs`, `src/prompt.rs`
+- `src/highlighter.rs`, `src/completer.rs`, `src/completions.rs`
+- `src/theme.rs`, `src/nushell_engine.rs`
+- `tree_sitter_nu/`, `build.rs`, `completions/`, `themes/`
+- `tests/integration.rs`
+
+Keep:
+- `src/lib.rs` — re-exports
+- `src/shell_engine.rs` — ShellEngine trait
+- `src/brush_engine.rs` — BrushEngine
+- `src/ai_engine.rs` — AiEngine (move AiConfig here from deleted config.rs)
+- `src/ai/` — session, prompt
+- `src/executor.rs` — run_startup_script for env.sh
+- `src/shell.rs` — ShellState, config_dir
+
+`shannon/Cargo.toml`:
+- Remove `[[bin]]` section
+- Remove: reedline, crossterm, tree-sitter-*, nu-ansi-term, chrono,
+  signal-hook, all nu-*/shannon-nu-* crates
+- Keep: brush-core, brush-builtins, rig-core, tokio, uuid, tempfile,
+  serde, serde_json, dirs
+
+`shannon/src/lib.rs`:
+- Export only: `shell_engine`, `brush_engine`, `ai_engine`, `ai`, `executor`,
+  `shell`
+- Add `ShannonEngines` struct holding BrushEngine + AiEngine
+
+Verify: `cargo build` from `nushell/` still produces the shannon binary.
+The shannonshell library compiles.
+
+#### Phase 3: Mode dispatch in loop_iteration
+
+Goal: Shift+Tab cycles between nu/brush/ai. Commands dispatch to the
+correct engine.
+
+**`nushell/src/main.rs`:**
+- Create BrushEngine and AiEngine after EngineState setup
+- Store in a `ShannonEngines` struct
+- Set `$env.SHANNON_MODE = "nu"` on the stack
+- Set default `$env.SHANNON_CONFIG` if not already set
+- Pass engines through `run_repl()` → `evaluate_repl()` → `loop_iteration()`
+
+**`nushell/crates/nu-cli/src/repl.rs`:**
+
+Add to `LoopContext`:
+```rust
+shannon_engines: Option<&'a mut shannonshell::ShannonEngines>,
+```
+
+In `loop_iteration()`, after `Signal::Success(line)` (line 555):
+```rust
+if let Some(engines) = &mut ctx.shannon_engines {
+    let mode = stack.get_env_var(engine_state, "SHANNON_MODE")
+        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+        .unwrap_or_else(|| "nu".to_string());
+
+    match mode.as_str() {
+        "brush" => {
+            let env_strings = nu_engine::env_to_strings(engine_state, &stack)?;
+            let cwd = stack.get_env_var(engine_state, "PWD")
+                .and_then(|v| v.as_str().ok())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/"));
+            let state = ShellState { env: env_strings, cwd, last_exit_code: 0 };
+            engines.brush.inject_state(&state);
+            let new_state = engines.brush.execute(&repl_cmd_line_text);
+            for (key, value) in &new_state.env {
+                stack.add_env_var(key.clone(), Value::string(value, Span::unknown()));
+            }
+            let _ = stack.set_cwd(&new_state.cwd);
+            let _ = std::env::set_current_dir(&new_state.cwd);
+            // skip nushell parse/eval, continue to next iteration
+        }
+        "ai" => {
+            let env_strings = nu_engine::env_to_strings(engine_state, &stack)?;
+            let cwd = /* same as above */;
+            let state = ShellState { env: env_strings, cwd, last_exit_code: 0 };
+            engines.ai.inject_state(&state);
+            engines.ai.execute(&repl_cmd_line_text);
+            // AI doesn't change state
+        }
+        _ => {
+            // Fall through to normal nushell evaluation
+        }
+    }
+}
+```
+
+**Modify `evaluate_repl()` and `run_repl()` signatures** to accept
+`Option<&mut ShannonEngines>` and pass it through to `LoopContext`.
+
+Verify: Manually set `$env.SHANNON_MODE = "brush"` then run a bash command.
+Set `$env.SHANNON_MODE = "ai"` then ask a question.
+
+#### Phase 4: Keybinding and prompt
+
+Goal: Shift+Tab cycles modes. Prompt shows current mode.
+
+**Register `shannon-switch` as a nushell command:**
+
+Add a custom command via `add_command_context` in main.rs that:
+1. Reads `$env.SHANNON_CONFIG.TOGGLE` for the mode list
+2. Reads `$env.SHANNON_MODE` for the current mode
+3. Advances to the next mode in the list
+4. Sets `$env.SHANNON_MODE`
+
+**Add default keybinding:**
+
+In main.rs, after stack is created, set a default keybinding config that
+maps Shift+Tab to `ExecuteHostCommand("shannon-switch")`.
+
+**Prompt:**
+
+Set default `PROMPT_COMMAND` in main.rs that includes the mode:
+```nushell
+$env.PROMPT_COMMAND = {||
+    let mode = ($env.SHANNON_MODE? | default "nu")
+    $"[($mode)] (pwd | path basename)"
+}
+```
+
+Users can override this in their config.nu.
+
+Verify: Shift+Tab cycles nu → brush → ai. Prompt updates.
+
+#### Phase 5: Highlighter and completer per mode
+
+Goal: each mode gets appropriate highlighting and completion.
+
+In `loop_iteration()` where highlighter is created (line ~400):
+```rust
+let mode = stack.get_env_var(engine_state, "SHANNON_MODE")...;
+match mode {
+    "brush" | "ai" => {
+        // No-op highlighter (or basic bash highlighter for brush)
+        // File-only completer for brush, no completer for ai
+    }
+    _ => {
+        // Normal NuHighlighter and NuCompleter
+    }
+}
+```
+
+Verify: brush mode doesn't show nushell syntax errors. AI mode has no
+highlighting.
+
+#### Phase 6: env.sh loading
+
+Goal: `~/.config/shannon/env.sh` is sourced via brush at startup.
+
+In `nushell/src/main.rs` or `config_files.rs`, before env.nu loading:
+1. Check if `~/.config/shannon/env.sh` exists
+2. If so, run it via `shannonshell::executor::run_startup_script()`
+3. Inject the resulting env vars into the Stack
+
+Verify: Set `export FOO=bar` in env.sh. Start shannon. `$env.FOO` shows
+`bar` in nushell mode.
+
+#### Phase 7: Build system and cleanup
+
+**`scripts/build.sh`:**
+- Build from `nushell/` instead of `shannon/`
+- Binary is at `nushell/target/release/shannon`
+
+**`scripts/install.sh`:**
+- Copy from nushell's target dir
+
+**`scripts/release.sh`:**
+- Publish `shannonshell` library crate
+- Binary distribution via `cargo install --git` or GitHub releases
+
+**CLAUDE.md and docs:**
+- Update architecture description
+- Update source file listings
+- Remove references to deleted files
+
+#### Verification (end to end)
+
+1. `cargo build` from `nushell/` produces a `shannon` binary
+2. Shannon starts, shows `[nu]` prompt
+3. Shift+Tab → `[brush]` → bash commands work
+4. Shift+Tab → `[ai]` → chat works
+5. Shift+Tab → `[nu]` → back to nushell
+6. `export FOO=bar` in brush → switch to nu → `$env.FOO` shows `bar`
+7. `$env.BAZ = "qux"` in nu → switch to brush → `echo $BAZ` shows `qux`
+8. `cd /tmp` in brush → switch to nu → `pwd` shows `/tmp`
+9. Ctrl+Z job control works in nushell mode
+10. Ctrl+C works in all modes
+11. env.sh loaded at startup, vars available in all modes
+12. Config dir is `~/.config/shannon/`
+13. `$env.SHANNON_CONFIG` record is readable
+14. `cargo test -p shannonshell` passes
