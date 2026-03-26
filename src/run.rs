@@ -214,6 +214,7 @@ pub(crate) fn run_repl(
         parsed_nu_cli_args.execute,
         parsed_nu_cli_args.no_std_lib,
         entire_start_time,
+        None, // No mode dispatcher — standalone nushell
     );
     perf!("evaluate_repl", start_time, use_color);
 

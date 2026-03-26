@@ -74,6 +74,7 @@ pub fn evaluate_repl(
     prerun_command: Option<Spanned<String>>,
     load_std_lib: Option<Spanned<String>>,
     entire_start_time: Instant,
+    mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
 ) -> Result<()> {
     // throughout this code, we hold this stack uniquely.
     // During the main REPL loop, we hand ownership of this value to an Arc,
@@ -206,6 +207,7 @@ pub fn evaluate_repl(
                 use_color,
                 entry_num: &mut entry_num,
                 hostname: hostname.as_deref(),
+                mode_dispatcher: mode_dispatcher.clone(),
             });
 
             // pass the most recent version of the line_editor back
@@ -313,6 +315,7 @@ struct LoopContext<'a> {
     use_color: bool,
     entry_num: &'a mut usize,
     hostname: Option<&'a str>,
+    mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
 }
 
 /// Perform one iteration of the REPL loop
@@ -332,6 +335,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         use_color,
         entry_num,
         hostname,
+        mut mode_dispatcher,
     } = ctx;
 
     let mut start_time = std::time::Instant::now();
