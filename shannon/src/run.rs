@@ -213,6 +213,16 @@ pub(crate) fn run_repl(
         nu_protocol::Value::string("nu", nu_protocol::Span::unknown()),
     );
 
+    // Set default prompt that shows the active mode
+    nu_cli::eval_source(
+        engine_state,
+        &mut stack,
+        br#"$env.PROMPT_COMMAND = {|| let mode = ($env.SHANNON_MODE? | default "nu"); $"[($mode)] ($env.PWD | path basename)" }"#,
+        "shannon-prompt",
+        nu_protocol::PipelineData::empty(),
+        false,
+    );
+
     // Create the Shannon mode dispatcher with brush + AI engines
     let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
     let dispatcher: std::sync::Arc<std::sync::Mutex<Box<dyn nu_cli::ModeDispatcher>>> =
