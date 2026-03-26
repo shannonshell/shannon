@@ -270,3 +270,149 @@ brush or AI instead of nushell's parser. Everything else (highlighter,
 completer, prompt, keybindings) is already designed to be dynamic and
 per-iteration. The env.sh feature can be preserved by injecting bash env vars
 during config loading.
+
+### Experiment 2: Fork the binary vs enhance shannon — which approach?
+
+#### Description
+
+Two options for the rearchitecture:
+
+**Option A: Fork the nu binary.** Copy nushell's `main.rs` and `run.rs` into
+shannon, modify `loop_iteration()` in our nushell fork to add mode switching.
+Shannon's binary IS the modified nushell binary. We delete shannon's current
+`repl.rs` and use nushell's REPL directly.
+
+Pros:
+
+- Get everything nushell has for free (terminal, process groups, job control,
+  plugins, multiline, native completions, hooks)
+- Less code to maintain — nushell's REPL replaces ours
+- Guaranteed compatibility with nushell features
+
+Cons:
+
+- Deep coupling to nushell internals — every upstream update touches our code
+- Must modify `loop_iteration()` in the nushell fork (not just use it as lib)
+- Shannon becomes a nushell distribution, not an independent shell
+- Two REPLs to understand (nushell's is ~1000 lines of complex state)
+
+**Option B: Enhance shannon's existing REPL.** Keep shannon's `repl.rs` but add
+the missing pieces that nushell's REPL has: terminal ownership, process groups,
+signal setup, env merging. Learn from nushell's code but don't copy it.
+
+Pros:
+
+- Shannon stays independent — lighter coupling to nushell
+- We control the REPL complexity
+- Easier to understand and modify
+- Upstream nushell changes don't break our REPL
+
+Cons:
+
+- Must reimplement terminal/process group/job control ourselves
+- May never reach full nushell feature parity
+- More code to maintain long-term
+
+#### Method
+
+Compare the two approaches by examining:
+
+1. **How much of nushell's main.rs/run.rs would we actually copy?** Is it a thin
+   wrapper we can replicate, or deep integration?
+2. **What specifically is missing from shannon's REPL?** List every feature gap
+   between our `repl.rs` and nushell's `loop_iteration()`.
+3. **How hard are the gaps to fill?** Terminal ownership and process groups are
+   the big ones. Are they isolated code we can copy, or deeply woven into
+   nushell's REPL?
+4. **What breaks when nushell updates?** If we fork `loop_iteration()`, how
+   often does it change upstream? What's the merge burden?
+
+#### Findings
+
+**1. How much would we copy?**
+
+- `main.rs` (653 lines): ~200-250 lines of actual logic needed. The rest is
+  feature gates, IDE/LSP modes, and plugin setup we can skip initially.
+- `run.rs` (221 lines): `run_repl()` is only 40 lines — thin wrapper around
+  `evaluate_repl()` from nu-cli.
+- `terminal.rs` (148 lines): Highly isolated. Pure terminal/process group setup
+  using `nix` crate. Can be extracted as-is.
+- `signals.rs` (34 lines): Single function. Trivially isolated.
+
+Total to copy for Option A: ~600 lines of integration code, not 1700.
+
+**2. What's missing from shannon's REPL?**
+
+Shannon's REPL is 295 lines. Nushell's is 1,759 lines. 22 feature gaps found:
+
+Critical gaps:
+
+- Terminal ownership / job control (149 lines, deeply integrated)
+- Hook system — pre_prompt, pre_execution, env_change (300+ lines)
+- Env merging between iterations (5 lines, isolated)
+- Config-driven keybindings (1,300+ lines in reedline_config.rs)
+- Stack/variable cleanup (80 lines, deeply integrated)
+
+Medium gaps:
+
+- Multiline validation (28 lines, isolated)
+- Transient prompt (140 lines)
+- Auto-cd (60 lines)
+- Shell integration OSC 133/633 (150 lines)
+- Menu system (250+ lines)
+- Buffer editor integration (15 lines)
+- Panic recovery via catch_unwind (58 lines)
+- REPL buffer management (30 lines)
+
+Low priority:
+
+- History metadata, CMD_DURATION_MS, cursor shapes, kitty protocol, mouse
+
+**3. How hard are the gaps to fill?**
+
+Terminal ownership and process groups (`terminal.rs`) are isolated — 148 lines
+that can be copied directly. The hard parts are deeply woven into nushell's
+REPL: the hook system, config-driven keybindings, and stack management. These
+aren't isolated modules — they're interleaved throughout `loop_iteration()`.
+
+If we go with Option B (enhance shannon), we'd need to reimplement these from
+scratch. If we go with Option A (fork the binary), we get them for free but must
+maintain the fork.
+
+**4. How often does the REPL change?**
+
+- `repl.rs`: 20 commits since Jan 2025 (~1/week). Actively maintained.
+- `main.rs`: 47 commits. High activity.
+- `terminal.rs`: 2 commits. Stable.
+- `signals.rs`: 2 commits. Stable.
+
+The REPL changes frequently for shell integration (OSC sequences), reedline
+upgrades, and new features. Forking it means regular merge work.
+
+#### Decision
+
+**Option A: Fork the binary.** The gap analysis makes this clear:
+
+- Shannon's REPL has 22 missing features. Reimplementing them (Option B) means
+  writing ~2000+ lines of complex state management that nushell already has.
+- The isolated pieces (terminal.rs, signals.rs) are stable and easy to extract,
+  but the deeply integrated pieces (hooks, keybindings, stack management) are
+  not — they require the full REPL context.
+- The maintenance burden of tracking nushell's REPL changes (~1/week) is less
+  than the development burden of reimplementing and maintaining 22 features.
+- Shannon already deeply depends on nushell (forked crates, renamed packages).
+  The additional coupling of forking the binary is marginal.
+
+The approach: modify `loop_iteration()` in our nushell fork to check a mode
+variable. When in brush or AI mode, dispatch to the respective engine instead of
+nushell's parser. Everything else (terminal, signals, hooks, keybindings,
+completions, highlighting, prompt) comes from nushell's REPL for free.
+
+**Result:** Decision made — Option A.
+
+#### Conclusion
+
+Fork the binary. The 22-feature gap between shannon's REPL and nushell's is too
+large to reimplement. The maintenance cost of tracking nushell's REPL changes is
+lower than the development cost of building all missing features. Next
+experiment: implement the fork.
