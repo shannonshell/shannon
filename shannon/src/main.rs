@@ -467,12 +467,6 @@ fn main() -> Result<()> {
             }
         }
         std::process::exit(0)
-    } else {
-        // If we're not running a testbin, set the current working directory to
-        // the location of the Nushell executable. This prevents the OS from
-        // locking the directory where the user launched Nushell.
-        std::env::set_current_dir(current_exe_directory())
-            .expect("set_current_dir() should succeed");
     }
     perf!("run test_bins", start_time, use_color);
 
