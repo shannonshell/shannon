@@ -91,7 +91,9 @@ impl Command for NuHighlight {
 pub struct NoOpHighlighter {}
 
 impl Highlighter for NoOpHighlighter {
-    fn highlight(&self, _line: &str, _cursor: usize) -> reedline::StyledText {
-        StyledText::new()
+    fn highlight(&self, line: &str, _cursor: usize) -> reedline::StyledText {
+        let mut styled = StyledText::new();
+        styled.push((nu_ansi_term::Style::default(), line.to_string()));
+        styled
     }
 }
