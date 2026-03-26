@@ -188,6 +188,19 @@ pub(crate) fn run_repl(
     trace!("run_repl");
     let start_time = std::time::Instant::now();
 
+    // Load env.sh via brush before nushell config (bash env compatibility)
+    if parsed_nu_cli_args.no_config_file.is_none() {
+        let shell_state = shannonshell::executor::run_startup_script(
+            shannonshell::shell::ShellState::from_current_env(),
+        );
+        for (key, value) in &shell_state.env {
+            stack.add_env_var(
+                key.clone(),
+                nu_protocol::Value::string(value, nu_protocol::Span::unknown()),
+            );
+        }
+    }
+
     if parsed_nu_cli_args.no_config_file.is_none() {
         setup_config(
             engine_state,
