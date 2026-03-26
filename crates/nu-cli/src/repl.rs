@@ -557,6 +557,39 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
     let line_editor_input_time = std::time::Instant::now();
     match input {
         Ok(Signal::Success(repl_cmd_line_text)) => {
+            // Shannon: handle mode switch command and exit from non-nu modes
+            if repl_cmd_line_text.trim() == "__shannon_switch" {
+                if let Some(ref _dispatcher) = mode_dispatcher {
+                    let current = stack
+                        .get_env_var(engine_state, "SHANNON_MODE")
+                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "nu".to_string());
+                    let modes = ["nu", "brush", "ai"];
+                    let next_idx = modes.iter().position(|m| *m == current)
+                        .map(|i| (i + 1) % modes.len())
+                        .unwrap_or(0);
+                    stack.add_env_var(
+                        "SHANNON_MODE".to_string(),
+                        Value::string(modes[next_idx], Span::unknown()),
+                    );
+                }
+                return (true, stack, line_editor);
+            }
+            // Shannon: handle exit from non-nu modes
+            if repl_cmd_line_text.trim() == "exit" {
+                if let Some(ref _dispatcher) = mode_dispatcher {
+                    let mode = stack
+                        .get_env_var(engine_state, "SHANNON_MODE")
+                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "nu".to_string());
+                    if mode != "nu" {
+                        // In non-nu mode, exit means quit shannon
+                        return (false, stack, line_editor);
+                    }
+                }
+                // In nu mode, fall through to nushell's exit handling
+            }
+
             let history_supports_meta = match engine_state.history_config().map(|h| h.file_format) {
                 #[cfg(feature = "sqlite")]
                 Some(HistoryFileFormat::Sqlite) => true,
@@ -1271,14 +1304,28 @@ fn setup_history(
 fn setup_keybindings(engine_state: &EngineState, line_editor: Reedline) -> Reedline {
     match create_keybindings(engine_state.get_config()) {
         Ok(keybindings) => match keybindings {
-            KeybindingsMode::Emacs(keybindings) => {
+            KeybindingsMode::Emacs(mut keybindings) => {
+                // Shannon: Shift+Tab to cycle shell modes
+                keybindings.add_binding(
+                    crossterm::event::KeyModifiers::SHIFT,
+                    crossterm::event::KeyCode::BackTab,
+                    reedline::ReedlineEvent::ExecuteHostCommand("__shannon_switch".into()),
+                );
                 let edit_mode = Box::new(Emacs::new(keybindings));
                 line_editor.with_edit_mode(edit_mode)
             }
             KeybindingsMode::Vi {
-                insert_keybindings,
-                normal_keybindings,
+                mut insert_keybindings,
+                mut normal_keybindings,
             } => {
+                // Shannon: Shift+Tab to cycle shell modes (both vi modes)
+                for kb in [&mut insert_keybindings, &mut normal_keybindings] {
+                    kb.add_binding(
+                        crossterm::event::KeyModifiers::SHIFT,
+                        crossterm::event::KeyCode::BackTab,
+                        reedline::ReedlineEvent::ExecuteHostCommand("__shannon_switch".into()),
+                    );
+                }
                 let edit_mode = Box::new(Vi::new(insert_keybindings, normal_keybindings));
                 line_editor.with_edit_mode(edit_mode)
             }
