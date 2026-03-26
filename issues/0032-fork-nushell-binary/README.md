@@ -501,168 +501,150 @@ Shannon's current `main.rs`, `repl.rs`, `config.rs`, `prompt.rs`,
 
 Scope documented. No code changes in this experiment.
 
-### Experiment 4: Implement the fork
+### Experiment 4: Research config.nu integration for shannon settings
 
 #### Description
 
-Implement the nushell binary fork with brush and AI mode switching. This is the
-big refactor — shannon becomes a thin library, the nushell binary becomes the
-shell.
+Shannon's config.toml has three categories of settings:
 
-#### Critical requirement: environment propagation
+1. **toggle** — shell rotation order (e.g., `["nu", "brush", "ai"]`)
+2. **AI config** — provider, model, api_key_env
+3. **theme** — 13 color settings (replaced by nushell's native
+   `$env.config.color_config`)
 
-When switching between modes, all exported environment variable strings and the
-cwd MUST be preserved. This is shannon's core value proposition.
+Theme is gone — nushell handles it natively. The remaining settings (toggle and
+AI config) need a home in nushell's config system. Research how to store
+shannon-specific settings in config.nu or env.nu.
 
-**Nu → Brush transition:**
+#### Research questions
 
-1. Read env vars from nushell's Stack via `stack.get_env_vars(engine_state)`
-2. Read cwd from Stack's PWD
-3. Call `brush_engine.inject_state(state)` with the captured state
+1. **Can we use `$env` vars?** Set `$env.SHANNON_TOGGLE` and
+   `$env.SHANNON_AI_MODEL` in env.nu. Simple, no config struct needed. But env
+   vars are strings — toggle is a list. Can nushell env vars hold lists?
 
-**Brush → Nu transition:**
+2. **Can we use `$env.config.plugins`?** Nushell has a `plugins` field in Config
+   that accepts arbitrary key-value pairs. Could we store shannon config there?
+   How does reading it back work?
 
-1. `brush_engine.execute()` returns `ShellState` with updated env/cwd
-2. Write env vars back to nushell's Stack via `stack.add_env_var()`
-3. Update Stack's cwd via `stack.set_cwd()`
+3. **Can we add custom fields to `$env.config`?** Nushell rejects unknown config
+   fields. Can our fork relax this to accept a `shannon` section?
 
-**AI → anything:** AI doesn't change env/cwd, so the state from whichever real
-shell was last active is preserved.
+4. **Can we use a custom `$env.SHANNON_CONFIG` record?** Set a structured record
+   in env.nu:
+   ```nushell
+   $env.SHANNON_CONFIG = {
+       toggle: ["nu", "brush", "ai"]
+       ai: {
+           provider: "anthropic"
+           model: "claude-sonnet-4-20250514"
+           api_key_env: "ANTHROPIC_API_KEY"
+       }
+   }
+   ```
+   Would this survive across REPL iterations? Can the Rust code read it from the
+   Stack?
 
-This sync must happen on EVERY mode switch AND after every brush command (since
-brush may change env vars).
+5. **How does the Rust code read env var values from the Stack?** What types
+   does `stack.get_env_var()` return? Can it return lists, records, or only
+   strings?
 
-#### Changes
+#### Method
 
-**Phase 1: Nushell fork — add shannon dependency and mode dispatch**
+Read the nushell source code to answer each question. Focus on:
 
-**`nushell/Cargo.toml` (root package):**
+- `nu-protocol/src/config/` — how Config is parsed, what's rejected
+- `nu-protocol/src/engine/stack.rs` — how env vars are stored and typed
+- `nu-protocol/src/value/` — what Value types exist (string, list, record)
+- How existing nushell features read structured env vars
 
-- Add dependency: `shannonshell = { path = "../shannon" }`
-- Change binary name from "nu" to "shannon"
+#### Findings
 
-**`nushell/src/main.rs`:**
+**1. Can nushell env vars hold non-string types?**
 
-- Import shannonshell::{BrushEngine, AiEngine, ShellEngine}
-- After EngineState setup, create BrushEngine and AiEngine
-- Store engines in a global or thread-local (since loop_iteration doesn't have
-  custom params — investigate passing via EngineState or side channel)
-- Add env.sh loading: run brush to source env.sh, inject vars into Stack before
-  config loading
-- Set `$env.SHANNON_MODE = "nu"` as initial mode
+YES. `stack.add_env_var(name, value)` takes a `Value`, not a `String`. The
+`Value` enum supports Bool, Int, Float, String, Record, List, and more.
+`stack.get_env_var()` returns `Option<&Value>`. Nushell itself uses this —
+`$env.NUSHELL_SHELLS` is a list, not a string.
 
-**`nushell/crates/nu-cli/src/repl.rs` — loop_iteration():**
+**2. Can we use `$env.config.plugins`?**
 
-After `line_editor.read_line()` returns `Signal::Success(line)`:
+YES. The `plugins` field is `HashMap<String, Value>` — it accepts any key-value
+pairs. We could do `$env.config.plugins.shannon = { toggle: [...] }`. Reading it
+from Rust: access `engine_state.get_config().plugins.get("shannon")`.
+
+**3. Can we add custom fields to `$env.config`?**
+
+NO without forking. Unknown top-level config keys are rejected with
+`errors.unknown_option(path, val)` in the match statement. Our fork could add a
+`"shannon"` arm to the match, but that's more invasive than necessary.
+
+**4. Can `$env.SHANNON_CONFIG` be a persistent record?**
+
+YES. This is the cleanest approach. Set in env.nu:
+
+```nushell
+$env.SHANNON_CONFIG = {
+    TOGGLE: ["nu", "brush", "ai"]
+    AI_PROVIDER: "anthropic"
+    AI_MODEL: "claude-sonnet-4-20250514"
+    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+}
+```
+
+Records persist across REPL iterations — env vars are merged via
+`Stack::with_changes_from_child()` which copies the full
+`HashMap<String, Value>`. The record is cloned to child stacks and survives the
+merge.
+
+**5. How does Rust code read structured env vars?**
+
+`Value` has methods: `.as_record()`, `.as_list()`, `.as_str()`, `.as_int()`,
+`.into_list()`. Pattern from nushell's own code:
 
 ```rust
-// Check mode
-let mode = stack.get_env_var(engine_state, "SHANNON_MODE")
-    .and_then(|v| v.as_str().ok())
-    .unwrap_or("nu");
-
-match mode {
-    "brush" => {
-        // Capture nushell state
-        let state = capture_nu_state(engine_state, stack);
-        // Execute in brush
-        let engines = get_shannon_engines();  // however we access them
-        engines.brush.inject_state(&state);
-        let new_state = engines.brush.execute(&line);
-        // Write back to nushell stack
-        apply_state_to_stack(stack, engine_state, &new_state);
-    }
-    "ai" => {
-        let state = capture_nu_state(engine_state, stack);
-        let engines = get_shannon_engines();
-        engines.ai.inject_state(&state);
-        engines.ai.execute(&line);
-        // AI doesn't change state, nothing to write back
-    }
-    _ => {
-        // Normal nushell evaluation (existing code)
-        // ... parse_operation, do_run_cmd, etc.
+if let Some(val) = stack.get_env_var(engine_state, "SHANNON_CONFIG") {
+    if let Ok(record) = val.as_record() {
+        if let Some(toggle) = record.get("TOGGLE") {
+            let shells = toggle.as_list()?;
+            // iterate shells...
+        }
+        if let Some(model) = record.get("AI_MODEL") {
+            let model_str = model.as_str()?;
+        }
     }
 }
 ```
 
-**`nushell/crates/nu-cli/src/repl.rs` — highlighter/completer per mode:**
+#### Decision
 
-In the section that creates the highlighter (line ~400):
+**Use `$env.SHANNON_CONFIG` as a structured record.** This is the best approach:
 
-```rust
-let mode = stack.get_env_var(engine_state, "SHANNON_MODE")...;
-let highlighter: Box<dyn Highlighter> = match mode {
-    "brush" => Box::new(BashHighlighter::new(theme)),  // or tree-sitter-bash
-    "ai" => Box::new(NoOpHighlighter),
-    _ => Box::new(NuHighlighter { engine_state, stack }),
-};
+- No nushell config changes needed (no unknown field rejection)
+- Fully typed — lists stay lists, records stay records
+- Persists across REPL iterations
+- Readable from Rust via `stack.get_env_var()` + `.as_record()`
+- Users configure it naturally in env.nu or config.nu
+- No separate config file
+
+The user's `~/.config/shannon/env.nu` would include:
+
+```nushell
+$env.SHANNON_CONFIG = {
+    TOGGLE: ["nu", "brush", "ai"]
+    AI_PROVIDER: "anthropic"
+    AI_MODEL: "claude-sonnet-4-20250514"
+    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+}
 ```
 
-Same pattern for the completer.
+Default values are set in shannon's startup code if `$env.SHANNON_CONFIG` is not
+defined. The Rust code reads the record from the Stack each REPL iteration.
 
-**`nushell/crates/nu-cli/src/repl.rs` — keybinding for Shift+Tab:**
+**Result:** Research complete, decision made.
 
-Add a default keybinding in the config setup that cycles SHANNON_MODE:
+#### Conclusion
 
-```rust
-// Register a custom nushell command "shannon-switch" that cycles the mode
-```
-
-Or: add it as a built-in keybinding in `create_keybindings()`.
-
-**Phase 2: Shannon crate — strip to library**
-
-**Delete from `shannon/`:**
-
-- `src/main.rs` (binary entry point — nushell binary replaces it)
-- `src/repl.rs` (REPL loop — nushell's REPL replaces it)
-- `src/config.rs` (config loading — nushell's config replaces it)
-- `src/prompt.rs` (prompt — nushell's prompt replaces it)
-- `src/highlighter.rs` (highlighting — nushell's highlighter replaces it)
-- `src/completer.rs` (completions — nushell's completer replaces it)
-- `src/completions.rs` (fish completion table — nushell has its own)
-- `src/theme.rs` (theme — nushell's color config replaces it)
-- `src/shell.rs` (ShellState, config_dir — partially kept for ShellState)
-- `tree_sitter_nu/` (nushell highlights natively)
-- `build.rs` (tree-sitter compilation — no longer needed)
-- `completions/` (fish completions data)
-- `themes/` (theme files)
-
-**Keep in `shannon/`:**
-
-- `src/lib.rs` — re-exports ShellEngine, BrushEngine, AiEngine
-- `src/shell_engine.rs` — ShellEngine trait
-- `src/brush_engine.rs` — BrushEngine (unchanged)
-- `src/ai_engine.rs` — AiEngine (unchanged)
-- `src/ai/` — AI session, provider, prompt (unchanged)
-- `src/executor.rs` — run_startup_script for env.sh (unchanged)
-- `src/shell.rs` — ShellState struct (keep), config_dir (keep)
-
-**`shannon/Cargo.toml`:**
-
-- Remove: reedline, crossterm, tree-sitter-*, nu-ansi-term, chrono
-- Remove: `[[bin]]` section (no longer a binary)
-- Keep: brush-core, brush-builtins, rig-core, tokio, signal-hook, serde,
-  serde_json, uuid, tempfile, dirs
-
-**Phase 3: Build system**
-
-- `scripts/build.sh` — change to build `nushell/` instead of `shannon/`
-- `scripts/install.sh` — install the nushell binary as `shannon`
-- `scripts/release.sh` — publish shannonshell as library, then publish from
-  nushell fork (or just publish shannonshell and let users build from source)
-
-#### Verification
-
-1. `cargo build` from `nushell/` produces a `shannon` binary.
-2. Shannon starts, shows nushell prompt `[nu]`.
-3. Shift+Tab switches to `[brush]` — bash commands work.
-4. Shift+Tab switches to `[ai]` — chat works.
-5. `export FOO=bar` in brush → Shift+Tab to nu → `$env.FOO` shows `bar`.
-6. `$env.BAZ = "qux"` in nu → Shift+Tab to brush → `echo $BAZ` shows `qux`.
-7. `cd /tmp` in brush → Shift+Tab to nu → `pwd` shows `/tmp`.
-8. Ctrl+Z job control works in nushell mode.
-9. Ctrl+C works in all modes.
-10. env.sh is loaded at startup, vars available in all modes.
-11. `cargo test` passes for the shannon library crate.
+Shannon config lives in `$env.SHANNON_CONFIG` as a nushell record. No
+config.toml, no config.nu modifications needed. Set it in env.nu. Rust reads it
+via `stack.get_env_var("SHANNON_CONFIG")` → `.as_record()` → navigate fields.
+Uppercase naming follows nushell convention for env vars.
