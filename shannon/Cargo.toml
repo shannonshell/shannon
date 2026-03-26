@@ -70,7 +70,7 @@ nix = { version = "0.30", default-features = false, features = ["signal", "proce
 [features]
 default = ["plugin", "sqlite", "trash-support"]
 plugin = ["nu-cmd-plugin", "nu-plugin-engine"]
-sqlite = ["nu-command/sqlite"]
+sqlite = ["nu-cli/sqlite", "nu-command/sqlite", "nu-std/sqlite", "nu-protocol/sqlite", "reedline/sqlite"]
 trash-support = ["nu-command/trash-support"]
 mcp = ["nu-mcp"]
 network = ["nu-command/network"]
