@@ -1,8 +1,8 @@
 # Shannon
 
-An AI-first shell with seamless access to bash, nushell, and any other shell.
-The default mode accepts plain English (via a configurable LLM), and Shift+Tab
-switches to traditional shells. Named after Claude Shannon.
+An AI-first shell built on nushell, with seamless bash compatibility via brush
+and AI chat via Anthropic. Shift+Tab cycles between nu, brush, and ai modes.
+Named after Claude Shannon.
 
 ## Build
 
@@ -17,48 +17,90 @@ run from there.
 
 ## Architecture
 
-Shannon uses reedline as its line editor. Nushell is embedded as a library via
-`eval_source()` from the `nu-cli` crate. Bash is embedded via the brush crate's
-`Shell` API. Fish and zsh run as subprocesses via wrapper scripts.
+Shannon IS nushell — it copies the nushell binary source code and adds mode
+dispatch for brush (bash) and AI. Nushell's REPL handles terminal ownership,
+process groups, job control, signal handling, multiline editing, completions,
+and all interactive features. Shannon adds a `ModeDispatcher` trait (defined
+in nu-cli) that intercepts commands when the mode is not "nu".
 
-### Source files (under `shannon/`)
+### Repo structure
 
-- `src/main.rs` — entry point, startup sequence
-- `src/repl.rs` — main REPL loop, shell switching, OSC integration
-- `src/lib.rs` — re-exports modules for integration tests
-- `src/config.rs` — TOML config loading, built-in shell definitions, AI config
-- `src/shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
-- `src/executor.rs` — startup script (`env.sh`) execution
-- `src/nushell_engine.rs` — embedded nushell via `EngineState` + `eval_source()`
-- `src/brush_engine.rs` — embedded bash via brush `Shell` + tokio async runtime
-- `src/prompt.rs` — custom reedline `Prompt` impl, tilde contraction
-- `src/highlighter.rs` — tree-sitter syntax highlighting with Tokyo Night colors
-- `src/completer.rs` — `ShannonCompleter` combining command + file completion
-- `src/completions.rs` — fish completion table (loaded from build-time JSON)
-- `src/ai_engine.rs` — AI chat shell engine (LLM conversation via rig-core)
-- `src/ai/` — AI infrastructure: provider setup, session history, prompt builder
+```
+shannon/              (main repo)
+├── shannon/          (shannonshell crate — binary + library)
+├── nushell/          (submodule → shannonshell/shannon_nushell)
+├── brush/            (submodule → shannonshell/shannon_brush)
+├── reedline/         (submodule → shannonshell/shannon_reedline)
+├── vendor/           (reference source code, gitignored)
+├── issues/           (issue tracking with experiments)
+└── scripts/          (build, install, release)
+```
+
+### Submodules (forked dependencies)
+
+- **nushell** — fork of `nushell/nushell`, renamed crates to `shannon-nu-*`.
+  Changes: `ModeDispatcher` trait in nu-cli, `BashHighlighter` in nu-cli,
+  Shift+Tab keybinding, config dir `~/.config/shannon/`, relaxed libc pin.
+- **brush** — fork of `reubeno/brush`, renamed crates to `shannon-brush-*`.
+  Changes: crate renames only (API already has what we need on main).
+- **reedline** — fork of `nushell/reedline`, renamed to `shannon-reedline`.
+  Changes: crate rename only.
+
+### Source files (under `shannon/src/`)
+
+**Copied from nushell binary (the shell):**
+- `main.rs` — entry point, startup sequence (from nu binary, modified)
+- `run.rs` — `run_repl()` wrapper, creates ModeDispatcher, shows banner
+- `command.rs` — CLI argument parsing
+- `command_context.rs` — registers all nushell commands
+- `config_files.rs` — loads env.nu, config.nu, login.nu
+- `signals.rs` — Ctrl+C handler via ctrlc crate
+- `terminal.rs` — Unix terminal/process group acquisition
+- `logger.rs` — logging setup
+- `ide.rs` — IDE/LSP features
+- `experimental_options.rs` — nushell experimental feature flags
+- `test_bins.rs` — nushell test utilities
+
+**Shannon-specific (engines and dispatch):**
+- `lib.rs` — library exports for the shannonshell crate
+- `dispatcher.rs` — `ShannonDispatcher` implementing `ModeDispatcher`
+- `brush_engine.rs` — `BrushEngine` (embedded bash via brush crate)
+- `ai_engine.rs` — `AiEngine` (LLM chat via rig-core), `AiConfig`
+- `shell_engine.rs` — `ShellEngine` trait
+- `shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
+- `executor.rs` — startup script (`env.sh`) execution via bash
+- `ai/` — AI infrastructure: provider setup, session history, prompt builder
 
 ### How command execution works
 
-**Bash/fish/zsh (wrapper model):**
+**Nu mode (default):**
 1. User types a command
-2. Shannon wraps it in a shell-specific template that captures env + cwd
-3. Subprocess runs with inherited stdio
-4. After exit, shannon reads captured state from a temp file
-5. State is injected into the next command's subprocess
+2. Nushell's `loop_iteration()` reads input via reedline
+3. `$env.SHANNON_MODE` is "nu" — falls through to nushell's parser/evaluator
+4. Nushell handles everything: parsing, execution, output, env updates
 
-**Brush (embedded bash via brush crate):**
+**Brush mode (bash):**
 1. User types a command
-2. Shannon calls `shell.run_string()` via tokio `block_on`
-3. Output goes directly to the terminal
-4. Shannon reads env vars from `shell.env().iter_exported()` and cwd from
-   `shell.working_dir()` after evaluation
+2. Nushell's `loop_iteration()` reads input via reedline
+3. `$env.SHANNON_MODE` is "brush" — calls `ModeDispatcher::execute()`
+4. Env vars converted to strings via `env_to_strings()`
+5. `BrushEngine::execute()` runs the command via brush's `run_string()`
+6. Result (env vars, cwd, exit code) written back to nushell's Stack
+7. Nushell's REPL continues with updated state
 
-**Nushell (embedded model):**
-1. User types a command
-2. Shannon calls `eval_source()` directly via the nushell crate API
-3. Output goes directly to the terminal (auto-print, vim, etc. all work)
-4. Shannon reads env vars and cwd from the nushell `Stack` after evaluation
+**AI mode:**
+1. User types a message (plain English)
+2. Same dispatch as brush, but `AiEngine::execute()` sends to LLM
+3. AI doesn't modify env or cwd — state unchanged
+
+### Environment propagation
+
+When switching modes, all exported environment variables and cwd are preserved:
+- **Nu → Brush:** `env_to_strings()` converts nushell typed values to strings
+  (using `ENV_CONVERSIONS` `to_string` closures for PATH etc.)
+- **Brush → Nu:** String env vars written back to Stack via `add_env_var()`.
+  Nushell's REPL automatically applies `from_string` conversions on the next
+  iteration.
 
 ### Testing
 
@@ -71,36 +113,64 @@ Every new feature must include tests. No feature ships without test coverage.
 
 ### Key design decisions
 
-- **Strings only** — only env vars (strings), cwd, and exit code cross the
-  shell boundary. No shell-internal data structures.
-- **Nushell and brush embedded, others wrapped** — nushell and brush (bash)
-  run natively via crate APIs. Bash, fish, and zsh also available as subprocess
-  wrappers.
-- **Config-driven shells** — shells are defined in `config.toml` with wrapper
-  templates. Adding a new shell requires no code changes.
-- **Fish completions baked in** — 983 commands parsed from fish completion
-  files at build time, available in all shell modes.
+- **Shannon IS nushell** — the binary copies nushell's startup code (~4,600
+  lines) and adds mode dispatch. Shannon gets all nushell features for free:
+  job control, plugins, multiline editing, completions, hooks, etc.
+- **Trait injection** — `ModeDispatcher` trait defined in nu-cli, implemented
+  by `ShannonDispatcher` in shannon. Nushell's fork has a ~30-line hook in
+  `loop_iteration()`. Shannon stays the primary binary; nushell stays a
+  dependency.
+- **Strings at the boundary** — env vars cross between shells as strings.
+  `env_to_strings()` and `from_string` conversions handle typed values
+  (PATH as list, etc.).
+- **Forked dependencies** — nushell, brush, reedline are forked as submodules
+  with renamed crates (`shannon-nu-*`, `shannon-brush-*`, `shannon-reedline`)
+  published to crates.io. Upstream sync via `git rebase upstream/main` on
+  the `shannon` branch.
 - **Vendor directory is for reference only** — vendored repos are for reading
-  source code, not for building against. Use crates.io dependencies.
+  source code, not for building against.
 
-## Shells
+## Modes
 
-Shannon has three built-in shell engines, cycled via Shift+Tab:
+Shannon has three modes, cycled via Shift+Tab:
 
-- **nu** — nushell, embedded via crate API
-- **brush** — bash-compatible, embedded via brush crate
+- **nu** — nushell (native, default)
+- **brush** — bash-compatible via brush crate
 - **ai** — AI chat powered by an LLM (Anthropic by default)
 
-All shells implement the `ShellEngine` trait. The `toggle` config controls
-which shells appear and their order.
+Mode is stored in `$env.SHANNON_MODE`. Shift+Tab sends `__shannon_switch`
+via reedline's `ExecuteHostCommand`, which cycles the mode.
+
+Each mode gets appropriate syntax highlighting:
+- Nu mode: `NuHighlighter` (nushell's native highlighter)
+- Brush mode: `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
+- AI mode: `NoOpHighlighter` (plain text)
 
 ## Config
 
 Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
 
-- `config.toml` — shell rotation (`toggle`), custom shells, AI provider/model
-- `env.sh` — bash script for PATH, env vars, API keys (runs once at startup)
-- `history.db` — SQLite command history (shared across all shells and instances)
+- `env.sh` — bash script for PATH, env vars, API keys (runs first via brush)
+- `env.nu` — nushell env setup (runs after env.sh)
+- `config.nu` — nushell config (keybindings, colors, hooks, etc.)
+- `login.nu` — login shell config
+- `history.sqlite3` — SQLite command history
+
+Config is nushell-native. Shannon-specific settings use `$env.SHANNON_CONFIG`
+as a structured nushell record in env.nu:
+
+```nushell
+$env.SHANNON_CONFIG = {
+    TOGGLE: ["nu", "brush", "ai"]
+    AI_PROVIDER: "anthropic"
+    AI_MODEL: "claude-sonnet-4-20250514"
+    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+}
+```
+
+The `env.sh` feature is critical — it lets users follow bash-style setup
+instructions ("add this to your .bashrc") directly. Shannon sources it via
+brush at startup and injects the resulting env vars into nushell's Stack.
 
 ## Issues and Experiments
 
