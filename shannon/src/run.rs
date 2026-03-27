@@ -230,7 +230,17 @@ pub(crate) fn run_repl(
     nu_cli::eval_source(
         engine_state,
         &mut stack,
-        br#"$env.PROMPT_COMMAND = {|| let mode = ($env.SHANNON_MODE? | default "nu"); $"[($mode)] ($env.PWD | path basename)" }"#,
+        br#"$env.PROMPT_COMMAND = {||
+            let mode = ($env.SHANNON_MODE? | default "nu")
+            let color = match $mode {
+                "nu" => (ansi green)
+                "brush" => (ansi cyan)
+                "ai" => (ansi magenta)
+                _ => (ansi green)
+            }
+            let reset = (ansi reset)
+            $"($color)[($mode)](ansi reset) ($env.PWD | path basename)"
+        }"#,
         "shannon-prompt",
         nu_protocol::PipelineData::empty(),
         false,
