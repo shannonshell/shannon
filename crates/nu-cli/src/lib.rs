@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+mod bash_highlight;
 mod commands;
 mod completions;
 mod config_files;
@@ -22,6 +23,7 @@ pub use completions::{FileCompletion, NuCompleter, SemanticSuggestion, Suggestio
 pub use config_files::eval_config_contents;
 pub use eval_cmds::{EvaluateCommandsOpts, evaluate_commands};
 pub use eval_file::evaluate_file;
+pub use bash_highlight::BashHighlighter;
 pub use menus::NuHelpCompleter;
 pub use mode_dispatcher::{ModeDispatcher, ModeResult};
 pub use nu_highlight::NuHighlight;

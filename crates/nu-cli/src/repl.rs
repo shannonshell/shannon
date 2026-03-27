@@ -413,7 +413,11 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 stack: stack_arc.clone(),
             }))
         } else {
-            line_editor.with_highlighter(Box::<NoOpHighlighter>::default())
+            if shannon_mode == "brush" {
+                line_editor.with_highlighter(Box::new(crate::bash_highlight::BashHighlighter::new()))
+            } else {
+                line_editor.with_highlighter(Box::<NoOpHighlighter>::default())
+            }
         }
         .with_validator(Box::new(NuValidator {
             engine_state: engine_reference.clone(),
