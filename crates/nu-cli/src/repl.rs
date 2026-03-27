@@ -335,7 +335,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         use_color,
         entry_num,
         hostname,
-        mut mode_dispatcher,
+        mode_dispatcher,
     } = ctx;
 
     let mut start_time = std::time::Instant::now();
