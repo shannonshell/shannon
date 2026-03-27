@@ -239,7 +239,12 @@ pub(crate) fn run_repl(
                 _ => (ansi green)
             }
             let reset = (ansi reset)
-            $"($color)[($mode)](ansi reset) ($env.PWD | path basename)"
+            let dir = if ($env.PWD | str starts-with $env.HOME) {
+                $env.PWD | str replace $env.HOME "~"
+            } else {
+                $env.PWD
+            }
+            $"($color)[($mode)](ansi reset) ($dir)"
         }"#,
         "shannon-prompt",
         nu_protocol::PipelineData::empty(),
