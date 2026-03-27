@@ -236,33 +236,49 @@ pub(crate) fn run_repl(
         false,
     );
 
-    // Disable nushell's banner and show Shannon's instead
-    nu_cli::eval_source(
-        engine_state,
-        &mut stack,
-        b"$env.config.show_banner = false",
-        "shannon-banner-disable",
-        nu_protocol::PipelineData::empty(),
-        false,
-    );
+    // Show Shannon's banner instead of nushell's, respecting show_banner config
     {
-        let version = env!("CARGO_PKG_VERSION");
-        let green = "\x1b[32m";
-        let _purple = "\x1b[35m";
-        let bold = "\x1b[1m";
-        let reset = "\x1b[0m";
-        let fg = "\x1b[37m";
-        eprintln!(
-            "{fg}Welcome to {green}{bold}Shannon{reset}{fg}, based on the {green}Nu{reset}{fg} language, where all data is structured!{reset}"
+        use nu_protocol::BannerKind;
+        let show_banner = engine_state.get_config().show_banner.clone();
+        // Always disable nushell's banner (we replace it with ours)
+        nu_cli::eval_source(
+            engine_state,
+            &mut stack,
+            b"$env.config.show_banner = false",
+            "shannon-banner-disable",
+            nu_protocol::PipelineData::empty(),
+            false,
         );
-        eprintln!(
-            "{fg}Version: {green}{version}{reset}"
-        );
-        eprintln!(
-            "{green}{bold}Startup Time:{reset}{fg} {:?}{reset}",
-            entire_start_time.elapsed()
-        );
-        eprintln!();
+        match show_banner {
+            BannerKind::None => {} // User disabled banner
+            BannerKind::Short => {
+                let green = "\x1b[32m";
+                let bold = "\x1b[1m";
+                let reset = "\x1b[0m";
+                let fg = "\x1b[37m";
+                eprintln!(
+                    "{green}{bold}Startup Time:{reset}{fg} {:?}{reset}",
+                    entire_start_time.elapsed()
+                );
+                eprintln!();
+            }
+            BannerKind::Full => {
+                let version = env!("CARGO_PKG_VERSION");
+                let green = "\x1b[32m";
+                let bold = "\x1b[1m";
+                let reset = "\x1b[0m";
+                let fg = "\x1b[37m";
+                eprintln!(
+                    "{fg}Welcome to {green}{bold}Shannon{reset}{fg}, based on the {green}Nu{reset}{fg} language, where all data is structured!{reset}"
+                );
+                eprintln!("{fg}Version: {green}{version}{reset}");
+                eprintln!(
+                    "{green}{bold}Startup Time:{reset}{fg} {:?}{reset}",
+                    entire_start_time.elapsed()
+                );
+                eprintln!();
+            }
+        }
     }
 
     // Create the Shannon mode dispatcher with brush + AI engines
