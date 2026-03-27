@@ -1,61 +1,37 @@
 # Syntax Highlighting
 
-Shannon highlights your input as you type using
-[tree-sitter](https://tree-sitter.github.io/) grammars. Each shell has its own
-grammar, so you get accurate highlighting for bash, nushell, fish, and zsh
-syntax.
+Each mode has its own syntax highlighter that activates automatically when you
+switch modes.
 
-## Color Themes
+## Nu Mode
 
-By default, shannon uses standard ANSI colors that inherit from your
-terminal's theme. If your terminal uses Dracula, shannon looks like Dracula.
-If it uses Solarized Light, shannon adapts automatically.
+Uses nushell's native `NuHighlighter`. Full nushell syntax awareness —
+keywords, commands, strings, variables, pipes, types, and errors are all
+colored according to your `$env.config.color_config`.
 
-You can also pick a named theme or override individual colors. See
-[Configuration](../reference/02-configuration.md) for the `[theme]` section.
+See [Nushell theming docs](https://nushell.sh/book/coloring_and_theming.html)
+for customization.
 
-### Color Categories
+## Brush Mode
 
-| Category   | What it colors                | Default (ANSI) |
-| ---------- | ----------------------------- | -------------- |
-| Keywords   | `if`, `for`, `let`, `export`  | Magenta bold   |
-| Commands   | `ls`, `grep`, `echo`, `cd`    | Blue           |
-| Strings    | `"hello"`, `'world'`          | Green          |
-| Numbers    | `42`, `3.14`                  | Yellow         |
-| Variables  | `$HOME`, `$env.PATH`          | Cyan           |
-| Operators  | `|`, `>`, `&&`, `||`          | Cyan           |
-| Comments   | `# this is a comment`         | Dark gray      |
-| Types      | `int`, `string` (nushell)     | Yellow         |
-| Errors     | Syntax errors                 | Red bold       |
+Uses `BashHighlighter` with tree-sitter-bash. Tokyo Night color scheme:
 
-## Bash Highlighting
+| Category | What it colors | Color |
+|----------|---------------|-------|
+| Keywords | `if`, `for`, `export`, `while` | Purple |
+| Commands | `ls`, `grep`, `echo`, `cd` | Blue |
+| Strings | `"hello"`, `'world'` | Green |
+| Numbers | `42`, `3.14` | Orange |
+| Variables | `$HOME`, `${BAR}` | Yellow |
+| Operators | `\|`, `>`, `&&`, `\|\|` | Cyan |
+| Comments | `# this is a comment` | Gray |
 
-Keywords like `if`, `then`, `else`, `for`, `while`, `export`, and `function`
-are highlighted. Command names are colored. Variables (`$FOO`, `${BAR}`) and
-pipes/redirections are distinct.
+## AI Mode
 
-## Nushell Highlighting
-
-Nushell has additional categories: type annotations (`int`, `string`) and
-booleans (`true`, `false`). Nushell keywords include `let`, `mut`, `def`,
-`match`, `try`, `catch`, and `use`.
-
-## Fish Highlighting
-
-Fish keywords like `if`, `function`, `set`, `for`, `while` are highlighted.
-Command names (the first word of a command) are colored.
-
-## Zsh Highlighting
-
-Zsh uses the bash grammar for highlighting (the syntax is similar enough).
-
-## Incomplete Input
-
-Tree-sitter handles incomplete input gracefully. If you're mid-line and the
-syntax is incomplete (like an unterminated string), the parser still highlights
-the valid portions. Unrecoverable parse errors are shown in the error color.
+Uses `NoOpHighlighter` — plain unstyled text, appropriate for natural
+language input.
 
 ## Automatic Switching
 
-When you switch shells with Shift+Tab, the highlighter switches too. The next
-keystroke uses the new shell's grammar — no configuration needed.
+When you press Shift+Tab, the highlighter switches immediately. The next
+keystroke uses the new mode's highlighter.

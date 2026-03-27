@@ -1,168 +1,101 @@
 # Architecture
 
-This document explains how shannon works under the hood. It's aimed at someone
-who wants to understand the design, not just use the shell.
+This document explains how shannon works under the hood.
 
-## Three Execution Models
+## Shannon IS Nushell
 
-Shannon uses three different models depending on the shell:
+Shannon copies the nushell binary source code (~4,600 lines) and adds mode
+dispatch for brush (bash) and AI. This gives shannon all nushell features for
+free: terminal ownership, process groups, job control, signal handling,
+multiline editing, completions, hooks, plugins, and more.
 
-### Nushell: Embedded via Library
+## Mode Dispatch
 
-Nushell is embedded using the `nu-cli` crate. Commands are evaluated directly
-by nushell's engine via `eval_source()`. There is no subprocess — nushell runs
-inside shannon's process. This means builtins auto-print, interactive programs
-(vim, htop) get direct terminal access, and variables persist across commands.
+Shannon has three modes, cycled via Shift+Tab:
 
-After each command, shannon reads the resulting env vars and cwd from nushell's
-`Stack` object.
+- **nu** — nushell's native evaluation (default)
+- **brush** — bash commands via the brush crate
+- **ai** — AI chat via an LLM
 
-### Brush: Embedded Bash via Library
+The mode is stored in `$env.SHANNON_MODE`. When the mode is "nu", commands
+go through nushell's parser and evaluator as normal. When the mode is "brush"
+or "ai", a `ModeDispatcher` trait intercepts the command in
+`loop_iteration()` and routes it to the appropriate engine.
 
-Brush is a Rust reimplementation of bash, embedded via the `brush-core` crate.
-Commands are evaluated by `shell.run_string()` in a tokio async runtime. Like
-nushell, brush runs inside shannon's process — bash variables, functions, and
-aliases persist across commands.
+### ModeDispatcher Trait
 
-After each command, shannon reads env vars from `shell.env().iter_exported()`
-and cwd from `shell.working_dir()`.
+Defined in nu-cli (our nushell fork):
 
-### Bash/Fish/Zsh: Subprocess Wrappers
-
-For other shells, shannon spawns a fresh subprocess for every command:
-
-```
-<shell> -c '<wrapper script containing ls -la>'
-```
-
-The subprocess inherits stdio directly — you see output in real time.
-After the subprocess exits, shannon reads the captured state from a temp file
-and uses it for the next command.
-
-## Wrapper Templates
-
-Shannon doesn't run your command directly. It wraps it in a script that
-captures state after execution. Each shell has its own wrapper template
-defined in the built-in defaults or in `config.toml`. Templates use
-`{{placeholder}}` syntax:
-
-| Placeholder     | Replaced with                                    |
-| --------------- | ------------------------------------------------ |
-| `{{command}}`   | The user's command                               |
-| `{{temp_path}}` | Path to the temp file for env capture            |
-| `{{init}}`      | Contents of the per-shell init script (or empty) |
-
-### Bash Wrapper (built-in default)
-
-```bash
-{{init}}
-{{command}}
-__shannon_ec=$?
-(export -p; echo "__SHANNON_CWD=$(pwd)"; echo "__SHANNON_EXIT=$__shannon_ec") > '{{temp_path}}'
-exit $__shannon_ec
+```rust
+pub trait ModeDispatcher: Send {
+    fn execute(
+        &mut self,
+        mode: &str,
+        command: &str,
+        env_vars: HashMap<String, String>,
+        cwd: PathBuf,
+    ) -> ModeResult;
+}
 ```
 
-### Fish/Zsh Wrapper (generic POSIX pattern)
+The dispatcher receives string env vars (converted from nushell's typed
+values via `env_to_strings()`) and returns strings. Nushell's REPL writes
+them back to the Stack. The dispatcher never touches nushell internals.
 
-```
-{{init}}
-{{command}}
-__shannon_ec=$?
-env > '{{temp_path}}'
-echo "__SHANNON_CWD=$(pwd)" >> '{{temp_path}}'
-echo "__SHANNON_EXIT=$__shannon_ec" >> '{{temp_path}}'
-exit $__shannon_ec
-```
+## Forked Dependencies
 
-Most POSIX shells can use this pattern. The `env` command outputs `KEY=VALUE`
-lines, which shannon's generic `env` parser reads.
+Shannon depends on three forked repos, maintained as git submodules:
 
-### Nushell Wrapper (special case)
+| Submodule | Fork of | Changes |
+|-----------|---------|---------|
+| `nushell/` | nushell/nushell | ModeDispatcher trait, BashHighlighter, Shift+Tab keybinding, config dir, relaxed libc pin, crate renames |
+| `brush/` | reubeno/brush | Crate renames only |
+| `reedline/` | nushell/reedline | Crate rename only |
 
-Nushell has unique syntax and captures env as JSON via `$env | to json`. See
-the built-in default in `src/config.rs`.
+All forked crates are renamed to `shannon-*` and published to crates.io.
+Each fork has a `shannon` branch with our changes. Upstream sync is done via
+`git rebase upstream/main`.
 
-## State Capture and Parsing
+## Environment Propagation
 
-After the subprocess exits, shannon reads the temp file using the parser
-specified for that shell:
+When switching modes, all exported environment variables and the cwd are
+preserved:
 
-- **`bash` parser:** reads `declare -x KEY="VALUE"` lines, unescaping quotes
-  and backslashes.
-- **`nushell` parser:** reads JSON. List values (like PATH) are joined with
-  `:`. Non-string values are dropped.
-- **`env` parser:** reads `KEY=VALUE` lines from the `env` command. Used by
-  fish, zsh, and any POSIX shell.
+**Nu to Brush:**
+1. `env_to_strings()` converts nushell's typed values to strings
+2. `ENV_CONVERSIONS` `to_string` closures handle typed vars (PATH as list)
+3. Strings passed to `BrushEngine::inject_state()`
 
-Special markers (`__SHANNON_CWD`, `__SHANNON_EXIT`) are extracted and removed
-from the env map. The resulting state — env vars, cwd, exit code — is stored
-and injected into the next subprocess.
-
-If parsing fails, the previous state is preserved. Shannon doesn't crash on a
-bad parse — it degrades gracefully.
+**Brush to Nu:**
+1. `BrushEngine::execute()` returns string env vars
+2. Strings written to nushell's Stack via `add_env_var(Value::string(...))`
+3. Nushell's REPL automatically applies `from_string` conversions
 
 ## Configuration
 
-Shannon has two configuration files with distinct purposes:
+Shannon uses `~/.config/shannon/` with nushell's native config system:
 
-- **`env.sh`** — a bash script that runs once at startup to set up PATH, env
-  vars, and API keys. This is for importing your existing environment.
-- **`config.toml`** — static settings for shannon itself: default shell, custom
-  shell definitions, wrapper templates, init scripts.
+1. `env.sh` — bash environment setup via brush (runs first)
+2. `env.nu` — nushell env setup
+3. `config.nu` — nushell config (keybindings, colors, hooks)
 
-Neither file is required. Without them, shannon uses built-in defaults.
+Shannon-specific settings use `$env.SHANNON_CONFIG` as a nushell record.
 
-## The Strings-Only Boundary
+## Syntax Highlighting
 
-Only three things cross the shell boundary:
+Each mode has its own highlighter, rebuilt every REPL iteration:
 
-1. **Environment variables** — always strings
-2. **Working directory** — a path
-3. **Exit code** — an integer
+- **Nu mode:** `NuHighlighter` (nushell's native highlighter)
+- **Brush mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
+- **AI mode:** `NoOpHighlighter` (plain unstyled text)
 
-This is deliberate. Bash arrays, nushell tables, shell functions, and aliases
-are internal to their shell. Trying to translate them between shells would be
-fragile and lossy. The strings-only policy keeps the boundary clean and
-predictable.
+## Source Code Layout
 
-## Why Not Persistent Sessions for All Shells?
+**Copied from nushell binary (startup, terminal, signals):**
+`main.rs`, `run.rs`, `command.rs`, `command_context.rs`, `config_files.rs`,
+`signals.rs`, `terminal.rs`, `logger.rs`, `ide.rs`,
+`experimental_options.rs`, `test_bins.rs`
 
-Nushell and brush use persistent engines (embedded via library). For
-bash/fish/zsh, we use the subprocess-per-command model. Why not embed those too?
-
-- Nushell exposes a clean Rust crate API (`eval_source`) that makes embedding
-  straightforward.
-- Brush (a Rust bash reimplementation) exposes a similar API via
-  `Shell::builder()` and `run_string()`.
-- Fish and zsh don't expose equivalent library APIs. They're designed to run
-  as standalone processes.
-- Bash is available both as an embedded engine (via brush) and as a subprocess
-  wrapper (via the system `bash` binary). The wrapper is kept for compatibility.
-
-The subprocess-per-command model is simpler and more reliable for shells that
-don't offer a library API.
-
-## Line Editor
-
-Shannon uses [reedline](https://github.com/nushell/reedline) as its line
-editor. Reedline provides:
-
-- Vi keybindings (default)
-- SQLite-backed history with cross-instance sharing
-- Autosuggestions (ghost text from history)
-- Syntax highlighting via the `Highlighter` trait
-- Tab completion via the `Completer` trait and menus
-- Bracketed paste mode
-
-Shannon implements custom `Highlighter` and `Completer` traits backed by
-tree-sitter and fish completion files, respectively. The Shift+Tab shell
-switch is a custom keybinding that triggers a host command.
-
-## Terminal Integration
-
-Shannon emits OSC escape sequences to communicate with the terminal emulator:
-
-- **OSC 7** — reports the current working directory after every command. This
-  enables new panes/tabs to open in the same directory.
-- **OSC 2** — sets the window/tab title. Shows `[shell] ~/path` when idle
-  and `[shell] ~/path> command` when running a command.
+**Shannon-specific (engines and dispatch):**
+`dispatcher.rs`, `brush_engine.rs`, `ai_engine.rs`, `shell_engine.rs`,
+`shell.rs`, `executor.rs`, `ai/`

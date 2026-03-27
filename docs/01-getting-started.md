@@ -11,10 +11,13 @@ cargo install shannonshell
 Or build from source:
 
 ```sh
-git clone https://github.com/shannonshell/shannon.git
+git clone --recursive https://github.com/shannonshell/shannon.git
 cd shannon/shannon
 cargo build --release
 ```
+
+Note: `--recursive` is needed to fetch the nushell, brush, and reedline
+submodules.
 
 ## First Run
 
@@ -22,86 +25,68 @@ cargo build --release
 shannon
 ```
 
-You'll see a prompt like this:
+You'll see:
 
 ```
-[bash] ~/projects/shannon >
+Welcome to Shannon, based on the Nu language, where all data is structured!
+Version: 0.3.2
+Startup Time: 125ms
+
+[nu] ~/projects >
 ```
 
-This tells you:
+Shannon starts in nushell mode. All nushell commands work.
 
-- `[bash]` — the active shell is bash
-- `~/projects/shannon` — your current working directory
-- `>` — the last command succeeded (you'd see `!` if it failed)
+## Switching Modes
 
-## Running Commands
-
-Type any command as you normally would:
+Press **Shift+Tab** to cycle between modes:
 
 ```
-[bash] ~/projects/shannon > echo "hello from shannon"
-hello from shannon
-[bash] ~/projects/shannon > ls src/
-completer.rs  executor.rs  highlighter.rs  lib.rs  main.rs  prompt.rs  shell.rs
-```
-
-Commands run in real shell subprocesses — everything works exactly as it would
-in a normal bash or nushell session.
-
-## Switching Shells
-
-Press **Shift+Tab** to switch to the next shell:
-
-```
-[bash] ~/projects/shannon > export GREETING="hello"
-[bash] ~/projects/shannon > <Shift+Tab>
-[nu] ~/projects/shannon > $env.GREETING
-hello
+[nu] ~/projects > ls | where size > 1mb    ← nushell
+[brush] ~/projects > grep -r TODO src/     ← bash
+[ai] ~/projects > how do I find large files? ← AI chat
 ```
 
 Your environment variables and working directory carry over when you switch.
-See [Shell Switching](features/01-shell-switching.md) for details.
 
-## Tab Completion
+## Running Commands
 
-Press **Tab** to complete file and directory names:
+In **nu mode**, use nushell syntax:
 
 ```
-[bash] ~/projects/shannon > cat Car<Tab>
-Cargo.lock  Cargo.toml
+[nu] ~/project > ls | sort-by modified
+[nu] ~/project > $env.HOME
 ```
 
-See [Tab Completion](features/05-tab-completion.md) for details.
+In **brush mode**, use bash syntax:
+
+```
+[brush] ~/project > echo hello && echo world
+[brush] ~/project > export FOO=bar
+```
+
+In **ai mode**, type plain English:
+
+```
+[ai] ~/project > how do I compress a folder?
+```
 
 ## Setting Up Your Environment
 
-If shannon is your default shell (e.g. in your terminal emulator config), you
-may need to configure PATH and other environment variables. Create a startup
-script:
+Create `~/.config/shannon/env.sh` for bash-style environment setup:
 
 ```bash
 # ~/.config/shannon/env.sh
 eval "$(/opt/homebrew/bin/brew shellenv)"
 export PATH="$PATH:$HOME/.cargo/bin"
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-This runs once when shannon starts. See
-[Configuration](reference/02-configuration.md) for details.
-
-## Nesting Indicator
-
-If you run shannon inside shannon (e.g. `cargo run` during development), the
-prompt shows extra `>` characters to indicate nesting depth:
-
-```
-[bash] ~/project >       ← normal (depth 1)
-[bash] ~/project >>      ← shannon inside shannon (depth 2)
-[bash] ~/project >>>     ← three deep (depth 3)
-```
-
-This makes it easy to tell which instance you're in.
+This runs via brush at startup, before nushell's `env.nu` and `config.nu`.
+Follow any tutorial that says "add this to your .bashrc" — it works in
+`env.sh`.
 
 ## Exiting
 
 - **Ctrl+D** — exit shannon
-- Type `exit` — also exits shannon
+- Type `exit` — also exits (works in all modes)

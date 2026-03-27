@@ -1,7 +1,7 @@
 # Shannon
 
-An AI-first shell with seamless access to bash, nushell, and any other shell —
-all in one session.
+An AI-first shell built on nushell, with seamless bash compatibility and
+AI chat — all in one session.
 
 Named after [Claude Shannon](https://en.wikipedia.org/wiki/Claude_Shannon),
 the father of information theory.
@@ -10,8 +10,7 @@ the father of information theory.
 
 Nobody remembers every shell command. Shannon lets you type in plain English
 and have an LLM translate your intent into the right command. When you need
-precise control, press **Shift+Tab** to drop into bash, nushell, or any other
-shell — then Shift+Tab back.
+precise control, press **Shift+Tab** to drop into bash — then Shift+Tab back.
 
 ```
 [nu] ~/project > ls | where size > 1mb
@@ -31,38 +30,35 @@ You can use `fd` or `find`:
 
 ### AI Chat
 
-- Shift+Tab into the `[ai]` shell — ask questions in plain English
+- Shift+Tab into `[ai]` mode — ask questions in plain English
 - Configurable provider (Anthropic by default)
 - Context-aware — the LLM knows your cwd and OS
 - Conversational — follow-up questions remember context
 
-### Poly-Shell
+### Nushell at the Core
 
-- **Shift+Tab** to cycle between shells (bash, brush, nushell, fish, zsh)
-- **Nushell and brush embedded** — nushell and brush run natively via library, not as subprocesses
-- **Syntax highlighting** for each shell (Tokyo Night theme, tree-sitter)
-- **Command-aware tab completion** — 983 commands with subcommands and flags
-- **Autosuggestions** — ghost text from history as you type
-- **SQLite history** — shared across shells and instances, cross-session
-- **Vi keybindings** by default
-- Environment variables, cwd, and exit code synchronized across shell switches
-- **Configurable** — add any shell via `config.toml`, no recompilation
-- **Terminal integration** — OSC 2 (title) and OSC 7 (cwd) for tab titles
-  and new-pane-in-same-directory
-- Not a new language — zero new syntax to learn
+Shannon IS nushell — you get all nushell features out of the box:
 
-### Nushell and Brush as First-Class Citizens
+- Structured data (tables, records, lists)
+- Powerful pipelines (`ls | where size > 1mb | sort-by modified`)
+- Job control (Ctrl+Z, `job unfreeze`)
+- Native completions, multiline editing, plugins
+- Hooks, keybindings, themes — all configurable via `config.nu`
 
-Nushell is embedded via its crate API (`eval_source`), not wrapped in a
-subprocess. Brush (a bash-compatible shell written in Rust) is also embedded
-via its crate API (`Shell::builder()` + `run_string()`). This means:
+### Bash Compatibility
 
-- `pwd`, `ls`, and other builtins auto-print their results
-- Interactive programs like `vim` and `htop` work correctly
-- Nushell variables and functions persist across commands
-- Bash variables, functions, and aliases persist across commands (via brush)
-- No system `nu` binary required — nushell and brush are always available
-- Bash is also available as a traditional subprocess wrapper if installed
+- **Shift+Tab** to switch to `[brush]` mode for bash commands
+- Bash syntax highlighting (tree-sitter-bash, Tokyo Night colors)
+- Environment variables sync between nushell and bash automatically
+- `env.sh` for bash-style setup (PATH, API keys) — follow any tutorial that
+  says "add this to your .bashrc"
+
+### Environment Sync
+
+- Environment variables, cwd, and exit code synchronized across mode switches
+- Set `export FOO=bar` in bash, switch to nushell — `$env.FOO` works
+- Set `$env.BAZ = "qux"` in nushell, switch to bash — `echo $BAZ` works
+- PATH and other typed env vars converted automatically via `ENV_CONVERSIONS`
 
 ## Configuration
 
@@ -70,22 +66,25 @@ Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
 
 | File | Purpose |
 |------|---------|
-| `config.toml` | Shannon settings — shell rotation, custom shells, AI config |
-| `env.sh` | Environment setup — PATH, env vars, API keys (bash script) |
-| `history.db` | SQLite command history (shared across shells and instances) |
+| `env.sh` | Bash environment setup — PATH, env vars, API keys (runs first) |
+| `env.nu` | Nushell env setup (runs after env.sh) |
+| `config.nu` | Nushell config — keybindings, colors, hooks, completions |
+| `history.sqlite3` | SQLite command history |
 
 No config files are required — shannon works out of the box.
 
-### Example config.toml
+### Shannon-specific settings
 
-```toml
-toggle = ["nu", "bash"]
+Add to `env.nu`:
 
-[ai]
-model = "claude-sonnet-4-20250514"
+```nushell
+$env.SHANNON_CONFIG = {
+    TOGGLE: ["nu", "brush", "ai"]
+    AI_PROVIDER: "anthropic"
+    AI_MODEL: "claude-sonnet-4-20250514"
+    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+}
 ```
-
-See the [documentation](docs/) for full config options.
 
 ## Installation
 
@@ -96,10 +95,13 @@ cargo install shannonshell
 Or build from source:
 
 ```sh
-git clone https://github.com/shannonshell/shannon.git
+git clone --recursive https://github.com/shannonshell/shannon.git
 cd shannon/shannon
 cargo build --release
 ```
+
+Note: `--recursive` is needed to fetch the nushell, brush, and reedline
+submodules.
 
 ## License
 

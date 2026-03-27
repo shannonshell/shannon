@@ -1,67 +1,52 @@
 # State Synchronization
 
-Shannon keeps your environment variables, working directory, and exit code in
-sync across shell switches. Set a variable in bash, switch to nushell, and it's
-there.
+Shannon keeps your environment variables and working directory in sync across
+mode switches.
 
 ## Environment Variables
 
 ```
-[bash] ~/project > export API_KEY="sk-1234"
-[bash] ~/project > <Shift+Tab>
+[brush] ~/project > export API_KEY="sk-1234"
+[brush] ~/project > <Shift+Tab>
 [nu] ~/project > $env.API_KEY
 sk-1234
 ```
 
-Only string-valued variables are synchronized. Nushell stores some env vars as
-structured data (for example, `PATH` is a list). When capturing state from
-nushell, shannon joins list values with `:` (or `;` on Windows) so they work in
-bash. Non-string values (numbers, booleans, records) are silently dropped.
+It works both ways:
+
+```
+[nu] ~/project > $env.FOO = "hello"
+[nu] ~/project > <Shift+Tab>
+[brush] ~/project > echo $FOO
+hello
+```
+
+## Typed Value Conversion
+
+Nushell stores some env vars as typed values (PATH is a list, not a string).
+Shannon handles this automatically:
+
+- **Nu to Brush:** `env_to_strings()` converts typed values to strings using
+  `ENV_CONVERSIONS` `to_string` closures
+- **Brush to Nu:** String env vars are written back. Nushell automatically
+  applies `from_string` conversions on the next REPL iteration
+
+You don't need to do anything — PATH, LS_COLORS, and other typed vars just
+work.
 
 ## Working Directory
 
 ```
-[bash] ~/project > cd /tmp
-[bash] /tmp > <Shift+Tab>
+[brush] ~/project > cd /tmp
+[brush] /tmp > <Shift+Tab>
 [nu] /tmp >
 ```
 
-The working directory is captured after every command and injected into the next
-subprocess. The prompt always shows the current directory with `~` for your home
-directory.
-
-## Exit Code
-
-The prompt indicator shows whether the last command succeeded:
-
-- `>` — exit code 0 (success)
-- `!` — nonzero exit code (failure)
-
-```
-[bash] ~/project > true
-[bash] ~/project > false
-[bash] ~/project ! <Shift+Tab>
-[nu] ~/project !
-```
-
-The exit code carries across shell switches.
-
-## How It Works
-
-After every command, shannon reads the subprocess's resulting state from a
-temporary file. The next command — even in a different shell — starts with that
-state. See [Architecture](../02-architecture.md) for the full details on wrapper
-scripts and state capture.
-
 ## The Strings-Only Boundary
 
-Shannon only transfers string data between shells. This is a deliberate design
-constraint:
+Only exported environment variables and the cwd cross between modes. Internal
+shell state does not transfer:
 
-- Environment variables are always strings
-- The working directory is a path (string)
-- The exit code is an integer
-
-Shell-internal data structures (bash arrays, nushell tables, functions, aliases)
-do not transfer. If you need to pass complex data between shells, serialize it
-to a string (JSON, for example) and store it in an env var.
+- Nushell variables (`let x = 5`) stay in nushell
+- Bash local variables and aliases stay in brush
+- Use `export` / `$env.X = ...` for values that need to cross

@@ -1,66 +1,55 @@
-# Shell Switching
+# Mode Switching
 
-Shannon lets you use multiple shells in one session. Press **Shift+Tab** to
-cycle between them.
-
-## How It Works
-
-Shannon has three built-in shell engines — all always available:
+Shannon has three modes — press **Shift+Tab** to cycle between them:
 
 ```
 nu → brush → ai → nu → ...
 ```
 
-If a shell isn't installed, it's skipped. If only one shell is available,
-Shift+Tab has no effect.
-
-You can customize which shells appear and their order with the `toggle` option
-in `config.toml`. See [Configuration](../reference/02-configuration.md).
-
 ## Switching in Action
 
 ```
-[bash] ~/project > echo "I'm in bash"
-I'm in bash
-[bash] ~/project > <Shift+Tab>
-[nu] ~/project > echo "Now I'm in nushell"
-Now I'm in nushell
+[nu] ~/project > ls | where size > 1mb
+...
 [nu] ~/project > <Shift+Tab>
-[bash] ~/project >
+[brush] ~/project > echo hello && echo world
+hello
+world
+[brush] ~/project > <Shift+Tab>
+[ai] ~/project > how do I find large files?
+...
+[ai] ~/project > <Shift+Tab>
+[nu] ~/project >
 ```
 
-The prompt updates immediately to show the active shell.
+The prompt updates immediately to show the active mode.
 
 ## What Carries Over
 
-When you switch shells, three things are preserved:
+When you switch modes, these are preserved:
 
-1. **Environment variables** — `export FOO=bar` in bash is visible as
+1. **Environment variables** — `export FOO=bar` in brush is visible as
    `$env.FOO` in nushell
-2. **Working directory** — `cd /tmp` in bash means you're in `/tmp` when you
+2. **Working directory** — `cd /tmp` in brush means you're in `/tmp` when you
    switch to nushell
-3. **Exit code** — the prompt indicator (`>` or `!`) reflects the last
-   command's exit code regardless of which shell ran it
+
+Environment variables are converted automatically between nushell's typed
+values and bash strings using `ENV_CONVERSIONS`.
 
 ## What Doesn't Carry Over
 
-Shell-internal data structures do not transfer between shells. This includes:
+Shell-internal data stays within its mode:
 
-- Bash arrays and associative arrays
-- Nushell tables, records, and lists
-- Shell functions and aliases
-- Shell-local variables (unexported)
+- Nushell variables (`let x = 5`) don't exist in brush
+- Bash local variables and aliases don't exist in nushell
+- Only exported environment variables cross the boundary
 
-Only string-valued environment variables cross the shell boundary. This is by
-design — see [Architecture](../02-architecture.md) for why.
+## Customizing the Toggle Order
 
-## Per-Shell Features
+Add to `~/.config/shannon/env.nu`:
 
-Each shell keeps its own:
-
-- **Syntax highlighting** — colors match the active shell's grammar
-- **Tab completion** — command and file completion works the same in all shells
-- **Command history** — shared across all shells via SQLite
-
-See [History](04-history.md) and [Syntax Highlighting](03-syntax-highlighting.md)
-for details.
+```nushell
+$env.SHANNON_CONFIG = {
+    TOGGLE: ["nu", "brush"]  # skip ai mode
+}
+```
