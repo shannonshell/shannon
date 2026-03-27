@@ -236,6 +236,21 @@ pub(crate) fn run_repl(
         false,
     );
 
+    // Disable nushell's banner and show Shannon's instead
+    nu_cli::eval_source(
+        engine_state,
+        &mut stack,
+        b"$env.config.show_banner = false",
+        "shannon-banner-disable",
+        nu_protocol::PipelineData::empty(),
+        false,
+    );
+    let version = env!("CARGO_PKG_VERSION");
+    eprintln!("Welcome to Shannon, based on the Nu language, where all data is structured!");
+    eprintln!("Version: {version}");
+    eprintln!("Startup Time: {:?}", entire_start_time.elapsed());
+    eprintln!();
+
     // Create the Shannon mode dispatcher with brush + AI engines
     let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
     let dispatcher: std::sync::Arc<std::sync::Mutex<Box<dyn nu_cli::ModeDispatcher>>> =
