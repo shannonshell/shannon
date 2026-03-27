@@ -245,11 +245,25 @@ pub(crate) fn run_repl(
         nu_protocol::PipelineData::empty(),
         false,
     );
-    let version = env!("CARGO_PKG_VERSION");
-    eprintln!("Welcome to Shannon, based on the Nu language, where all data is structured!");
-    eprintln!("Version: {version}");
-    eprintln!("Startup Time: {:?}", entire_start_time.elapsed());
-    eprintln!();
+    {
+        let version = env!("CARGO_PKG_VERSION");
+        let green = "\x1b[32m";
+        let purple = "\x1b[35m";
+        let bold = "\x1b[1m";
+        let reset = "\x1b[0m";
+        let fg = "\x1b[37m";
+        eprintln!(
+            "{fg}Welcome to {green}{bold}Shannon{reset}{fg}, based on the {green}Nu{reset}{fg} language, where all data is structured!{reset}"
+        );
+        eprintln!(
+            "{fg}Version: {green}{version}{reset}"
+        );
+        eprintln!(
+            "{green}{bold}Startup Time:{reset}{fg} {:?}{reset}",
+            entire_start_time.elapsed()
+        );
+        eprintln!();
+    }
 
     // Create the Shannon mode dispatcher with brush + AI engines
     let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
