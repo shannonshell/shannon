@@ -74,3 +74,4 @@ sqlite = ["nu-cli/sqlite", "nu-command/sqlite", "nu-std/sqlite", "nu-protocol/sq
 trash-support = ["nu-command/trash-support"]
 mcp = ["nu-mcp"]
 network = ["nu-command/network"]
+rustls-tls = []

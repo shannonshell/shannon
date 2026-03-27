@@ -248,7 +248,7 @@ pub(crate) fn run_repl(
     {
         let version = env!("CARGO_PKG_VERSION");
         let green = "\x1b[32m";
-        let purple = "\x1b[35m";
+        let _purple = "\x1b[35m";
         let bold = "\x1b[1m";
         let reset = "\x1b[0m";
         let fg = "\x1b[37m";

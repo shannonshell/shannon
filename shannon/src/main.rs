@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod command;
 mod command_context;
 mod config_files;
