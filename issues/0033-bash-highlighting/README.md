@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-26"
+closed = "2026-03-26"
 +++
 
 # Issue 33: Bash syntax highlighting in brush mode
@@ -79,3 +80,19 @@ need the bash path (~80 lines of node matching + ~70 lines of tree walking).
 5. Brush mode: comments (`# hello`) colored.
 6. Nu mode: highlighting unchanged (still uses NuHighlighter).
 7. AI mode: no highlighting (still uses NoOpHighlighter).
+
+**Result:** Pass
+
+All verification steps confirmed. Bash syntax highlighting works in brush mode
+with Tokyo Night colors.
+
+#### Conclusion
+
+BashHighlighter added to nu-cli using tree-sitter-bash. ~130 lines ported from
+the old shannon highlighter. Keywords, strings, variables, operators, and
+comments are colored. Nu and AI modes unaffected.
+
+## Conclusion
+
+Bash syntax highlighting restored in brush mode via tree-sitter-bash in the
+nushell fork's nu-cli crate.
