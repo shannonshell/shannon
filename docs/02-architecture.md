@@ -79,7 +79,7 @@ Shannon uses `~/.config/shannon/` with nushell's native config system:
 2. `env.nu` — nushell env setup
 3. `config.nu` — nushell config (keybindings, colors, hooks)
 
-Shannon-specific settings use `$env.SHANNON_CONFIG` as a nushell record.
+Shannon adds no custom configuration — nushell's `config.nu` handles everything.
 
 ## Syntax Highlighting
 

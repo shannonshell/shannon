@@ -58,21 +58,6 @@ $env.config.edit_mode = "vi"             # vi or emacs keybindings
 $env.config.history.file_format = "sqlite"
 ```
 
-## Shannon-Specific Settings
-
-Shannon settings use `$env.SHANNON_CONFIG` as a nushell record. Add to
-`~/.config/shannon/env.nu`:
-
-```nushell
-$env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush"]
-}
-```
-
-| Field | Default | Description |
-|-------|---------|-------------|
-| `TOGGLE` | `["nu", "brush"]` | Mode rotation order for Shift+Tab |
-
 ## Banner
 
 The startup banner respects nushell's `$env.config.show_banner` setting:

@@ -41,12 +41,3 @@ Shell-internal data stays within its mode:
 - Bash local variables and aliases don't exist in nushell
 - Only exported environment variables cross the boundary
 
-## Customizing the Toggle Order
-
-Add to `~/.config/shannon/env.nu`:
-
-```nushell
-$env.SHANNON_CONFIG = {
-    TOGGLE: ["brush", "nu"]  # brush first
-}
-```

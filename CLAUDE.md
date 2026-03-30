@@ -147,14 +147,9 @@ Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
 - `login.nu` — login shell config
 - `history.sqlite3` — SQLite command history
 
-Config is nushell-native. Shannon-specific settings use `$env.SHANNON_CONFIG`
-as a structured nushell record in env.nu:
-
-```nushell
-$env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush"]
-}
-```
+Config is nushell-native. Shannon adds no custom configuration beyond what
+nushell provides. All shell settings (keybindings, colors, hooks, completions)
+are configured via nushell's `config.nu`.
 
 The `env.sh` feature is critical — it lets users follow bash-style setup
 instructions ("add this to your .bashrc") directly. Shannon sources it via
