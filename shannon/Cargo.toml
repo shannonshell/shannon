@@ -1,6 +1,6 @@
 [package]
 name = "shannonshell"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2024"
 description = "A poly-shell built on nushell with seamless bash compatibility"
 license = "MIT"
