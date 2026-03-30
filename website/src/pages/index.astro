@@ -2,26 +2,22 @@
 import Base from "../layouts/Base.astro"
 ---
 
-<Base title="Shannon — nushell + bash">
+<Base title="Shannon — Nushell + Bash">
   <section>
-    <div class="flex items-center gap-4 mb-6">
+    <div class="flex items-center gap-4 mb-8">
       <img src="/images/shannon-1.webp" alt="Shannon logo" class="w-16 h-16" />
       <div>
-        <h1 class="text-lg font-bold text-foreground">Shannon</h1>
-        <p class="text-muted">
-          A poly-shell built on nushell, with seamless bash compatibility.
-        </p>
+        <h1 class="text-xl font-bold text-foreground">Shannon</h1>
+        <p class="text-primary text-sm font-bold">Nushell + Bash</p>
       </div>
     </div>
 
-    <p class="text-foreground-dark mb-4">
-      Nushell is powerful but the world runs on bash. Shannon gives you both —
-      press <span class="text-accent">Shift+Tab</span> to switch between
-      nushell and bash. Environment variables and working directory sync
-      automatically.
+    <p class="text-foreground mb-6 text-base">
+      Shannon is nushell with a built-in bash mode.
+      Press <span class="text-accent font-bold">Shift+Tab</span> to switch.
     </p>
 
-    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6"><code><span class="text-success">[nu]</span> ~/project &gt; ls | where size &gt; 1mb
+    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-success">[nu]</span> ~/project &gt; ls | where size &gt; 1mb
 ...
 <span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
 
@@ -31,21 +27,57 @@ import Base from "../layouts/Base.astro"
 
 <span class="text-success">[nu]</span> ~/project &gt;</code></pre>
 
+    <h2 class="text-primary font-bold mb-3">Why?</h2>
+
     <p class="text-foreground-dark mb-4">
-      When a tool says <em>"add this to your <span class="text-secondary">.bashrc</span>"</em>,
-      just put it in <span class="text-secondary">~/.config/shannon/env.sh</span>.
-      Shannon sources it with bash at startup and injects the environment into
-      nushell — no translation needed.
+      Nushell is great. But the world runs on bash. Every tool, every tutorial,
+      every Stack Overflow answer assumes bash. Shannon lets you use both
+      without leaving your shell.
     </p>
 
-    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6"><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+    <ul class="text-foreground-dark mb-6 space-y-2">
+      <li>
+        <span class="text-success font-bold">[nu]</span> for structured data,
+        pipelines, and modern shell features
+      </li>
+      <li>
+        <span class="text-accent font-bold">[bash]</span> when you need
+        <code class="text-secondary">&&</code>,
+        <code class="text-secondary">||</code>, or any bash-ism
+      </li>
+      <li>
+        <span class="text-foreground font-bold">Shift+Tab</span> to switch —
+        env vars and cwd sync automatically
+      </li>
+    </ul>
+
+    <h2 class="text-primary font-bold mb-3">env.sh: bash setup, nushell power</h2>
+
+    <p class="text-foreground-dark mb-4">
+      When a tool says <em>"add this to your
+      <span class="text-secondary">.bashrc</span>"</em> — just put it in
+      <span class="text-secondary">env.sh</span>. Shannon sources it with bash
+      at startup and injects the environment into nushell. No translation needed.
+    </p>
+
+    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
 eval "$(/opt/homebrew/bin/brew shellenv)"
 export PATH="$PATH:$HOME/.cargo/bin"
-export ANTHROPIC_API_KEY="sk-ant-..."</code></pre>
+. "$HOME/.nvm/nvm.sh"</code></pre>
 
-    <div class="mt-6">
-      <a href="/docs/getting-started" class="text-primary hover:text-accent">
-        &gt; [Get started]
+    <h2 class="text-primary font-bold mb-3">Everything nushell, plus bash</h2>
+
+    <p class="text-foreground-dark mb-4">
+      Shannon IS nushell. You get everything — structured data, plugins, job
+      control, completions, hooks, themes. Plus a bash mode one keypress away.
+    </p>
+
+    <div class="mt-8 flex gap-4">
+      <a href="/docs/getting-started" class="text-primary hover:text-accent font-bold">
+        &gt; Get started
+      </a>
+      <a href="https://github.com/shannonshell/shannon" class="text-muted hover:text-accent">
+        GitHub
       </a>
     </div>
   </section>
