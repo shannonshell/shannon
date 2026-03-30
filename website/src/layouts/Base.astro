@@ -1,0 +1,30 @@
+---
+import "../styles/style.css"
+import Header from "../components/Header.astro"
+import Footer from "../components/Footer.astro"
+
+interface Props {
+  title?: string
+}
+
+const { title = "Shannon" } = Astro.props
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>{title}</title>
+  </head>
+  <body class="text-sm">
+    <div class="max-w-3xl mx-auto px-4 py-6">
+      <Header />
+      <main class="mt-6">
+        <slot />
+      </main>
+      <Footer />
+    </div>
+  </body>
+</html>

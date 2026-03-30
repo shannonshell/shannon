@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="/favicon.ico"><title>Mode Switching — Shannon</title><link rel="stylesheet" href="/_astro/Base.BslDpFPT.css"></head> <body class="text-sm"> <div class="max-w-3xl mx-auto px-4 py-6"> <header class="flex items-center gap-4 text-sm"> <a href="/" class="text-foreground hover:text-primary font-bold">Shannon</a> <nav class="flex gap-3 text-muted"> <a href="/docs" class="hover:text-accent">Docs</a> <a href="https://github.com/shannonshell/shannon" class="hover:text-accent">GitHub</a> </nav> </header> <main class="mt-6">  <div class="flex gap-8"> <aside class="w-48 shrink-0 hidden md:block"> <nav class="text-xs space-y-3"> <a href="/docs/getting-started" class="block text-muted hover:text-foreground-dark"> Getting Started </a><a href="/docs/architecture" class="block text-muted hover:text-foreground-dark"> Architecture </a><a href="/docs/readme" class="block text-muted hover:text-foreground-dark"> Shannon Documentation </a> <div> <div class="text-foreground-dark font-bold mb-1">Features</div> <a href="/docs/features/shell-switching" class="block ml-2 text-accent"> Mode Switching </a><a href="/docs/features/state-sync" class="block ml-2 text-muted hover:text-foreground-dark"> State Synchronization </a><a href="/docs/features/syntax-highlighting" class="block ml-2 text-muted hover:text-foreground-dark"> Syntax Highlighting </a> </div><div> <div class="text-foreground-dark font-bold mb-1">Reference</div> <a href="/docs/reference/configuration" class="block ml-2 text-muted hover:text-foreground-dark"> Configuration </a> </div> </nav> </aside> <article class="prose-shannon min-w-0 flex-1"> <h1 id="mode-switching">Mode Switching</h1>
+<p>Shannon has two modes — press <strong>Shift+Tab</strong> to toggle between them:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>nu ↔ brush</span></span></code></pre>
+<h2 id="switching-in-action">Switching in Action</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[nu] ~/project > ls | where size > 1mb</span></span>
+<span class="line"><span>...</span></span>
+<span class="line"><span>[nu] ~/project > &#x3C;Shift+Tab></span></span>
+<span class="line"><span>[brush] ~/project > echo hello &#x26;&#x26; echo world</span></span>
+<span class="line"><span>hello</span></span>
+<span class="line"><span>world</span></span>
+<span class="line"><span>[brush] ~/project > &#x3C;Shift+Tab></span></span>
+<span class="line"><span>[nu] ~/project ></span></span></code></pre>
+<p>The prompt updates immediately to show the active mode.</p>
+<h2 id="what-carries-over">What Carries Over</h2>
+<p>When you switch modes, these are preserved:</p>
+<ol>
+<li><strong>Environment variables</strong> — <code>export FOO=bar</code> in brush is visible as
+<code>$env.FOO</code> in nushell</li>
+<li><strong>Working directory</strong> — <code>cd /tmp</code> in brush means you’re in <code>/tmp</code> when you
+switch to nushell</li>
+</ol>
+<p>Environment variables are converted automatically between nushell’s typed
+values and bash strings using <code>ENV_CONVERSIONS</code>.</p>
+<h2 id="what-doesnt-carry-over">What Doesn’t Carry Over</h2>
+<p>Shell-internal data stays within its mode:</p>
+<ul>
+<li>Nushell variables (<code>let x = 5</code>) don’t exist in brush</li>
+<li>Bash local variables and aliases don’t exist in nushell</li>
+<li>Only exported environment variables cross the boundary</li>
+</ul> </article> </div>  </main> <footer class="mt-12 pt-4 border-t border-border text-muted text-xs"> <p>&copy; 2026 Shannon. MIT License.</p> </footer> </div> </body></html>

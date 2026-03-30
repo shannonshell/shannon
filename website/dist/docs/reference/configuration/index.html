@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="/favicon.ico"><title>Configuration — Shannon</title><link rel="stylesheet" href="/_astro/Base.BslDpFPT.css"></head> <body class="text-sm"> <div class="max-w-3xl mx-auto px-4 py-6"> <header class="flex items-center gap-4 text-sm"> <a href="/" class="text-foreground hover:text-primary font-bold">Shannon</a> <nav class="flex gap-3 text-muted"> <a href="/docs" class="hover:text-accent">Docs</a> <a href="https://github.com/shannonshell/shannon" class="hover:text-accent">GitHub</a> </nav> </header> <main class="mt-6">  <div class="flex gap-8"> <aside class="w-48 shrink-0 hidden md:block"> <nav class="text-xs space-y-3"> <a href="/docs/getting-started" class="block text-muted hover:text-foreground-dark"> Getting Started </a><a href="/docs/architecture" class="block text-muted hover:text-foreground-dark"> Architecture </a><a href="/docs/readme" class="block text-muted hover:text-foreground-dark"> Shannon Documentation </a> <div> <div class="text-foreground-dark font-bold mb-1">Features</div> <a href="/docs/features/shell-switching" class="block ml-2 text-muted hover:text-foreground-dark"> Mode Switching </a><a href="/docs/features/state-sync" class="block ml-2 text-muted hover:text-foreground-dark"> State Synchronization </a><a href="/docs/features/syntax-highlighting" class="block ml-2 text-muted hover:text-foreground-dark"> Syntax Highlighting </a> </div><div> <div class="text-foreground-dark font-bold mb-1">Reference</div> <a href="/docs/reference/configuration" class="block ml-2 text-accent"> Configuration </a> </div> </nav> </aside> <article class="prose-shannon min-w-0 flex-1"> <h1 id="configuration">Configuration</h1>
+<p>Shannon stores its files in <code>~/.config/shannon/</code>. The config directory respects
+<code>XDG_CONFIG_HOME</code> — if set, shannon uses <code>$XDG_CONFIG_HOME/shannon/</code> instead.</p>
+<h2 id="files">Files</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>File</th><th>Purpose</th></tr></thead><tbody><tr><td><code>env.sh</code></td><td>Bash environment setup — PATH, env vars, API keys (runs first)</td></tr><tr><td><code>env.nu</code></td><td>Nushell env setup (runs after env.sh)</td></tr><tr><td><code>config.nu</code></td><td>Nushell config — keybindings, colors, hooks, completions</td></tr><tr><td><code>login.nu</code></td><td>Login shell config</td></tr><tr><td><code>history.sqlite3</code></td><td>SQLite command history</td></tr></tbody></table>
+<p>None of these files are required. Shannon works out of the box.</p>
+<h2 id="envsh-bash-environment">env.sh (Bash Environment)</h2>
+<p>Shannon runs an optional bash script at startup via brush to set up the
+environment. Create <code>~/.config/shannon/env.sh</code>:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#6A737D"># ~/.config/shannon/env.sh</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Homebrew</span></span>
+<span class="line"><span style="color:#79B8FF">eval</span><span style="color:#9ECBFF"> "$(</span><span style="color:#B392F0">/opt/homebrew/bin/brew</span><span style="color:#9ECBFF"> shellenv)"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Custom paths</span></span>
+<span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> PATH</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">"</span><span style="color:#E1E4E8">$PATH</span><span style="color:#9ECBFF">:</span><span style="color:#E1E4E8">$HOME</span><span style="color:#9ECBFF">/.cargo/bin"</span></span>
+<span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> PATH</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">"</span><span style="color:#E1E4E8">$PATH</span><span style="color:#9ECBFF">:</span><span style="color:#E1E4E8">$HOME</span><span style="color:#9ECBFF">/.local/bin"</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#6A737D"># Environment variables</span></span>
+<span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> EDITOR</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">"nvim"</span></span>
+<span class="line"><span style="color:#F97583">export</span><span style="color:#E1E4E8"> ANTHROPIC_API_KEY</span><span style="color:#F97583">=</span><span style="color:#9ECBFF">"sk-ant-..."</span></span></code></pre>
+<p>This runs once when shannon starts, before <code>env.nu</code> and <code>config.nu</code>. The
+resulting environment variables are injected into nushell’s Stack.</p>
+<p>This is critical for compatibility — tutorials and AI always give instructions
+as “add this to your .bashrc.” Shannon’s <code>env.sh</code> lets you follow those
+instructions directly.</p>
+<h2 id="envnu-and-confignu-nushell-config">env.nu and config.nu (Nushell Config)</h2>
+<p>These are nushell’s native config files. See the
+<a href="https://nushell.sh/book/configuration.html">Nushell configuration docs</a>
+for full details.</p>
+<p>Common settings:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="nushell"><code><span class="line"><span style="color:#6A737D"># ~/.config/shannon/config.nu</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.show_banner </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> false</span><span style="color:#6A737D">          # disable startup banner</span></span>
+<span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.edit_mode </span><span style="color:#F97583">=</span><span style="color:#9ECBFF"> "vi"</span><span style="color:#6A737D">             # vi or emacs keybindings</span></span>
+<span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.history.file_format </span><span style="color:#F97583">=</span><span style="color:#9ECBFF"> "sqlite"</span></span></code></pre>
+<h2 id="banner">Banner</h2>
+<p>The startup banner respects nushell’s <code>$env.config.show_banner</code> setting:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="nushell"><code><span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.show_banner </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> false</span><span style="color:#6A737D">    # no banner</span></span>
+<span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.show_banner </span><span style="color:#F97583">=</span><span style="color:#9ECBFF"> "short"</span><span style="color:#6A737D">  # just startup time</span></span>
+<span class="line"><span style="color:#79B8FF">$env</span><span style="color:#E1E4E8">.config.show_banner </span><span style="color:#F97583">=</span><span style="color:#79B8FF"> true</span><span style="color:#6A737D">     # full welcome message (default)</span></span></code></pre> </article> </div>  </main> <footer class="mt-12 pt-4 border-t border-border text-muted text-xs"> <p>&copy; 2026 Shannon. MIT License.</p> </footer> </div> </body></html>

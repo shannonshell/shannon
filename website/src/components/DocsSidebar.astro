@@ -1,0 +1,59 @@
+---
+interface DocLink {
+  slug: string
+  title: string
+  section?: string
+}
+
+interface Props {
+  pages: DocLink[]
+  currentSlug: string
+}
+
+const { pages, currentSlug } = Astro.props
+
+// Group pages by section
+const topLevel = pages.filter((p) => !p.section)
+const sections = new Map<string, DocLink[]>()
+for (const page of pages) {
+  if (page.section) {
+    const list = sections.get(page.section) || []
+    list.push(page)
+    sections.set(page.section, list)
+  }
+}
+---
+
+<nav class="text-xs space-y-3">
+  {
+    topLevel.map((page) => (
+      <a
+        href={`/docs/${page.slug}`}
+        class:list={[
+          "block",
+          currentSlug === page.slug ? "text-accent" : "text-muted hover:text-foreground-dark",
+        ]}
+      >
+        {page.title}
+      </a>
+    ))
+  }
+  {
+    Array.from(sections.entries()).map(([section, items]) => (
+      <div>
+        <div class="text-foreground-dark font-bold mb-1">{section}</div>
+        {items.map((page) => (
+          <a
+            href={`/docs/${page.slug}`}
+            class:list={[
+              "block ml-2",
+              currentSlug === page.slug ? "text-accent" : "text-muted hover:text-foreground-dark",
+            ]}
+          >
+            {page.title}
+          </a>
+        ))}
+      </div>
+    ))
+  }
+</nav>

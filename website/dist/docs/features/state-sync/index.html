@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="/favicon.ico"><title>State Synchronization — Shannon</title><link rel="stylesheet" href="/_astro/Base.BslDpFPT.css"></head> <body class="text-sm"> <div class="max-w-3xl mx-auto px-4 py-6"> <header class="flex items-center gap-4 text-sm"> <a href="/" class="text-foreground hover:text-primary font-bold">Shannon</a> <nav class="flex gap-3 text-muted"> <a href="/docs" class="hover:text-accent">Docs</a> <a href="https://github.com/shannonshell/shannon" class="hover:text-accent">GitHub</a> </nav> </header> <main class="mt-6">  <div class="flex gap-8"> <aside class="w-48 shrink-0 hidden md:block"> <nav class="text-xs space-y-3"> <a href="/docs/getting-started" class="block text-muted hover:text-foreground-dark"> Getting Started </a><a href="/docs/architecture" class="block text-muted hover:text-foreground-dark"> Architecture </a><a href="/docs/readme" class="block text-muted hover:text-foreground-dark"> Shannon Documentation </a> <div> <div class="text-foreground-dark font-bold mb-1">Features</div> <a href="/docs/features/shell-switching" class="block ml-2 text-muted hover:text-foreground-dark"> Mode Switching </a><a href="/docs/features/state-sync" class="block ml-2 text-accent"> State Synchronization </a><a href="/docs/features/syntax-highlighting" class="block ml-2 text-muted hover:text-foreground-dark"> Syntax Highlighting </a> </div><div> <div class="text-foreground-dark font-bold mb-1">Reference</div> <a href="/docs/reference/configuration" class="block ml-2 text-muted hover:text-foreground-dark"> Configuration </a> </div> </nav> </aside> <article class="prose-shannon min-w-0 flex-1"> <h1 id="state-synchronization">State Synchronization</h1>
+<p>Shannon keeps your environment variables and working directory in sync across
+mode switches.</p>
+<h2 id="environment-variables">Environment Variables</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[brush] ~/project > export API_KEY="sk-1234"</span></span>
+<span class="line"><span>[brush] ~/project > &#x3C;Shift+Tab></span></span>
+<span class="line"><span>[nu] ~/project > $env.API_KEY</span></span>
+<span class="line"><span>sk-1234</span></span></code></pre>
+<p>It works both ways:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[nu] ~/project > $env.FOO = "hello"</span></span>
+<span class="line"><span>[nu] ~/project > &#x3C;Shift+Tab></span></span>
+<span class="line"><span>[brush] ~/project > echo $FOO</span></span>
+<span class="line"><span>hello</span></span></code></pre>
+<h2 id="typed-value-conversion">Typed Value Conversion</h2>
+<p>Nushell stores some env vars as typed values (PATH is a list, not a string).
+Shannon handles this automatically:</p>
+<ul>
+<li><strong>Nu to Brush:</strong> <code>env_to_strings()</code> converts typed values to strings using
+<code>ENV_CONVERSIONS</code> <code>to_string</code> closures</li>
+<li><strong>Brush to Nu:</strong> String env vars are written back. Nushell automatically
+applies <code>from_string</code> conversions on the next REPL iteration</li>
+</ul>
+<p>You don’t need to do anything — PATH, LS_COLORS, and other typed vars just
+work.</p>
+<h2 id="working-directory">Working Directory</h2>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8; overflow-x: auto;" tabindex="0" data-language="plaintext"><code><span class="line"><span>[brush] ~/project > cd /tmp</span></span>
+<span class="line"><span>[brush] /tmp > &#x3C;Shift+Tab></span></span>
+<span class="line"><span>[nu] /tmp ></span></span></code></pre>
+<h2 id="the-strings-only-boundary">The Strings-Only Boundary</h2>
+<p>Only exported environment variables and the cwd cross between modes. Internal
+shell state does not transfer:</p>
+<ul>
+<li>Nushell variables (<code>let x = 5</code>) stay in nushell</li>
+<li>Bash local variables and aliases stay in brush</li>
+<li>Use <code>export</code> / <code>$env.X = ...</code> for values that need to cross</li>
+</ul> </article> </div>  </main> <footer class="mt-12 pt-4 border-t border-border text-muted text-xs"> <p>&copy; 2026 Shannon. MIT License.</p> </footer> </div> </body></html>
