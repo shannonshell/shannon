@@ -1,6 +1,6 @@
 # Shannon
 
-An AI-first shell built on nushell, with seamless bash compatibility via brush.
+A poly-shell built on nushell, with seamless bash compatibility via brush.
 Shift+Tab cycles between nu and bash modes.
 Named after Claude Shannon.
 

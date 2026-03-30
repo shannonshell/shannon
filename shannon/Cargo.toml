@@ -2,11 +2,11 @@
 name = "shannonshell"
 version = "0.3.5"
 edition = "2024"
-description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
+description = "A poly-shell built on nushell with seamless bash compatibility"
 license = "MIT"
 repository = "https://github.com/shannonshell/shannon"
 readme = "README.md"
-keywords = ["shell", "nushell", "bash", "ai", "terminal"]
+keywords = ["shell", "nushell", "bash", "terminal", "poly-shell"]
 categories = ["command-line-utilities"]
 
 [[bin]]
