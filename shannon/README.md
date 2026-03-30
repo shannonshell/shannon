@@ -1,6 +1,6 @@
 # Shannon
 
-A poly-shell built on nushell, with seamless bash compatibility via brush.
+A poly-shell built on nushell, with seamless bash compatibility.
 Shift+Tab to switch between nushell and bash.
 
 Named after [Claude Shannon](https://en.wikipedia.org/wiki/Claude_Shannon),

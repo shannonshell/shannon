@@ -48,5 +48,5 @@ Only exported environment variables and the cwd cross between modes. Internal
 shell state does not transfer:
 
 - Nushell variables (`let x = 5`) stay in nushell
-- Bash local variables and aliases stay in brush
+- Bash local variables and aliases stay in bash
 - Use `export` / `$env.X = ...` for values that need to cross

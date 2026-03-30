@@ -17,7 +17,7 @@ None of these files are required. Shannon works out of the box.
 
 ## env.sh (Bash Environment)
 
-Shannon runs an optional bash script at startup via brush to set up the
+Shannon runs an optional bash script at startup via bash to set up the
 environment. Create `~/.config/shannon/env.sh`:
 
 ```bash

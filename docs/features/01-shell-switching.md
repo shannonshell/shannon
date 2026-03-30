@@ -3,7 +3,7 @@
 Shannon has two modes — press **Shift+Tab** to toggle between them:
 
 ```
-nu ↔ brush
+nu ↔ bash
 ```
 
 ## Switching in Action
@@ -37,7 +37,7 @@ values and bash strings using `ENV_CONVERSIONS`.
 
 Shell-internal data stays within its mode:
 
-- Nushell variables (`let x = 5`) don't exist in brush
+- Nushell variables (`let x = 5`) don't exist in bash
 - Bash local variables and aliases don't exist in nushell
 - Only exported environment variables cross the boundary
 
