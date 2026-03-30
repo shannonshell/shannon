@@ -17,7 +17,7 @@ Shannon has two modes, toggled via Shift+Tab:
 - **brush** — bash commands via the brush crate
 
 The mode is stored in `$env.SHANNON_MODE`. When the mode is "nu", commands
-go through nushell's parser and evaluator as normal. When the mode is "brush"
+go through nushell's parser and evaluator as normal. When the mode is "bash"
 or "ai", a `ModeDispatcher` trait intercepts the command in
 `loop_iteration()` and routes it to the appropriate engine.
 
@@ -86,7 +86,7 @@ Shannon adds no custom configuration — nushell's `config.nu` handles everythin
 Each mode has its own highlighter, rebuilt every REPL iteration:
 
 - **Nu mode:** `NuHighlighter` (nushell's native highlighter)
-- **Brush mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
+- **Bash mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
 
 ## Source Code Layout
 

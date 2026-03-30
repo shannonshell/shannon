@@ -6,8 +6,8 @@ mode switches.
 ## Environment Variables
 
 ```
-[brush] ~/project > export API_KEY="sk-1234"
-[brush] ~/project > <Shift+Tab>
+[bash] ~/project > export API_KEY="sk-1234"
+[bash] ~/project > <Shift+Tab>
 [nu] ~/project > $env.API_KEY
 sk-1234
 ```
@@ -17,7 +17,7 @@ It works both ways:
 ```
 [nu] ~/project > $env.FOO = "hello"
 [nu] ~/project > <Shift+Tab>
-[brush] ~/project > echo $FOO
+[bash] ~/project > echo $FOO
 hello
 ```
 
@@ -37,8 +37,8 @@ work.
 ## Working Directory
 
 ```
-[brush] ~/project > cd /tmp
-[brush] /tmp > <Shift+Tab>
+[bash] ~/project > cd /tmp
+[bash] /tmp > <Shift+Tab>
 [nu] /tmp >
 ```
 

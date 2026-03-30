@@ -234,7 +234,7 @@ pub(crate) fn run_repl(
             let mode = ($env.SHANNON_MODE? | default "nu")
             let color = match $mode {
                 "nu" => (ansi green)
-                "brush" => (ansi cyan)
+                "bash" => (ansi cyan)
                 _ => (ansi green)
             }
             let reset = (ansi reset)

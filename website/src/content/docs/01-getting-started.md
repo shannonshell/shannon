@@ -113,7 +113,7 @@ Press **Shift+Tab** to toggle between modes:
 
 ```
 [nu] ~/projects > ls | where size > 1mb    ← nushell
-[brush] ~/projects > grep -r TODO src/     ← bash
+[bash] ~/projects > grep -r TODO src/     ← bash
 ```
 
 Your environment variables and working directory carry over when you switch.
@@ -127,11 +127,11 @@ In **nu mode**, use nushell syntax:
 [nu] ~/project > $env.HOME
 ```
 
-In **brush mode**, use bash syntax:
+In **bash mode**, use bash syntax:
 
 ```
-[brush] ~/project > echo hello && echo world
-[brush] ~/project > export FOO=bar
+[bash] ~/project > echo hello && echo world
+[bash] ~/project > export FOO=bar
 ```
 
 ## Exiting

@@ -12,10 +12,10 @@ nu ↔ brush
 [nu] ~/project > ls | where size > 1mb
 ...
 [nu] ~/project > <Shift+Tab>
-[brush] ~/project > echo hello && echo world
+[bash] ~/project > echo hello && echo world
 hello
 world
-[brush] ~/project > <Shift+Tab>
+[bash] ~/project > <Shift+Tab>
 [nu] ~/project >
 ```
 

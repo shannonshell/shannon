@@ -5,7 +5,7 @@ This document explains how shannon works under the hood.
 ## Shannon IS Nushell
 
 Shannon copies the nushell binary source code (~4,600 lines) and adds mode
-dispatch for brush (bash). This gives shannon all nushell features for
+dispatch for bash (via brush crate). This gives shannon all nushell features for
 free: terminal ownership, process groups, job control, signal handling,
 multiline editing, completions, hooks, plugins, and more.
 
@@ -14,10 +14,10 @@ multiline editing, completions, hooks, plugins, and more.
 Shannon has two modes, toggled via Shift+Tab:
 
 - **nu** — nushell's native evaluation (default)
-- **brush** — bash commands via the brush crate
+- **bash** — bash commands via the brush crate
 
 The mode is stored in `$env.SHANNON_MODE`. When the mode is "nu", commands
-go through nushell's parser and evaluator as normal. When the mode is "brush"
+go through nushell's parser and evaluator as normal. When the mode is "bash"
 or "ai", a `ModeDispatcher` trait intercepts the command in
 `loop_iteration()` and routes it to the appropriate engine.
 
@@ -75,7 +75,7 @@ preserved:
 
 Shannon uses `~/.config/shannon/` with nushell's native config system:
 
-1. `env.sh` — bash environment setup via brush (runs first)
+1. `env.sh` — bash environment setup via bash (runs first)
 2. `env.nu` — nushell env setup
 3. `config.nu` — nushell config (keybindings, colors, hooks)
 
@@ -86,7 +86,7 @@ Shannon adds no custom configuration — nushell's `config.nu` handles everythin
 Each mode has its own highlighter, rebuilt every REPL iteration:
 
 - **Nu mode:** `NuHighlighter` (nushell's native highlighter)
-- **Brush mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
+- **Bash mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
 
 ## Source Code Layout
 

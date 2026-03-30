@@ -12,10 +12,10 @@ nu ↔ brush
 [nu] ~/project > ls | where size > 1mb
 ...
 [nu] ~/project > <Shift+Tab>
-[brush] ~/project > echo hello && echo world
+[bash] ~/project > echo hello && echo world
 hello
 world
-[brush] ~/project > <Shift+Tab>
+[bash] ~/project > <Shift+Tab>
 [nu] ~/project >
 ```
 
@@ -25,9 +25,9 @@ The prompt updates immediately to show the active mode.
 
 When you switch modes, these are preserved:
 
-1. **Environment variables** — `export FOO=bar` in brush is visible as
+1. **Environment variables** — `export FOO=bar` in bash is visible as
    `$env.FOO` in nushell
-2. **Working directory** — `cd /tmp` in brush means you're in `/tmp` when you
+2. **Working directory** — `cd /tmp` in bash means you're in `/tmp` when you
    switch to nushell
 
 Environment variables are converted automatically between nushell's typed

@@ -17,9 +17,9 @@ and working directory sync automatically.
 ...
 [nu] ~/project > <Shift+Tab>
 
-[brush] ~/project > grep -r "TODO" src/ && echo "done"
+[bash] ~/project > grep -r "TODO" src/ && echo "done"
 ...
-[brush] ~/project > <Shift+Tab>
+[bash] ~/project > <Shift+Tab>
 
 [nu] ~/project >
 ```
@@ -38,7 +38,7 @@ Shannon IS nushell — you get all nushell features out of the box:
 
 ### Bash Compatibility
 
-- **Shift+Tab** to switch to `[brush]` mode for bash commands
+- **Shift+Tab** to switch to `[bash]` mode for bash commands
 - Bash syntax highlighting (tree-sitter-bash, Tokyo Night colors)
 - Environment variables sync between nushell and bash automatically
 - `env.sh` for bash-style setup (PATH, API keys) — follow any tutorial that

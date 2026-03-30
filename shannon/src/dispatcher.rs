@@ -33,7 +33,7 @@ impl ModeDispatcher for ShannonDispatcher {
             last_exit_code: 0,
         };
         match mode {
-            "brush" => {
+            "bash" => {
                 self.brush.inject_state(&state);
                 let result = self.brush.execute(command);
                 ModeResult {
