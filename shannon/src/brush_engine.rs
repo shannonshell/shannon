@@ -44,9 +44,11 @@ impl BrushEngine {
     fn do_execute(&mut self, command: &str) -> ShellState {
         let params = self.shell.default_exec_params();
 
-        let result = self
-            .runtime
-            .block_on(self.shell.run_string(command, &SourceInfo::default(), &params));
+        let result = self.runtime.block_on(self.shell.run_string(
+            command,
+            &SourceInfo::default(),
+            &params,
+        ));
 
         let exit_code = match result {
             Ok(r) => self.exit_code_to_i32(&r.exit_code),
