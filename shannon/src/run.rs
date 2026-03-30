@@ -188,14 +188,14 @@ pub(crate) fn run_repl(
     trace!("run_repl");
     let start_time = std::time::Instant::now();
 
-    // Load env.sh via brush before nushell config (bash env compatibility)
+    // Create the dispatcher early — it sources env.sh in the embedded brush
+    // engine so bash functions (like nvm) persist. Also captures env vars
+    // to inject into nushell's stack before config loading.
+    let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
     if parsed_nu_cli_args.no_config_file.is_none() {
-        let shell_state = shannonshell::executor::run_startup_script(
-            shannonshell::shell::ShellState::from_current_env(),
-        );
-        for (key, value) in &shell_state.env {
+        for (key, value) in dispatcher.env_vars() {
             stack.add_env_var(
-                key.clone(),
+                key,
                 nu_protocol::Value::string(value, nu_protocol::Span::unknown()),
             );
         }
@@ -295,8 +295,7 @@ pub(crate) fn run_repl(
         }
     }
 
-    // Create the Shannon mode dispatcher with brush + AI engines
-    let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
+    // Wrap the dispatcher for the REPL (created earlier for env.sh loading)
     let dispatcher: std::sync::Arc<std::sync::Mutex<Box<dyn nu_cli::ModeDispatcher>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Box::new(dispatcher)));
 

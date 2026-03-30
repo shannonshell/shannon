@@ -13,9 +13,26 @@ pub struct ShannonDispatcher {
 
 impl ShannonDispatcher {
     pub fn new() -> Self {
-        ShannonDispatcher {
-            brush: BrushEngine::new(),
+        let mut brush = BrushEngine::new();
+
+        // Source env.sh in the embedded brush engine so bash functions
+        // (like nvm) persist across commands in bash mode.
+        let config_dir = crate::shell::config_dir();
+        let env_sh = config_dir.join("env.sh");
+        if env_sh.exists() {
+            let state = ShellState::from_current_env();
+            brush.inject_state(&state);
+            let source_cmd = format!(". '{}'", env_sh.display());
+            brush.execute(&source_cmd);
         }
+
+        ShannonDispatcher { brush }
+    }
+
+    /// Get the current env vars from brush (after sourcing env.sh).
+    /// Used to inject bash env vars into nushell's Stack at startup.
+    pub fn env_vars(&self) -> HashMap<String, String> {
+        self.brush.capture_env()
     }
 }
 

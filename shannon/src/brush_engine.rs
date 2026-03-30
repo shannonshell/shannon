@@ -80,7 +80,7 @@ impl BrushEngine {
     }
 
     /// Capture all exported env vars directly from brush's environment.
-    fn capture_env(&self) -> HashMap<String, String> {
+    pub fn capture_env(&self) -> HashMap<String, String> {
         let mut env = HashMap::new();
 
         for (name, var) in self.shell.env().iter_exported() {
