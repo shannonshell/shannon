@@ -31,6 +31,18 @@ import Base from "../layouts/Base.astro"
 
 <span class="text-success">[nu]</span> ~/project &gt;</code></pre>
 
+    <p class="text-foreground-dark mb-4">
+      When a tool says <em>"add this to your <span class="text-secondary">.bashrc</span>"</em>,
+      just put it in <span class="text-secondary">~/.config/shannon/env.sh</span>.
+      Shannon sources it with bash at startup and injects the environment into
+      nushell — no translation needed.
+    </p>
+
+    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6"><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+eval "$(/opt/homebrew/bin/brew shellenv)"
+export PATH="$PATH:$HOME/.cargo/bin"
+export ANTHROPIC_API_KEY="sk-ant-..."</code></pre>
+
     <div class="mt-6">
       <a href="/docs/getting-started" class="text-primary hover:text-accent">
         &gt; [Get started]
