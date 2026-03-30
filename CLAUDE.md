@@ -1,7 +1,7 @@
 # Shannon
 
-An AI-first shell built on nushell, with seamless bash compatibility via brush
-and AI chat via Anthropic. Shift+Tab cycles between nu, brush, and ai modes.
+An AI-first shell built on nushell, with seamless bash compatibility via brush.
+Shift+Tab cycles between nu and brush modes.
 Named after Claude Shannon.
 
 ## Build
@@ -18,7 +18,7 @@ run from there.
 ## Architecture
 
 Shannon IS nushell — it copies the nushell binary source code and adds mode
-dispatch for brush (bash) and AI. Nushell's REPL handles terminal ownership,
+dispatch for brush (bash). Nushell's REPL handles terminal ownership,
 process groups, job control, signal handling, multiline editing, completions,
 and all interactive features. Shannon adds a `ModeDispatcher` trait (defined
 in nu-cli) that intercepts commands when the mode is not "nu".
@@ -65,11 +65,9 @@ shannon/              (main repo)
 - `lib.rs` — library exports for the shannonshell crate
 - `dispatcher.rs` — `ShannonDispatcher` implementing `ModeDispatcher`
 - `brush_engine.rs` — `BrushEngine` (embedded bash via brush crate)
-- `ai_engine.rs` — `AiEngine` (LLM chat via rig-core), `AiConfig`
 - `shell_engine.rs` — `ShellEngine` trait
 - `shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
 - `executor.rs` — startup script (`env.sh`) execution via bash
-- `ai/` — AI infrastructure: provider setup, session history, prompt builder
 
 ### How command execution works
 
@@ -87,11 +85,6 @@ shannon/              (main repo)
 5. `BrushEngine::execute()` runs the command via brush's `run_string()`
 6. Result (env vars, cwd, exit code) written back to nushell's Stack
 7. Nushell's REPL continues with updated state
-
-**AI mode:**
-1. User types a message (plain English)
-2. Same dispatch as brush, but `AiEngine::execute()` sends to LLM
-3. AI doesn't modify env or cwd — state unchanged
 
 ### Environment propagation
 
@@ -118,8 +111,8 @@ Every new feature must include tests. No feature ships without test coverage.
   job control, plugins, multiline editing, completions, hooks, etc.
 - **Trait injection** — `ModeDispatcher` trait defined in nu-cli, implemented
   by `ShannonDispatcher` in shannon. Nushell's fork has a ~30-line hook in
-  `loop_iteration()`. Shannon stays the primary binary; nushell stays a
-  dependency.
+  `loop_iteration()` that dispatches to brush when `$env.SHANNON_MODE` is
+  "brush". Shannon stays the primary binary; nushell stays a dependency.
 - **Strings at the boundary** — env vars cross between shells as strings.
   `env_to_strings()` and `from_string` conversions handle typed values
   (PATH as list, etc.).
@@ -132,11 +125,10 @@ Every new feature must include tests. No feature ships without test coverage.
 
 ## Modes
 
-Shannon has three modes, cycled via Shift+Tab:
+Shannon has two modes, cycled via Shift+Tab:
 
 - **nu** — nushell (native, default)
 - **brush** — bash-compatible via brush crate
-- **ai** — AI chat powered by an LLM (Anthropic by default)
 
 Mode is stored in `$env.SHANNON_MODE`. Shift+Tab sends `__shannon_switch`
 via reedline's `ExecuteHostCommand`, which cycles the mode.
@@ -144,7 +136,6 @@ via reedline's `ExecuteHostCommand`, which cycles the mode.
 Each mode gets appropriate syntax highlighting:
 - Nu mode: `NuHighlighter` (nushell's native highlighter)
 - Brush mode: `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
-- AI mode: `NoOpHighlighter` (plain text)
 
 ## Config
 
@@ -161,10 +152,7 @@ as a structured nushell record in env.nu:
 
 ```nushell
 $env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush", "ai"]
-    AI_PROVIDER: "anthropic"
-    AI_MODEL: "claude-sonnet-4-20250514"
-    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+    TOGGLE: ["nu", "brush"]
 }
 ```
 

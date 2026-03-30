@@ -43,9 +43,6 @@ nu-mcp = { path = "../nushell/crates/nu-mcp", version = "0.111.2", package = "sh
 brush-core = { path = "../brush/brush-core", version = "0.4.0", package = "shannon-brush-core" }
 brush-builtins = { path = "../brush/brush-builtins", version = "0.1.0", package = "shannon-brush-builtins" }
 
-# AI provider
-rig-core = { version = "0.33", default-features = false, features = ["reqwest-rustls"] }
-
 # Core deps
 crossterm = "0.29.0"
 ctrlc = "3.5"
@@ -62,7 +59,6 @@ tempfile = "3"
 time = "0.3"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 same-file = "1.0"
-uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 nix = { version = "0.30", default-features = false, features = ["signal", "process", "fs", "term"] }

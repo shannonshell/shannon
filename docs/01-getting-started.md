@@ -39,12 +39,11 @@ Shannon starts in nushell mode. All nushell commands work.
 
 ## Switching Modes
 
-Press **Shift+Tab** to cycle between modes:
+Press **Shift+Tab** to toggle between modes:
 
 ```
 [nu] ~/projects > ls | where size > 1mb    ← nushell
 [brush] ~/projects > grep -r TODO src/     ← bash
-[ai] ~/projects > how do I find large files? ← AI chat
 ```
 
 Your environment variables and working directory carry over when you switch.
@@ -63,12 +62,6 @@ In **brush mode**, use bash syntax:
 ```
 [brush] ~/project > echo hello && echo world
 [brush] ~/project > export FOO=bar
-```
-
-In **ai mode**, type plain English:
-
-```
-[ai] ~/project > how do I compress a folder?
 ```
 
 ## Setting Up Your Environment

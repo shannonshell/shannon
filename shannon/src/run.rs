@@ -235,7 +235,6 @@ pub(crate) fn run_repl(
             let color = match $mode {
                 "nu" => (ansi green)
                 "brush" => (ansi cyan)
-                "ai" => (ansi magenta)
                 _ => (ansi green)
             }
             let reset = (ansi reset)

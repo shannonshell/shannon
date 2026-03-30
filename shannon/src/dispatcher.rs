@@ -4,22 +4,17 @@ use std::path::PathBuf;
 use nu_cli::{ModeDispatcher, ModeResult};
 
 use crate::brush_engine::BrushEngine;
-use crate::ai_engine::AiEngine;
 use crate::shell::ShellState;
 use crate::shell_engine::ShellEngine;
 
 pub struct ShannonDispatcher {
     brush: BrushEngine,
-    ai: AiEngine,
 }
 
 impl ShannonDispatcher {
     pub fn new() -> Self {
-        // Default AI config from env vars
-        let ai_config = crate::ai_engine::AiConfig::default();
         ShannonDispatcher {
             brush: BrushEngine::new(),
-            ai: AiEngine::new(ai_config),
         }
     }
 }
@@ -45,15 +40,6 @@ impl ModeDispatcher for ShannonDispatcher {
                     env: result.env,
                     cwd: result.cwd,
                     exit_code: result.last_exit_code,
-                }
-            }
-            "ai" => {
-                self.ai.inject_state(&state);
-                self.ai.execute(command);
-                ModeResult {
-                    env: state.env,
-                    cwd: state.cwd,
-                    exit_code: 0,
                 }
             }
             _ => ModeResult {

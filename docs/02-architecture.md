@@ -5,17 +5,16 @@ This document explains how shannon works under the hood.
 ## Shannon IS Nushell
 
 Shannon copies the nushell binary source code (~4,600 lines) and adds mode
-dispatch for brush (bash) and AI. This gives shannon all nushell features for
+dispatch for brush (bash). This gives shannon all nushell features for
 free: terminal ownership, process groups, job control, signal handling,
 multiline editing, completions, hooks, plugins, and more.
 
 ## Mode Dispatch
 
-Shannon has three modes, cycled via Shift+Tab:
+Shannon has two modes, toggled via Shift+Tab:
 
 - **nu** — nushell's native evaluation (default)
 - **brush** — bash commands via the brush crate
-- **ai** — AI chat via an LLM
 
 The mode is stored in `$env.SHANNON_MODE`. When the mode is "nu", commands
 go through nushell's parser and evaluator as normal. When the mode is "brush"
@@ -40,7 +39,8 @@ pub trait ModeDispatcher: Send {
 
 The dispatcher receives string env vars (converted from nushell's typed
 values via `env_to_strings()`) and returns strings. Nushell's REPL writes
-them back to the Stack. The dispatcher never touches nushell internals.
+them back to the Stack. The dispatcher never touches nushell internals
+directly.
 
 ## Forked Dependencies
 
@@ -87,7 +87,6 @@ Each mode has its own highlighter, rebuilt every REPL iteration:
 
 - **Nu mode:** `NuHighlighter` (nushell's native highlighter)
 - **Brush mode:** `BashHighlighter` (tree-sitter-bash, Tokyo Night colors)
-- **AI mode:** `NoOpHighlighter` (plain unstyled text)
 
 ## Source Code Layout
 
@@ -97,5 +96,5 @@ Each mode has its own highlighter, rebuilt every REPL iteration:
 `experimental_options.rs`, `test_bins.rs`
 
 **Shannon-specific (engines and dispatch):**
-`dispatcher.rs`, `brush_engine.rs`, `ai_engine.rs`, `shell_engine.rs`,
-`shell.rs`, `executor.rs`, `ai/`
+`dispatcher.rs`, `brush_engine.rs`, `shell_engine.rs`, `shell.rs`,
+`executor.rs`

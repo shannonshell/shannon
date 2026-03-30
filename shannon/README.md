@@ -1,39 +1,30 @@
 # Shannon
 
-An AI-first shell built on nushell, with seamless bash compatibility and
-AI chat — all in one session.
+A poly-shell built on nushell, with seamless bash compatibility via brush.
+Shift+Tab to switch between nushell and bash.
 
 Named after [Claude Shannon](https://en.wikipedia.org/wiki/Claude_Shannon),
 the father of information theory.
 
 ## The Idea
 
-Nobody remembers every shell command. Shannon lets you type in plain English
-and have an LLM translate your intent into the right command. When you need
-precise control, press **Shift+Tab** to drop into bash — then Shift+Tab back.
+Nushell is powerful but the world runs on bash. Shannon gives you both —
+press **Shift+Tab** to switch between nushell and bash. Environment variables
+and working directory sync automatically.
 
 ```
 [nu] ~/project > ls | where size > 1mb
 ...
 [nu] ~/project > <Shift+Tab>
 
-[brush] ~/project > grep -r "TODO" src/
+[brush] ~/project > grep -r "TODO" src/ && echo "done"
 ...
 [brush] ~/project > <Shift+Tab>
 
-[ai] ~/project > how do I find rust files modified today?
-You can use `fd` or `find`:
-  fd --extension rs --changed-within 1d
+[nu] ~/project >
 ```
 
 ## Features
-
-### AI Chat
-
-- Shift+Tab into `[ai]` mode — ask questions in plain English
-- Configurable provider (Anthropic by default)
-- Context-aware — the LLM knows your cwd and OS
-- Conversational — follow-up questions remember context
 
 ### Nushell at the Core
 
@@ -72,19 +63,6 @@ Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
 | `history.sqlite3` | SQLite command history |
 
 No config files are required — shannon works out of the box.
-
-### Shannon-specific settings
-
-Add to `env.nu`:
-
-```nushell
-$env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush", "ai"]
-    AI_PROVIDER: "anthropic"
-    AI_MODEL: "claude-sonnet-4-20250514"
-    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
-}
-```
 
 ## Installation
 

@@ -26,11 +26,6 @@ Uses `BashHighlighter` with tree-sitter-bash. Tokyo Night color scheme:
 | Operators | `\|`, `>`, `&&`, `\|\|` | Cyan |
 | Comments | `# this is a comment` | Gray |
 
-## AI Mode
-
-Uses `NoOpHighlighter` — plain unstyled text, appropriate for natural
-language input.
-
 ## Automatic Switching
 
 When you press Shift+Tab, the highlighter switches immediately. The next

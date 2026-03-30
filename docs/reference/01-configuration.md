@@ -65,19 +65,13 @@ Shannon settings use `$env.SHANNON_CONFIG` as a nushell record. Add to
 
 ```nushell
 $env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush", "ai"]
-    AI_PROVIDER: "anthropic"
-    AI_MODEL: "claude-sonnet-4-20250514"
-    AI_API_KEY_ENV: "ANTHROPIC_API_KEY"
+    TOGGLE: ["nu", "brush"]
 }
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `TOGGLE` | `["nu", "brush", "ai"]` | Mode rotation order for Shift+Tab |
-| `AI_PROVIDER` | `"anthropic"` | LLM provider |
-| `AI_MODEL` | `"claude-sonnet-4-20250514"` | Model name |
-| `AI_API_KEY_ENV` | `"ANTHROPIC_API_KEY"` | Env var name for the API key |
+| `TOGGLE` | `["nu", "brush"]` | Mode rotation order for Shift+Tab |
 
 ## Banner
 

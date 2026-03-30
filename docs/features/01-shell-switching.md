@@ -1,9 +1,9 @@
 # Mode Switching
 
-Shannon has three modes — press **Shift+Tab** to cycle between them:
+Shannon has two modes — press **Shift+Tab** to toggle between them:
 
 ```
-nu → brush → ai → nu → ...
+nu ↔ brush
 ```
 
 ## Switching in Action
@@ -16,9 +16,6 @@ nu → brush → ai → nu → ...
 hello
 world
 [brush] ~/project > <Shift+Tab>
-[ai] ~/project > how do I find large files?
-...
-[ai] ~/project > <Shift+Tab>
 [nu] ~/project >
 ```
 
@@ -50,6 +47,6 @@ Add to `~/.config/shannon/env.nu`:
 
 ```nushell
 $env.SHANNON_CONFIG = {
-    TOGGLE: ["nu", "brush"]  # skip ai mode
+    TOGGLE: ["brush", "nu"]  # brush first
 }
 ```

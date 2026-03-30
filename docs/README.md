@@ -1,7 +1,7 @@
 # Shannon Documentation
 
-Shannon is an AI-first shell built on nushell, with bash compatibility via
-brush and AI chat via Anthropic. Press Shift+Tab to switch between modes.
+Shannon is a poly-shell built on nushell, with bash compatibility via brush.
+Press Shift+Tab to switch between nushell and bash.
 Environment variables and working directory carry over automatically.
 
 ## Getting Started
