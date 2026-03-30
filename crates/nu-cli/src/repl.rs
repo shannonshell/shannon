@@ -577,7 +577,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                         .get_env_var(engine_state, "SHANNON_MODE")
                         .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
                         .unwrap_or_else(|| "nu".to_string());
-                    let modes = ["nu", "brush", "ai"];
+                    let modes = ["nu", "brush"];
                     let next_idx = modes.iter().position(|m| *m == current)
                         .map(|i| (i + 1) % modes.len())
                         .unwrap_or(0);
