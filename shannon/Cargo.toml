@@ -1,6 +1,6 @@
 [package]
 name = "shannonshell"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 description = "An AI-first shell with seamless access to bash, nushell, and any other shell"
 license = "MIT"
