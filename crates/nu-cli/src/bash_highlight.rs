@@ -1,35 +1,38 @@
 use nu_ansi_term::{Color, Style};
+use nu_color_config::get_shape_color;
+use nu_protocol::Config;
 use reedline::{Highlighter, StyledText};
 use tree_sitter::{Node, Parser};
 
 /// Syntax highlighter for bash using tree-sitter-bash.
+/// Colors are read from nushell's color_config so bash highlighting
+/// matches the user's nushell theme.
 pub struct BashHighlighter {
-    keyword: Color,
-    command: Color,
-    string: Color,
-    number: Color,
-    variable: Color,
-    operator: Color,
-    comment: Color,
-    foreground: Color,
+    keyword: Style,
+    command: Style,
+    string: Style,
+    number: Style,
+    variable: Style,
+    operator: Style,
+    comment: Style,
+    foreground: Style,
 }
 
 impl BashHighlighter {
-    pub fn new() -> Self {
-        // Tokyo Night colors (sensible defaults)
+    pub fn new(config: &Config) -> Self {
         BashHighlighter {
-            keyword: Color::Rgb(187, 154, 247),  // purple
-            command: Color::Rgb(125, 207, 255),   // blue
-            string: Color::Rgb(158, 206, 106),    // green
-            number: Color::Rgb(255, 158, 100),    // orange
-            variable: Color::Rgb(224, 175, 104),  // yellow
-            operator: Color::Rgb(137, 221, 255),  // cyan
-            comment: Color::Rgb(86, 95, 137),     // gray
-            foreground: Color::Rgb(192, 202, 245), // light gray
+            keyword: get_shape_color("shape_keyword", config),
+            command: get_shape_color("shape_external", config),
+            string: get_shape_color("shape_string", config),
+            number: get_shape_color("shape_int", config),
+            variable: get_shape_color("shape_variable", config),
+            operator: get_shape_color("shape_operator", config),
+            comment: Style::new().fg(Color::DarkGray),
+            foreground: Style::default(),
         }
     }
 
-    fn bash_color(&self, node: &Node) -> Color {
+    fn bash_style(&self, node: &Node) -> Style {
         match node.kind() {
             "if" | "then" | "else" | "elif" | "fi" | "for" | "in" | "do" | "done" | "while"
             | "until" | "case" | "esac" | "function" | "export" | "declare" | "local"
@@ -68,37 +71,37 @@ impl Highlighter for BashHighlighter {
         let language: tree_sitter::Language = tree_sitter_bash::LANGUAGE.into();
         let mut parser = Parser::new();
         if parser.set_language(&language).is_err() {
-            styled.push((Style::new().fg(self.foreground), line.to_string()));
+            styled.push((self.foreground, line.to_string()));
             return styled;
         }
 
         let tree = match parser.parse(line, None) {
             Some(tree) => tree,
             None => {
-                styled.push((Style::new().fg(self.foreground), line.to_string()));
+                styled.push((self.foreground, line.to_string()));
                 return styled;
             }
         };
 
-        let mut segments: Vec<(usize, usize, Color)> = Vec::new();
+        let mut segments: Vec<(usize, usize, Style)> = Vec::new();
         collect_leaf_styles(&tree.root_node(), self, &mut segments);
 
         segments.sort_by_key(|s| s.0);
 
         let mut pos = 0;
-        for (start, end, color) in &segments {
+        for (start, end, style) in &segments {
             let start = *start;
             let end = (*end).min(line.len());
             if start > pos {
-                styled.push((Style::new().fg(self.foreground), line[pos..start].to_string()));
+                styled.push((self.foreground, line[pos..start].to_string()));
             }
             if start >= pos && end > start {
-                styled.push((Style::new().fg(*color), line[start..end].to_string()));
+                styled.push((*style, line[start..end].to_string()));
                 pos = end;
             }
         }
         if pos < line.len() {
-            styled.push((Style::new().fg(self.foreground), line[pos..].to_string()));
+            styled.push((self.foreground, line[pos..].to_string()));
         }
 
         styled
@@ -108,24 +111,23 @@ impl Highlighter for BashHighlighter {
 fn collect_leaf_styles(
     node: &Node,
     highlighter: &BashHighlighter,
-    segments: &mut Vec<(usize, usize, Color)>,
+    segments: &mut Vec<(usize, usize, Style)>,
 ) {
     if node.child_count() == 0 {
         let start = node.start_byte();
         let end = node.end_byte();
-        let color = highlighter.bash_color(node);
-        segments.push((start, end, color));
+        let style = highlighter.bash_style(node);
+        segments.push((start, end, style));
     } else {
-        // Handle parent nodes that should color all children
-        let parent_color = match node.kind() {
+        let parent_style = match node.kind() {
             "command_name" => Some(highlighter.command),
             "simple_expansion" | "expansion" => Some(highlighter.variable),
             "string" => Some(highlighter.string),
             _ => None,
         };
 
-        if let Some(color) = parent_color {
-            segments.push((node.start_byte(), node.end_byte(), color));
+        if let Some(style) = parent_style {
+            segments.push((node.start_byte(), node.end_byte(), style));
         } else {
             for child in node.children(&mut node.walk()) {
                 collect_leaf_styles(&child, highlighter, segments);
