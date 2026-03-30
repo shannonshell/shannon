@@ -4884,7 +4884,7 @@ dependencies = [
 
 [[package]]
 name = "shannonshell"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "chrono",
  "crossterm",
