@@ -265,3 +265,35 @@ Real bash subprocess works on the first attempt. The sentinel-based protocol
 correctly captures env vars, cwd, and exit codes. State persists across
 commands (env vars, functions from env.sh). The pipeline deadlock that plagued
 brush is gone — real bash uses fork() for pipeline stages natively.
+
+### Experiment 2: Remove brush from the repo
+
+Now that BashProcess replaces BrushEngine, remove all brush-related files and
+references.
+
+#### Changes
+
+**Delete: `src/brush_engine.rs`**
+
+No longer used — replaced by `src/bash_process.rs`.
+
+**Delete: `brush/` subtree**
+
+The entire brush directory tree. This was merged via `git subtree add` and is
+no longer a dependency.
+
+**Update: `src/run.rs`**
+
+Line 191 comment still references "embedded brush engine". Update to say
+"persistent bash process".
+
+**Update: `src/shell_engine.rs`**
+
+Line 3 doc comment mentions "brush". Update to remove the brush reference.
+
+#### Verification
+
+1. `cargo build` — compiles without brush anywhere
+2. `cargo test` — all tests pass
+3. `grep -r "brush" src/` — no remaining references
+4. Manual smoke test: `shannon` → bash mode → `echo hello` → works
