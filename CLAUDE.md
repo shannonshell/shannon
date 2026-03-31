@@ -7,13 +7,11 @@ Named after Claude Shannon.
 ## Build
 
 ```sh
-cd shannon
 cargo build
 cargo run
 ```
 
-The Rust crate lives in the `shannon/` subdirectory. All cargo commands
-run from there.
+The Rust crate is at the repo root.
 
 ## Architecture
 
@@ -26,27 +24,32 @@ in nu-cli) that intercepts commands when the mode is not "nu".
 ### Repo structure
 
 ```
-shannon/              (main repo)
-├── shannon/          (shannonshell crate — binary + library)
-├── nushell/          (submodule → shannonshell/shannon_nushell)
-├── brush/            (submodule → shannonshell/shannon_brush)
-├── reedline/         (submodule → shannonshell/shannon_reedline)
+shannon/              (repo root = shannonshell crate)
+├── Cargo.toml        (binary + library)
+├── src/              (shannon source)
+├── nushell/          (nushell source, merged into repo)
+├── brush/            (brush source, merged into repo)
+├── reedline/         (reedline source, merged into repo)
 ├── vendor/           (reference source code, gitignored)
 ├── issues/           (issue tracking with experiments)
-└── scripts/          (build, install, release)
+└── scripts/          (build, install, release, sync-upstream)
 ```
 
-### Submodules (forked dependencies)
+### Merged dependencies
 
-- **nushell** — fork of `nushell/nushell`, renamed crates to `shannon-nu-*`.
-  Changes: `ModeDispatcher` trait in nu-cli, `BashHighlighter` in nu-cli,
-  Shift+Tab keybinding, config dir `~/.config/shannon/`, relaxed libc pin.
-- **brush** — fork of `reubeno/brush`, renamed crates to `shannon-brush-*`.
-  Changes: crate renames only (API already has what we need on main).
-- **reedline** — fork of `nushell/reedline`, renamed to `shannon-reedline`.
-  Changes: crate rename only.
+Nushell, brush, and reedline source is merged directly into the repo with
+full git history preserved (via `git subtree add`). Shannon uses path deps
+to reference their crates. No crates.io publishing needed for dependencies.
 
-### Source files (under `shannon/src/`)
+- **nushell/** — fork of `nushell/nushell`. Changes: `ModeDispatcher` trait
+  in nu-cli, `BashHighlighter` in nu-cli, Shift+Tab keybinding, config dir
+  `~/.config/shannon/`, relaxed libc pin.
+- **brush/** — fork of `reubeno/brush`. No code changes.
+- **reedline/** — fork of `nushell/reedline`. No code changes.
+
+Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
+
+### Source files (under `src/`)
 
 **Copied from nushell binary (the shell):**
 - `main.rs` — entry point, startup sequence (from nu binary, modified)
@@ -116,10 +119,11 @@ Every new feature must include tests. No feature ships without test coverage.
 - **Strings at the boundary** — env vars cross between shells as strings.
   `env_to_strings()` and `from_string` conversions handle typed values
   (PATH as list, etc.).
-- **Forked dependencies** — nushell, brush, reedline are forked as submodules
-  with renamed crates (`shannon-nu-*`, `shannon-brush-*`, `shannon-reedline`)
-  published to crates.io. Upstream sync via `git rebase upstream/main` on
-  the `shannon` branch.
+- **Monorepo** — nushell, brush, reedline source merged directly into the
+  repo with full git history. Path deps, no crates.io publishing needed.
+  Upstream sync via `git subtree pull` (full history preserved).
+  **NEVER use `--squash` with git subtree.** Full history must always be
+  preserved for blame, log, and bisect to work across merged projects.
 - **Vendor directory is for reference only** — vendored repos are for reading
   source code, not for building against.
 

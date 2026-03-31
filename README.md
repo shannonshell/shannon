@@ -67,19 +67,16 @@ No config files are required — shannon works out of the box.
 ## Installation
 
 ```sh
-cargo install shannonshell
+cargo install --git https://github.com/shannonshell/shannon
 ```
 
 Or build from source:
 
 ```sh
-git clone --recursive https://github.com/shannonshell/shannon.git
-cd shannon/shannon
+git clone https://github.com/shannonshell/shannon.git
+cd shannon
 cargo build --release
 ```
-
-Note: `--recursive` is needed to fetch the nushell, brush, and reedline
-submodules.
 
 ## License
 
