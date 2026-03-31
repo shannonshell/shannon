@@ -180,3 +180,25 @@ impl ModeDispatcher for ShannonDispatcher {
 4. Ctrl+C during a long bash command kills the process (not ignored).
 5. Ctrl+C in nushell mode still works (handler re-registered after brush).
 6. `cargo test` passes.
+
+**Result:** Fail
+
+`nvm install 24` still hangs until Ctrl+C is pressed. Unregistering nushell's
+signal-hook handler did not fix the issue. The `ctrlc` crate's handler is
+STILL registered — we added a signal-hook handler but never removed the ctrlc
+one. The `ctrlc` crate registers its own handler at startup (internally, via
+nushell's upstream code or our own call), and that handler persists regardless
+of what we do with signal-hook. Two handlers are now registered: the original
+ctrlc one and our new signal-hook one.
+
+The root cause may not be what we assumed. Possibilities:
+1. The `ctrlc` crate handler is still active and consuming SIGINT
+2. The issue isn't about handler competition but about how brush's tokio
+   runtime handles signals inside `block_on()`
+3. The child process isn't in the right process group to receive SIGINT
+
+#### Conclusion
+
+Simply adding signal-hook alongside ctrlc doesn't fix the issue. We need to
+either fully remove ctrlc (but nushell's internal code depends on it) or
+investigate whether the root cause is something else entirely.
