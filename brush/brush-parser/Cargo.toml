@@ -1,5 +1,5 @@
 [package]
-name = "shannon-brush-parser"
+name = "brush-parser"
 description = "POSIX/bash shell tokenizer and parsers (used by brush-shell)"
 version = "0.3.0"
 authors.workspace = true

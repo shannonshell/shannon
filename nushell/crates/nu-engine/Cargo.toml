@@ -4,7 +4,7 @@ description = "Nushell's evaluation engine"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-engine"
 edition = "2024"
 license = "MIT"
-name = "shannon-nu-engine"
+name = "nu-engine"
 version = "0.111.2"
 
 [lib]
@@ -14,11 +14,11 @@ bench = false
 workspace = true
 
 [dependencies]
-nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false, package = "shannon-nu-protocol"}
-nu-experimental = { path = "../nu-experimental", version = "0.111.1", package = "shannon-nu-experimental"}
-nu-path = { path = "../nu-path", version = "0.111.1", package = "shannon-nu-path"}
-nu-glob = { path = "../nu-glob", version = "0.111.1", package = "shannon-nu-glob"}
-nu-utils = { path = "../nu-utils", version = "0.111.1", default-features = false, package = "shannon-nu-utils"}
+nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false}
+nu-experimental = { path = "../nu-experimental", version = "0.111.1"}
+nu-path = { path = "../nu-path", version = "0.111.1"}
+nu-glob = { path = "../nu-glob", version = "0.111.1"}
+nu-utils = { path = "../nu-utils", version = "0.111.1", default-features = false}
 fancy-regex = { workspace = true }
 log = { workspace = true }
 

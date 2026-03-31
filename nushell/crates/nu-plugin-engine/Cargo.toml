@@ -4,7 +4,7 @@ description = "Functionality for running Nushell plugins from a Nushell engine"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-plugin-engine"
 edition = "2024"
 license = "MIT"
-name = "shannon-nu-plugin-engine"
+name = "nu-plugin-engine"
 version = "0.111.2"
 
 [lib]
@@ -14,12 +14,12 @@ bench = false
 workspace = true
 
 [dependencies]
-nu-engine = { path = "../nu-engine", version = "0.111.1", package = "shannon-nu-engine"}
-nu-protocol = { path = "../nu-protocol", version = "0.111.1", package = "shannon-nu-protocol"}
-nu-system = { path = "../nu-system", version = "0.111.1", package = "shannon-nu-system"}
-nu-plugin-protocol = { path = "../nu-plugin-protocol", version = "0.111.1", package = "shannon-nu-plugin-protocol"}
-nu-plugin-core = { path = "../nu-plugin-core", version = "0.111.1", default-features = false, package = "shannon-nu-plugin-core"}
-nu-utils = { path = "../nu-utils", version = "0.111.1", package = "shannon-nu-utils"}
+nu-engine = { path = "../nu-engine", version = "0.111.1"}
+nu-protocol = { path = "../nu-protocol", version = "0.111.1"}
+nu-system = { path = "../nu-system", version = "0.111.1"}
+nu-plugin-protocol = { path = "../nu-plugin-protocol", version = "0.111.1"}
+nu-plugin-core = { path = "../nu-plugin-core", version = "0.111.1", default-features = false}
+nu-utils = { path = "../nu-utils", version = "0.111.1"}
 
 serde = { workspace = true }
 log = { workspace = true }
