@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-30"
+closed = "2026-03-30"
 +++
 
 # Issue 37: Monorepo with full history preservation
@@ -164,3 +165,23 @@ Future `subtree pull` (even with `--squash`) works correctly.
 - Current: ~50MB (shannon only)
 - After merge: ~500MB-1GB (nushell's 11K commits + brush + reedline)
 - Clone time: ~30-60 seconds (acceptable for one-time install)
+
+## Result: Pass
+
+Monorepo created successfully using `git subtree add` (without `--squash`)
+from our local fork repos. Full history preserved:
+
+- 13,146 total commits (shannon + nushell + brush + reedline)
+- `git blame` shows original authors (Darren Schroeder for nushell, reuben
+  olinsky for brush)
+- All crate names reverted to originals (no `shannon-*` prefixes)
+- `cargo build` and `cargo test` pass
+- Shannon binary works with both nu and bash modes
+- No submodules — pure monorepo with path deps
+- Install: `cargo install --git https://github.com/shannonshell/shannon`
+
+## Conclusion
+
+Monorepo migration complete. Nushell, brush, and reedline source merged with
+full git history. No crates.io publishing needed. Upstream sync via
+`git subtree pull --squash` from upstream remotes.
