@@ -492,3 +492,49 @@ add a helper method or match on variants to produce readable names like
 3. Run `nvm install 24` in bash mode
 4. Find the hanging curl line in the log — check its stdin/stdout/stderr types
 5. Compare with non-hanging commands to see what's different
+
+**Result:** Pass (diagnostic success)
+
+The hanging curl line in the log:
+
+```
+[brush:commands] spawning: /usr/bin/curl -q --fail --compressed -L -s
+  https://nodejs.org/dist/index.tab -o - | stdin=Stdin stdout=PipeWriter stderr=Stderr
+```
+
+The fd types alone don't explain the hang — a later curl with identical fds
+(`iojs.org/dist/index.tab`) completes fine. But cross-referencing with the
+pipeline logs and `nvm.sh` source (line 1700) reveals the true structure:
+
+```bash
+VERSION_LIST="$(nvm_download -L -s "${MIRROR}/index.tab" -o - \
+    | command sed "
+        1d;
+        s/^/${PREFIX}/;
+      " \
+)"
+```
+
+This is a **two-stage pipeline inside a command substitution**: `curl | sed`.
+The logs confirm: after Ctrl+C kills the hanging curl, brush immediately
+spawns `stage 2/2` (sed) and then both `run_parsed_result returned` and
+`read_to_string completed` fire — everything completes.
+
+**Root cause: brush serializes pipeline stages instead of running them
+concurrently.** Curl is spawned first and brush calls `wait()` on it before
+spawning sed. Curl writes to a pipe whose read end is connected to sed — but
+sed hasn't started yet. When curl's output exceeds the OS pipe buffer
+(~64KB), `write()` blocks. Deadlock: curl waits for sed to drain the pipe,
+brush waits for curl to exit before starting sed.
+
+The `iojs.org` curl doesn't hang because its output is small enough to fit
+in the pipe buffer, so it completes before the buffer fills.
+
+#### Conclusion
+
+The bug is in brush's pipeline execution: it runs stages sequentially (spawn
+stage 1, wait for it, spawn stage 2) instead of concurrently (spawn all
+stages, then wait for the last one). This is a fundamental pipeline semantics
+bug — Unix pipelines must run all stages concurrently so data can flow
+through the pipe. The fix is in brush's pipeline executor, not in command
+substitution or signal handling.
