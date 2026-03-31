@@ -202,3 +202,59 @@ The root cause may not be what we assumed. Possibilities:
 Simply adding signal-hook alongside ctrlc doesn't fix the issue. We need to
 either fully remove ctrlc (but nushell's internal code depends on it) or
 investigate whether the root cause is something else entirely.
+
+### Experiment 2: Add debug logs to trace the hang
+
+#### Description
+
+We don't know where exactly the hang occurs. Possible locations:
+1. `processes.rs` `wait()` — the `tokio::select!` loop never fires
+2. The shell function execution path — `nvm install` doesn't go through
+   `ChildProcess::wait()` at all
+3. `block_on()` itself — the tokio runtime isn't delivering signals
+
+Add `eprintln!` debug logs at key points to trace execution flow when
+`nvm install 24` is run. No code changes — just temporary logging.
+
+#### Changes
+
+**`src/dispatcher.rs`** — log entry/exit of brush execution:
+```rust
+eprintln!("[shannon] entering brush execute: {command}");
+// ... brush.execute(command) ...
+eprintln!("[shannon] brush execute complete");
+```
+
+**`brush/brush-core/src/processes.rs`** — log inside the `wait()` loop:
+```rust
+eprintln!("[brush:processes] entering wait loop");
+// Inside tokio::select!:
+//   exec_future branch: eprintln!("[brush:processes] exec_future completed");
+//   sigtstp branch: eprintln!("[brush:processes] SIGTSTP received");
+//   sigchld branch: eprintln!("[brush:processes] SIGCHLD received");
+//   ctrl_c branch: eprintln!("[brush:processes] SIGINT/ctrl_c received");
+```
+
+**`brush/brush-core/src/commands.rs`** — log command type detection:
+```rust
+// Where commands are dispatched (function vs external vs builtin)
+eprintln!("[brush:commands] executing: {name} as {type}");
+```
+
+**`brush/brush-core/src/sys/unix/signal.rs`** — log signal listener creation:
+```rust
+eprintln!("[brush:signal] creating SIGTSTP listener");
+eprintln!("[brush:signal] creating SIGCHLD listener");
+eprintln!("[brush:signal] creating ctrl_c listener");
+```
+
+#### Verification
+
+1. `cargo build` succeeds
+2. Run `nvm install 24` in bash mode
+3. Observe debug output to determine:
+   - Does execution reach `processes.rs` `wait()`?
+   - Does the `tokio::select!` loop start?
+   - Which branch (if any) fires when Ctrl+C is pressed?
+   - Is the hang before, during, or after the `wait()` loop?
+4. Report findings and design next experiment based on results
