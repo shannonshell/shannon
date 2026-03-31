@@ -1,6 +1,6 @@
 use crate::shell::ShellState;
 
-/// Trait for embedded shell engines. Each shell (nushell, brush, etc.)
+/// Trait for shell engines. Each non-nu shell (bash, etc.)
 /// implements this to provide a uniform interface for the REPL.
 pub trait ShellEngine {
     /// Inject shannon's state (env vars, cwd) into the shell before execution.
