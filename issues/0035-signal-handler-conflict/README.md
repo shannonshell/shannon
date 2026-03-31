@@ -538,3 +538,66 @@ stages, then wait for the last one). This is a fundamental pipeline semantics
 bug — Unix pipelines must run all stages concurrently so data can flow
 through the pipe. The fix is in brush's pipeline executor, not in command
 substitution or signal handling.
+
+### Experiment 6: Spawn non-last pipeline stages concurrently
+
+#### Description
+
+In `spawn_pipeline_processes` (interp.rs:443), the loop at line 467 awaits
+each `execute_in_pipeline` call sequentially. For external commands this is
+fine — they return `StartedProcess` immediately. But shell functions return
+`Completed` only after fully executing. When stage 1 is a shell function
+(e.g., `nvm_download` which internally runs curl) and stage 2 is `sed`,
+stage 1 fills the pipe buffer and blocks because stage 2 hasn't started.
+
+The fix: for non-last pipeline stages (`run_in_current_shell=false`), wrap
+the `execute_in_pipeline` call in a `tokio::spawn` so it runs concurrently.
+Push the resulting `JoinHandle` as a `StartedTask` into `spawn_results`.
+The existing `wait_for_pipeline_processes_and_update_status` already handles
+`StartedTask` via `join_handle.await`.
+
+The challenge is lifetimes: `PipelineExecutionContext` holds
+`ShellForCommand::OwnedShell { target, parent }` where `parent` is
+`&'a mut Shell`. `tokio::spawn` requires `'static`. For non-last stages,
+the parent ref is only used for error display (interp.rs:1247). We can
+restructure the non-last stage path to use a fully owned shell with no
+parent reference:
+
+1. Clone the shell into a `Box<Shell>`
+2. Clone the command (it's an AST node, should be `Clone`)
+3. `tokio::spawn` an async block that:
+   a. Creates a `PipelineExecutionContext` with `ParentShell(&mut shell)`
+      using the owned shell
+   b. Calls `command.execute_in_pipeline(context, params).await`
+   c. Converts the result to `ExecutionResult` (awaiting if needed)
+4. Push `StartedTask(join_handle)` into `spawn_results`
+
+This matches the pattern used by `execute_via_builtin_in_owned_shell`
+(commands.rs:448) which already uses `tokio::task::spawn_blocking` with a
+fully owned shell.
+
+#### Changes
+
+**`brush/brush-core/src/interp.rs`** — modify `spawn_pipeline_processes`:
+
+In the loop at line 467, split the logic based on `run_in_current_shell`:
+
+- **`run_in_current_shell=true`** (last stage or single command): keep the
+  current sequential `.await` behavior unchanged.
+
+- **`run_in_current_shell=false`** (non-last stages): clone the shell,
+  spawn a tokio task that runs `execute_in_pipeline` to completion, push
+  `StartedTask(join_handle)`.
+
+Also remove the process_group_id update for `StartedTask` results (line
+536-540) since tasks don't have a pgid.
+
+#### Verification
+
+1. `cargo build` succeeds
+2. `cargo test` passes
+3. `nvm install 24` completes without hanging (the primary test)
+4. `echo hello | cat` works (basic pipeline)
+5. `seq 1 100000 | head -5` works (large output, early termination)
+6. `ls | sort | head` works (3-stage pipeline)
+7. Ctrl+C during a pipeline kills all stages
