@@ -1,7 +1,7 @@
 # Shannon
 
-A poly-shell built on nushell, with seamless bash compatibility via brush.
-Shift+Tab cycles between nu and bash modes.
+A poly-shell built on nushell, with seamless bash compatibility via a
+persistent bash subprocess. Shift+Tab cycles between nu and bash modes.
 Named after Claude Shannon.
 
 ## Build
@@ -16,10 +16,11 @@ The Rust crate is at the repo root.
 ## Architecture
 
 Shannon IS nushell — it copies the nushell binary source code and adds mode
-dispatch for bash (via brush crate). Nushell's REPL handles terminal ownership,
-process groups, job control, signal handling, multiline editing, completions,
-and all interactive features. Shannon adds a `ModeDispatcher` trait (defined
-in nu-cli) that intercepts commands when the mode is not "nu".
+dispatch for bash (via a persistent bash subprocess). Nushell's REPL handles
+terminal ownership, process groups, job control, signal handling, multiline
+editing, completions, and all interactive features. Shannon adds a
+`ModeDispatcher` trait (defined in nu-cli) that intercepts commands when the
+mode is not "nu".
 
 ### Repo structure
 
@@ -28,7 +29,6 @@ shannon/              (repo root = shannonshell crate)
 ├── Cargo.toml        (binary + library)
 ├── src/              (shannon source)
 ├── nushell/          (nushell source, merged into repo)
-├── brush/            (brush source, merged into repo)
 ├── reedline/         (reedline source, merged into repo)
 ├── vendor/           (reference source code, gitignored)
 ├── issues/           (issue tracking with experiments)
@@ -37,14 +37,13 @@ shannon/              (repo root = shannonshell crate)
 
 ### Merged dependencies
 
-Nushell, brush, and reedline source is merged directly into the repo with
-full git history preserved (via `git subtree add`). Shannon uses path deps
-to reference their crates. No crates.io publishing needed for dependencies.
+Nushell and reedline source is merged directly into the repo with full git
+history preserved (via `git subtree add`). Shannon uses path deps to reference
+their crates. No crates.io publishing needed for dependencies.
 
 - **nushell/** — fork of `nushell/nushell`. Changes: `ModeDispatcher` trait
   in nu-cli, `BashHighlighter` in nu-cli, Shift+Tab keybinding, config dir
-  `~/.config/shannon/`, relaxed libc pin.
-- **brush/** — fork of `reubeno/brush`. No code changes.
+  `~/.config/shannon/`.
 - **reedline/** — fork of `nushell/reedline`. No code changes.
 
 Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
@@ -67,7 +66,7 @@ Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
 **Shannon-specific (engines and dispatch):**
 - `lib.rs` — library exports for the shannonshell crate
 - `dispatcher.rs` — `ShannonDispatcher` implementing `ModeDispatcher`
-- `brush_engine.rs` — `BrushEngine` (embedded bash via brush crate)
+- `bash_process.rs` — `BashProcess` (persistent bash subprocess with sentinel protocol)
 - `shell_engine.rs` — `ShellEngine` trait
 - `shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
 - `executor.rs` — startup script (`env.sh`) execution via bash
@@ -85,18 +84,19 @@ Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
 2. Nushell's `loop_iteration()` reads input via reedline
 3. `$env.SHANNON_MODE` is "bash" — calls `ModeDispatcher::execute()`
 4. Env vars converted to strings via `env_to_strings()`
-5. `BrushEngine::execute()` runs the command via brush's `run_string()`
-6. Result (env vars, cwd, exit code) written back to nushell's Stack
-7. Nushell's REPL continues with updated state
+5. `BashProcess` injects env vars and cwd, writes command + sentinel to bash stdin
+6. Command output streams to stdout; sentinel block parsed for env, cwd, exit code
+7. Result written back to nushell's Stack; REPL continues with updated state
 
 ### Environment propagation
 
 When switching modes, all exported environment variables and cwd are preserved:
-- **Nu → Brush:** `env_to_strings()` converts nushell typed values to strings
-  (using `ENV_CONVERSIONS` `to_string` closures for PATH etc.)
-- **Brush → Nu:** String env vars written back to Stack via `add_env_var()`.
-  Nushell's REPL automatically applies `from_string` conversions on the next
-  iteration.
+- **Nu → Bash:** `env_to_strings()` converts nushell typed values to strings
+  (using `ENV_CONVERSIONS` `to_string` closures for PATH etc.). Injected into
+  bash via `export` commands.
+- **Bash → Nu:** `export -p` captures env vars after each command. String env
+  vars written back to Stack via `add_env_var()`. Nushell's REPL automatically
+  applies `from_string` conversions on the next iteration.
 
 ### Testing
 
@@ -119,8 +119,8 @@ Every new feature must include tests. No feature ships without test coverage.
 - **Strings at the boundary** — env vars cross between shells as strings.
   `env_to_strings()` and `from_string` conversions handle typed values
   (PATH as list, etc.).
-- **Monorepo** — nushell, brush, reedline source merged directly into the
-  repo with full git history. Path deps, no crates.io publishing needed.
+- **Monorepo** — nushell and reedline source merged directly into the repo
+  with full git history. Path deps, no crates.io publishing needed.
   Upstream sync via `git subtree pull` (full history preserved).
   **NEVER use `--squash` with git subtree.** Full history must always be
   preserved for blame, log, and bisect to work across merged projects.
@@ -132,7 +132,7 @@ Every new feature must include tests. No feature ships without test coverage.
 Shannon has two modes, cycled via Shift+Tab:
 
 - **nu** — nushell (native, default)
-- **bash** — bash-compatible via brush crate
+- **bash** — bash-compatible via persistent bash subprocess
 
 Mode is stored in `$env.SHANNON_MODE`. Shift+Tab sends `__shannon_switch`
 via reedline's `ExecuteHostCommand`, which cycles the mode.
@@ -145,7 +145,7 @@ Each mode gets appropriate syntax highlighting:
 
 Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
 
-- `env.sh` — bash script for PATH, env vars, API keys (runs first via brush)
+- `env.sh` — bash script for PATH, env vars, API keys (sourced first in bash)
 - `env.nu` — nushell env setup (runs after env.sh)
 - `config.nu` — nushell config (keybindings, colors, hooks, etc.)
 - `login.nu` — login shell config
@@ -156,8 +156,9 @@ nushell provides. All shell settings (keybindings, colors, hooks, completions)
 are configured via nushell's `config.nu`.
 
 The `env.sh` feature is critical — it lets users follow bash-style setup
-instructions ("add this to your .bashrc") directly. Shannon sources it via
-brush at startup and injects the resulting env vars into nushell's Stack.
+instructions ("add this to your .bashrc") directly. Shannon sources it in
+the persistent bash subprocess at startup and injects the resulting env vars
+into nushell's Stack.
 
 ## Issues and Experiments
 

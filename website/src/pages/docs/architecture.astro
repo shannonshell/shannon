@@ -12,9 +12,9 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>
     Shannon copies the nushell binary source code (~4,600 lines) and adds mode
-    dispatch for bash (via brush crate). This gives shannon all nushell features
-    for free: terminal ownership, process groups, job control, signal handling,
-    multiline editing, completions, hooks, plugins, and more.
+    dispatch for bash (via a persistent bash subprocess). This gives shannon all
+    nushell features for free: terminal ownership, process groups, job control,
+    signal handling, multiline editing, completions, hooks, plugins, and more.
   </p>
 
   <h2>Mode Dispatch</h2>
@@ -23,7 +23,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <ul>
     <li><span class="text-success font-bold">nu</span> — nushell's native evaluation (default)</li>
-    <li><span class="text-accent font-bold">bash</span> — bash commands via the brush crate</li>
+    <li><span class="text-accent font-bold">bash</span> — bash commands via a persistent bash subprocess</li>
   </ul>
 
   <p>
@@ -32,7 +32,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
     as normal. When the mode is "bash", a
     <code class="text-secondary">ModeDispatcher</code> trait intercepts the
     command in <code class="text-secondary">loop_iteration()</code> and routes
-    it to the brush engine.
+    it to the bash subprocess.
   </p>
 
   <h3>ModeDispatcher Trait</h3>
@@ -59,7 +59,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Merged Dependencies</h2>
 
   <p>
-    Nushell, brush, and reedline source is merged directly into the repo with
+    Nushell and reedline source is merged directly into the repo with
     full git history (via <code class="text-secondary">git subtree add</code>).
     Shannon uses path deps. No crates.io publishing needed.
   </p>
@@ -72,12 +72,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
       <tr>
         <td><code class="text-secondary">nushell/</code></td>
         <td>nushell/nushell</td>
-        <td>ModeDispatcher, BashHighlighter, Shift+Tab, config dir, libc pin</td>
-      </tr>
-      <tr>
-        <td><code class="text-secondary">brush/</code></td>
-        <td>reubeno/brush</td>
-        <td>No code changes</td>
+        <td>ModeDispatcher, BashHighlighter, Shift+Tab, config dir</td>
       </tr>
       <tr>
         <td><code class="text-secondary">reedline/</code></td>
@@ -102,12 +97,12 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <ol>
     <li><code class="text-secondary">env_to_strings()</code> converts nushell's typed values to strings</li>
     <li><code class="text-secondary">ENV_CONVERSIONS</code> <code class="text-secondary">to_string</code> closures handle typed vars (PATH as list)</li>
-    <li>Strings passed to <code class="text-secondary">BrushEngine::inject_state()</code></li>
+    <li>Strings injected into the bash subprocess via <code class="text-secondary">export</code> commands</li>
   </ol>
 
   <h3>Bash to Nu</h3>
   <ol>
-    <li><code class="text-secondary">BrushEngine::execute()</code> returns string env vars</li>
+    <li>After each command, <code class="text-secondary">export -p</code> captures all exported env vars</li>
     <li>Strings written to nushell's Stack via <code class="text-secondary">add_env_var(Value::string(...))</code></li>
     <li>Nushell's REPL automatically applies <code class="text-secondary">from_string</code> conversions</li>
   </ol>
@@ -156,7 +151,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <p><strong>Shannon-specific</strong> (engines and dispatch):</p>
   <p>
     <code class="text-secondary">dispatcher.rs</code>,
-    <code class="text-secondary">brush_engine.rs</code>,
+    <code class="text-secondary">bash_process.rs</code>,
     <code class="text-secondary">shell_engine.rs</code>,
     <code class="text-secondary">shell.rs</code>,
     <code class="text-secondary">executor.rs</code>
