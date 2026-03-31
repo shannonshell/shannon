@@ -16,8 +16,7 @@ use crate::variables::{
     ArrayLiteral, ShellValue, ShellValueLiteral, ShellValueUnsetType, ShellVariable,
 };
 use crate::{
-    ShellFd, error, expansion, extendedtests, extensions, ioutils, jobs, openfiles, processes, sys,
-    timing,
+    ShellFd, error, expansion, extendedtests, extensions, ioutils, jobs, openfiles, sys, timing,
 };
 
 /// Encapsulates the context of execution in a command pipeline.
@@ -490,6 +489,26 @@ async fn spawn_pipeline_processes(
             cmd_params.open_files.set_fd(OpenFiles::STDOUT_FD, writer);
         }
 
+        let pipeline_context = if !run_in_current_shell {
+            // Make sure that all commands in the pipeline are in the same process group.
+            if current_pipeline_index > 0 {
+                cmd_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
+            }
+
+            PipelineExecutionContext {
+                shell: commands::ShellForCommand::OwnedShell {
+                    target: Box::new(shell.clone()),
+                    parent: shell,
+                },
+                process_group_id,
+            }
+        } else {
+            PipelineExecutionContext {
+                shell: commands::ShellForCommand::ParentShell(shell),
+                process_group_id,
+            }
+        };
+
         {
             use std::io::Write;
             if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/shannon-debug.log") {
@@ -497,54 +516,9 @@ async fn spawn_pipeline_processes(
             }
         }
 
-        let spawn_result = if !run_in_current_shell {
-            // Non-last stages: spawn in a tokio task so they run concurrently.
-            // This prevents deadlocks when a shell function (e.g., nvm_download)
-            // writes to a pipe that the next stage reads from.
-            if current_pipeline_index > 0 {
-                cmd_params.process_group_policy = ProcessGroupPolicy::SameProcessGroup;
-            }
-
-            let mut owned_shell = shell.clone();
-            let owned_command = command.clone();
-
-            let join_handle = tokio::spawn(async move {
-                let pipeline_context = PipelineExecutionContext {
-                    shell: commands::ShellForCommand::ParentShell(&mut owned_shell),
-                    process_group_id,
-                };
-                let spawn_result = owned_command
-                    .execute_in_pipeline(pipeline_context, cmd_params)
-                    .await?;
-                // The task must run the command to completion.
-                match spawn_result {
-                    ExecutionSpawnResult::StartedProcess(mut child) => {
-                        match child.wait().await? {
-                            processes::ProcessWaitResult::Completed(output) => {
-                                Ok(ExecutionResult::from(output))
-                            }
-                            processes::ProcessWaitResult::Stopped => {
-                                Ok(ExecutionResult::stopped())
-                            }
-                        }
-                    }
-                    ExecutionSpawnResult::Completed(result) => Ok(result),
-                    ExecutionSpawnResult::StartedTask(handle) => handle.await?,
-                }
-            });
-
-            ExecutionSpawnResult::StartedTask(join_handle)
-        } else {
-            // Last stage (or single command): run in the current shell sequentially.
-            let pipeline_context = PipelineExecutionContext {
-                shell: commands::ShellForCommand::ParentShell(shell),
-                process_group_id,
-            };
-
-            command
-                .execute_in_pipeline(pipeline_context, cmd_params)
-                .await?
-        };
+        let spawn_result = command
+            .execute_in_pipeline(pipeline_context, cmd_params)
+            .await?;
 
         {
             use std::io::Write;
