@@ -1,0 +1,69 @@
+---
+import DocPage from "../../../components/DocPage.astro"
+import ShellSession from "../../../components/ShellSession.astro"
+---
+
+<DocPage title="State Synchronization">
+  <h1>State Synchronization</h1>
+
+  <p>
+    Shannon keeps your environment variables and working directory in sync
+    across mode switches.
+  </p>
+
+  <h2>Environment Variables</h2>
+
+  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
+<span class="text-accent">[bash]</span> ~/project &gt; &lt;Shift+Tab&gt;
+<span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.API_KEY
+sk-1234</ShellSession>
+
+  <p>It works both ways:</p>
+
+  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
+<span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
+<span class="text-accent">[bash]</span> ~/project &gt; echo <span class="text-warning">$FOO</span>
+hello</ShellSession>
+
+  <h2>Typed Value Conversion</h2>
+
+  <p>
+    Nushell stores some env vars as typed values (PATH is a list, not a string).
+    Shannon handles this automatically:
+  </p>
+
+  <ul>
+    <li>
+      <strong>Nu to Bash:</strong> <code class="text-secondary">env_to_strings()</code>
+      converts typed values to strings using <code class="text-secondary">ENV_CONVERSIONS</code>
+      <code class="text-secondary">to_string</code> closures
+    </li>
+    <li>
+      <strong>Bash to Nu:</strong> String env vars are written back. Nushell automatically
+      applies <code class="text-secondary">from_string</code> conversions on the next REPL iteration
+    </li>
+  </ul>
+
+  <p>
+    You don't need to do anything — PATH, LS_COLORS, and other typed vars just work.
+  </p>
+
+  <h2>Working Directory</h2>
+
+  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; cd /tmp
+<span class="text-accent">[bash]</span> /tmp &gt; &lt;Shift+Tab&gt;
+<span class="text-success">[nu]</span> /tmp &gt;</ShellSession>
+
+  <h2>The Strings-Only Boundary</h2>
+
+  <p>
+    Only exported environment variables and the cwd cross between modes.
+    Internal shell state does not transfer:
+  </p>
+
+  <ul>
+    <li>Nushell variables (<code class="text-secondary">let x = 5</code>) stay in nushell</li>
+    <li>Bash local variables and aliases stay in bash</li>
+    <li>Use <code class="text-secondary">export</code> / <code class="text-secondary">$env.X = ...</code> for values that need to cross</li>
+  </ul>
+</DocPage>

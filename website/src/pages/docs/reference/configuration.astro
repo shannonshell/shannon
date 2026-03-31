@@ -1,0 +1,104 @@
+---
+import DocPage from "../../../components/DocPage.astro"
+import CodeBlock from "../../../components/CodeBlock.astro"
+---
+
+<DocPage title="Configuration">
+  <h1>Configuration</h1>
+
+  <p>
+    Shannon stores its files in <code class="text-secondary">~/.config/shannon/</code>.
+    The config directory respects <code class="text-secondary">XDG_CONFIG_HOME</code>
+    — if set, shannon uses <code class="text-secondary">$XDG_CONFIG_HOME/shannon/</code> instead.
+  </p>
+
+  <h2>Files</h2>
+
+  <table>
+    <thead>
+      <tr><th>File</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="text-secondary">env.sh</code></td>
+        <td>Bash environment setup — PATH, env vars, API keys (runs first)</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">env.nu</code></td>
+        <td>Nushell env setup (runs after env.sh)</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">config.nu</code></td>
+        <td>Nushell config — keybindings, colors, hooks, completions</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">login.nu</code></td>
+        <td>Login shell config</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">history.sqlite3</code></td>
+        <td>SQLite command history</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>None of these files are required. Shannon works out of the box.</p>
+
+  <h2>env.sh (Bash Environment)</h2>
+
+  <p>
+    Shannon runs an optional bash script at startup to set up the environment.
+    Create <code class="text-secondary">~/.config/shannon/env.sh</code>:
+  </p>
+
+  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.sh</span>
+
+<span class="text-muted"># Homebrew</span>
+<span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
+
+<span class="text-muted"># Custom paths</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.cargo/bin"</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.local/bin"</span>
+
+<span class="text-muted"># Environment variables</span>
+<span class="text-accent">export</span> <span class="text-warning">EDITOR</span>=<span class="text-success">"nvim"</span></CodeBlock>
+
+  <p>
+    This runs once when shannon starts, before <code class="text-secondary">env.nu</code>
+    and <code class="text-secondary">config.nu</code>. The resulting environment
+    variables are injected into nushell's Stack.
+  </p>
+
+  <p>
+    This is critical for compatibility — tutorials always say "add this to your
+    <code class="text-secondary">.bashrc</code>." Shannon's
+    <code class="text-secondary">env.sh</code> lets you follow those instructions directly.
+  </p>
+
+  <h2>env.nu and config.nu (Nushell Config)</h2>
+
+  <p>
+    These are nushell's native config files. See the
+    <a href="https://nushell.sh/book/configuration.html">Nushell configuration docs</a>
+    for full details.
+  </p>
+
+  <p>Common settings:</p>
+
+  <CodeBlock><span class="text-muted"># ~/.config/shannon/config.nu</span>
+
+<span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>          <span class="text-muted"># disable startup banner</span>
+<span class="text-warning">$env</span>.config.edit_mode = <span class="text-success">"vi"</span>             <span class="text-muted"># vi or emacs keybindings</span>
+<span class="text-warning">$env</span>.config.history.file_format = <span class="text-success">"sqlite"</span></CodeBlock>
+
+  <h2>Banner</h2>
+
+  <p>
+    The startup banner respects nushell's
+    <code class="text-secondary">$env.config.show_banner</code> setting:
+  </p>
+
+  <CodeBlock><span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>    <span class="text-muted"># no banner</span>
+<span class="text-warning">$env</span>.config.show_banner = <span class="text-success">"short"</span>  <span class="text-muted"># just startup time</span>
+<span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">true</span>     <span class="text-muted"># full welcome message (default)</span></CodeBlock>
+</DocPage>

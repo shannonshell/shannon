@@ -1,0 +1,165 @@
+---
+import DocPage from "../../components/DocPage.astro"
+import CodeBlock from "../../components/CodeBlock.astro"
+import ShellSession from "../../components/ShellSession.astro"
+---
+
+<DocPage title="Architecture">
+  <h1>Architecture</h1>
+
+  <p>This document explains how shannon works under the hood.</p>
+
+  <h2>Shannon IS Nushell</h2>
+
+  <p>
+    Shannon copies the nushell binary source code (~4,600 lines) and adds mode
+    dispatch for bash (via brush crate). This gives shannon all nushell features
+    for free: terminal ownership, process groups, job control, signal handling,
+    multiline editing, completions, hooks, plugins, and more.
+  </p>
+
+  <h2>Mode Dispatch</h2>
+
+  <p>Shannon has two modes, toggled via Shift+Tab:</p>
+
+  <ul>
+    <li><span class="text-success font-bold">nu</span> — nushell's native evaluation (default)</li>
+    <li><span class="text-accent font-bold">bash</span> — bash commands via the brush crate</li>
+  </ul>
+
+  <p>
+    The mode is stored in <code class="text-secondary">$env.SHANNON_MODE</code>.
+    When the mode is "nu", commands go through nushell's parser and evaluator
+    as normal. When the mode is "bash", a
+    <code class="text-secondary">ModeDispatcher</code> trait intercepts the
+    command in <code class="text-secondary">loop_iteration()</code> and routes
+    it to the brush engine.
+  </p>
+
+  <h3>ModeDispatcher Trait</h3>
+
+  <p>Defined in nu-cli:</p>
+
+  <CodeBlock><span class="text-accent">pub trait</span> <span class="text-warning">ModeDispatcher</span>: Send &#123;
+    <span class="text-accent">fn</span> <span class="text-primary">execute</span>(
+        &amp;<span class="text-accent">mut</span> self,
+        mode: &amp;<span class="text-accent">str</span>,
+        command: &amp;<span class="text-accent">str</span>,
+        env_vars: HashMap&lt;String, String&gt;,
+        cwd: PathBuf,
+    ) -&gt; ModeResult;
+&#125;</CodeBlock>
+
+  <p>
+    The dispatcher receives string env vars (converted from nushell's typed
+    values via <code class="text-secondary">env_to_strings()</code>) and returns
+    strings. Nushell's REPL writes them back to the Stack. The dispatcher never
+    touches nushell internals directly.
+  </p>
+
+  <h2>Merged Dependencies</h2>
+
+  <p>
+    Nushell, brush, and reedline source is merged directly into the repo with
+    full git history (via <code class="text-secondary">git subtree add</code>).
+    Shannon uses path deps. No crates.io publishing needed.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Directory</th><th>Fork of</th><th>Changes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="text-secondary">nushell/</code></td>
+        <td>nushell/nushell</td>
+        <td>ModeDispatcher, BashHighlighter, Shift+Tab, config dir, libc pin</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">brush/</code></td>
+        <td>reubeno/brush</td>
+        <td>No code changes</td>
+      </tr>
+      <tr>
+        <td><code class="text-secondary">reedline/</code></td>
+        <td>nushell/reedline</td>
+        <td>No code changes</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    Upstream sync: <code class="text-secondary">git subtree pull --prefix nushell upstream-nushell main</code>
+  </p>
+
+  <h2>Environment Propagation</h2>
+
+  <p>
+    When switching modes, all exported environment variables and the cwd
+    are preserved:
+  </p>
+
+  <h3>Nu to Bash</h3>
+  <ol>
+    <li><code class="text-secondary">env_to_strings()</code> converts nushell's typed values to strings</li>
+    <li><code class="text-secondary">ENV_CONVERSIONS</code> <code class="text-secondary">to_string</code> closures handle typed vars (PATH as list)</li>
+    <li>Strings passed to <code class="text-secondary">BrushEngine::inject_state()</code></li>
+  </ol>
+
+  <h3>Bash to Nu</h3>
+  <ol>
+    <li><code class="text-secondary">BrushEngine::execute()</code> returns string env vars</li>
+    <li>Strings written to nushell's Stack via <code class="text-secondary">add_env_var(Value::string(...))</code></li>
+    <li>Nushell's REPL automatically applies <code class="text-secondary">from_string</code> conversions</li>
+  </ol>
+
+  <h2>Configuration</h2>
+
+  <p>
+    Shannon uses <code class="text-secondary">~/.config/shannon/</code> with
+    nushell's native config system:
+  </p>
+
+  <ol>
+    <li><code class="text-secondary">env.sh</code> — bash environment setup (runs first)</li>
+    <li><code class="text-secondary">env.nu</code> — nushell env setup</li>
+    <li><code class="text-secondary">config.nu</code> — nushell config (keybindings, colors, hooks)</li>
+  </ol>
+
+  <p>Shannon adds no custom configuration — nushell's <code class="text-secondary">config.nu</code> handles everything.</p>
+
+  <h2>Syntax Highlighting</h2>
+
+  <p>Each mode has its own highlighter, rebuilt every REPL iteration:</p>
+
+  <ul>
+    <li><span class="text-success font-bold">Nu mode:</span> <code class="text-secondary">NuHighlighter</code> (nushell's native highlighter)</li>
+    <li><span class="text-accent font-bold">Bash mode:</span> <code class="text-secondary">BashHighlighter</code> (tree-sitter-bash, colors from nushell config)</li>
+  </ul>
+
+  <h2>Source Code Layout</h2>
+
+  <p><strong>Copied from nushell binary</strong> (startup, terminal, signals):</p>
+  <p>
+    <code class="text-secondary">main.rs</code>,
+    <code class="text-secondary">run.rs</code>,
+    <code class="text-secondary">command.rs</code>,
+    <code class="text-secondary">command_context.rs</code>,
+    <code class="text-secondary">config_files.rs</code>,
+    <code class="text-secondary">signals.rs</code>,
+    <code class="text-secondary">terminal.rs</code>,
+    <code class="text-secondary">logger.rs</code>,
+    <code class="text-secondary">ide.rs</code>,
+    <code class="text-secondary">experimental_options.rs</code>,
+    <code class="text-secondary">test_bins.rs</code>
+  </p>
+
+  <p><strong>Shannon-specific</strong> (engines and dispatch):</p>
+  <p>
+    <code class="text-secondary">dispatcher.rs</code>,
+    <code class="text-secondary">brush_engine.rs</code>,
+    <code class="text-secondary">shell_engine.rs</code>,
+    <code class="text-secondary">shell.rs</code>,
+    <code class="text-secondary">executor.rs</code>
+  </p>
+</DocPage>

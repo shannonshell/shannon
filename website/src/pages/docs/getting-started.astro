@@ -1,0 +1,147 @@
+---
+import DocPage from "../../components/DocPage.astro"
+import ShellSession from "../../components/ShellSession.astro"
+import CodeBlock from "../../components/CodeBlock.astro"
+---
+
+<DocPage title="Getting Started">
+  <h1>Getting Started</h1>
+
+  <h2>Installation</h2>
+
+  <CodeBlock>cargo install --git https://github.com/shannonshell/shannon</CodeBlock>
+
+  <p>Or build from source:</p>
+
+  <CodeBlock>git clone https://github.com/shannonshell/shannon.git
+cd shannon
+cargo build --release</CodeBlock>
+
+  <h2>Setting Up Your Environment</h2>
+
+  <p>
+    <strong>This is the most important step.</strong> Shannon is a new shell —
+    it doesn't automatically inherit your PATH, homebrew, or other environment
+    setup from bash/zsh. You need to tell Shannon where your programs are.
+  </p>
+
+  <p>
+    The easiest way: create <code class="text-secondary">~/.config/shannon/env.sh</code>
+    and put your PATH setup there. This is a bash script that runs at startup.
+  </p>
+
+  <h3>Option 1: Copy from your existing shell (recommended)</h3>
+
+  <p>If you use zsh (macOS default), grab your PATH:</p>
+
+  <CodeBlock><span class="text-muted"># Run this in your current shell to see your PATH</span>
+echo $PATH</CodeBlock>
+
+  <p>Then create env.sh with it:</p>
+
+  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.sh</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.cargo/bin"</span></CodeBlock>
+
+  <h3>Option 2: Copy your bash/zsh setup</h3>
+
+  <p>
+    If you have a <code class="text-secondary">.bashrc</code>,
+    <code class="text-secondary">.bash_profile</code>, or
+    <code class="text-secondary">.zshrc</code> with environment setup,
+    copy the relevant <code class="text-secondary">export</code> and
+    <code class="text-secondary">eval</code> lines into env.sh:
+  </p>
+
+  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.sh</span>
+
+<span class="text-muted"># Homebrew</span>
+<span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
+
+<span class="text-muted"># Cargo/Rust</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.cargo/bin"</span>
+
+<span class="text-muted"># Go</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/go/bin"</span>
+
+<span class="text-muted"># Node (nvm, fnm, etc.)</span>
+<span class="text-accent">eval</span> <span class="text-success">"$(fnm env)"</span></CodeBlock>
+
+  <h3>Option 3: Use nushell's env.nu</h3>
+
+  <p>
+    If you're already a nushell user, put your PATH in
+    <code class="text-secondary">~/.config/shannon/env.nu</code>
+    using nushell syntax:
+  </p>
+
+  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.nu</span>
+<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | prepend <span class="text-success">"/opt/homebrew/bin"</span>)
+<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | append (<span class="text-warning">$env</span>.HOME | path join <span class="text-success">".cargo/bin"</span>))</CodeBlock>
+
+  <h3>Loading order</h3>
+
+  <p>Shannon loads configuration in this order:</p>
+
+  <ol>
+    <li><code class="text-secondary">~/.config/shannon/env.sh</code> — bash environment (via brush)</li>
+    <li><code class="text-secondary">~/.config/shannon/env.nu</code> — nushell environment</li>
+    <li><code class="text-secondary">~/.config/shannon/config.nu</code> — nushell settings</li>
+  </ol>
+
+  <p>
+    Any tutorial that says "add this to your
+    <code class="text-secondary">.bashrc</code>" — put it in
+    <code class="text-secondary">env.sh</code>.
+  </p>
+
+  <h2>First Run</h2>
+
+  <CodeBlock>shannon</CodeBlock>
+
+  <p>You'll see:</p>
+
+  <ShellSession>Welcome to <span class="text-success font-bold">Shannon</span>, based on the <span class="text-success">Nu</span> language, where all data is structured!
+Version: <span class="text-success">0.3.8</span>
+Startup Time: <span class="text-success font-bold">125ms</span>
+
+<span class="text-success">[nu]</span> ~/projects &gt;</ShellSession>
+
+  <p>
+    Shannon starts in nushell mode. All nushell commands work.
+  </p>
+
+  <p>
+    If commands like <code class="text-secondary">git</code>,
+    <code class="text-secondary">node</code>, or
+    <code class="text-secondary">brew</code> aren't found, your PATH isn't
+    set up — go back to the environment setup step above.
+  </p>
+
+  <h2>Switching Modes</h2>
+
+  <p>Press <strong>Shift+Tab</strong> to toggle between modes:</p>
+
+  <ShellSession><span class="text-success">[nu]</span> ~/projects &gt; ls | where size &gt; 1mb    <span class="text-muted">← nushell</span>
+<span class="text-accent">[bash]</span> ~/projects &gt; grep -r TODO src/     <span class="text-muted">← bash</span></ShellSession>
+
+  <p>Your environment variables and working directory carry over when you switch.</p>
+
+  <h2>Running Commands</h2>
+
+  <p>In <strong>nu mode</strong>, use nushell syntax:</p>
+
+  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; ls | sort-by modified
+<span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.HOME</ShellSession>
+
+  <p>In <strong>bash mode</strong>, use bash syntax:</p>
+
+  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; echo hello &amp;&amp; echo world
+<span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">FOO</span>=bar</ShellSession>
+
+  <h2>Exiting</h2>
+
+  <ul>
+    <li><strong>Ctrl+D</strong> — exit shannon</li>
+    <li>Type <code class="text-secondary">exit</code> — also exits (works in all modes)</li>
+  </ul>
+</DocPage>

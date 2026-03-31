@@ -1,0 +1,65 @@
+---
+import DocPage from "../../../components/DocPage.astro"
+import ShellSession from "../../../components/ShellSession.astro"
+---
+
+<DocPage title="Mode Switching">
+  <h1>Mode Switching</h1>
+
+  <p>
+    Shannon has two modes — press <strong>Shift+Tab</strong> to toggle between them:
+  </p>
+
+  <p class="text-center text-base my-4">
+    <span class="text-success font-bold">nu</span>
+    <span class="text-muted">↔</span>
+    <span class="text-accent font-bold">bash</span>
+  </p>
+
+  <h2>Switching in Action</h2>
+
+  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; ls | where size &gt; 1mb
+<span class="text-muted">...</span>
+<span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
+
+<span class="text-accent">[bash]</span> ~/project &gt; echo hello &amp;&amp; echo world
+hello
+world
+<span class="text-accent">[bash]</span> ~/project &gt; &lt;Shift+Tab&gt;
+
+<span class="text-success">[nu]</span> ~/project &gt;</ShellSession>
+
+  <p>The prompt updates immediately to show the active mode.</p>
+
+  <h2>What Carries Over</h2>
+
+  <p>When you switch modes, these are preserved:</p>
+
+  <ol>
+    <li>
+      <strong>Environment variables</strong> —
+      <code class="text-secondary">export FOO=bar</code> in bash is visible as
+      <code class="text-secondary">$env.FOO</code> in nushell
+    </li>
+    <li>
+      <strong>Working directory</strong> —
+      <code class="text-secondary">cd /tmp</code> in bash means you're in
+      <code class="text-secondary">/tmp</code> when you switch to nushell
+    </li>
+  </ol>
+
+  <p>
+    Environment variables are converted automatically between nushell's typed
+    values and bash strings using <code class="text-secondary">ENV_CONVERSIONS</code>.
+  </p>
+
+  <h2>What Doesn't Carry Over</h2>
+
+  <p>Shell-internal data stays within its mode:</p>
+
+  <ul>
+    <li>Nushell variables (<code class="text-secondary">let x = 5</code>) don't exist in bash</li>
+    <li>Bash local variables and aliases don't exist in nushell</li>
+    <li>Only exported environment variables cross the boundary</li>
+  </ul>
+</DocPage>

@@ -1,0 +1,51 @@
+---
+import Base from "../layouts/Base.astro"
+
+interface Props {
+  title: string
+}
+
+const { title } = Astro.props
+
+const pages = [
+  { href: "/docs/getting-started", label: "Getting Started" },
+  { href: "/docs/architecture", label: "Architecture" },
+  { section: "Features" },
+  { href: "/docs/features/shell-switching", label: "Shell Switching" },
+  { href: "/docs/features/state-sync", label: "State Sync" },
+  { href: "/docs/features/syntax-highlighting", label: "Syntax Highlighting" },
+  { section: "Reference" },
+  { href: "/docs/reference/configuration", label: "Configuration" },
+]
+
+const currentPath = Astro.url.pathname.replace(/\/$/, "")
+---
+
+<Base title={`${title} — Shannon`}>
+  <div class="flex gap-8">
+    <aside class="w-48 shrink-0 hidden md:block">
+      <nav class="text-xs space-y-1">
+        {pages.map((page) =>
+          "section" in page ? (
+            <div class="text-foreground-dark font-bold mt-3 mb-1">{page.section}</div>
+          ) : (
+            <a
+              href={page.href}
+              class:list={[
+                "block py-0.5",
+                currentPath === page.href
+                  ? "text-accent"
+                  : "text-muted hover:text-foreground-dark",
+              ]}
+            >
+              {page.label}
+            </a>
+          )
+        )}
+      </nav>
+    </aside>
+    <article class="prose-shannon min-w-0 flex-1">
+      <slot />
+    </article>
+  </div>
+</Base>
