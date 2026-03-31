@@ -93,3 +93,84 @@ if mode != "nu" {
   `LoopContext`.
 - Need to ensure the handler is always re-registered, even on panic (use a
   guard/drop pattern).
+
+## Experiments
+
+### Experiment 1: Replace ctrlc with signal-hook-registry, unregister during brush
+
+#### Description
+
+Replace the `ctrlc` crate with `signal-hook-registry` for SIGINT handling.
+Store the registration `SigId` so it can be unregistered before brush
+execution and re-registered after.
+
+#### Changes
+
+**`src/signals.rs`:**
+- Replace `ctrlc::set_handler(closure)` with
+  `signal_hook_registry::register(SIGINT, closure)`
+- Return the `SigId` from the function
+- Change function signature to return the SigId
+
+**`src/main.rs`:**
+- Capture the `SigId` returned from `ctrlc_protection()`
+- Store it somewhere accessible to the REPL — either on `EngineState`
+  (requires adding a field) or as a separate value passed through
+
+**`src/run.rs`:**
+- Pass the `SigId` to the dispatcher so it can unregister/re-register
+
+**`src/dispatcher.rs`:**
+- Accept the `SigId` in `ShannonDispatcher::new()` or `execute()`
+- Before calling `brush.execute()`, call
+  `signal_hook_registry::unregister(sigid)`
+- After brush returns, re-register with
+  `signal_hook_registry::register(SIGINT, closure)`
+- Use a drop guard to ensure re-registration on panic
+
+**`nushell/crates/nu-cli/src/repl.rs`:**
+- The `ModeDispatcher::execute()` trait doesn't need to change — the
+  unregister/re-register happens inside `ShannonDispatcher::execute()`,
+  not in the REPL
+
+**`Cargo.toml`:**
+- Add `signal-hook-registry` dependency
+- Keep `ctrlc` (nushell's upstream code may still reference it)
+
+**Actually, simpler approach:** Do the unregister/re-register inside
+`ShannonDispatcher::execute()` itself, not in the REPL. The dispatcher
+owns the SigId and the handler closure. This avoids threading anything
+through LoopContext or EngineState.
+
+```rust
+impl ShannonDispatcher {
+    pub fn new(sigid: SigId, handler: Arc<dyn Fn() + Send + Sync>) -> Self {
+        ShannonDispatcher { brush, sigid, handler }
+    }
+}
+
+impl ModeDispatcher for ShannonDispatcher {
+    fn execute(&mut self, mode, command, env, cwd) -> ModeResult {
+        // Unregister nushell's SIGINT handler
+        signal_hook_registry::unregister(self.sigid);
+
+        let result = /* brush execute */;
+
+        // Re-register
+        self.sigid = signal_hook_registry::register(
+            libc::SIGINT, self.handler.clone()
+        ).unwrap();
+
+        result
+    }
+}
+```
+
+#### Verification
+
+1. `cargo build` succeeds.
+2. `nvm use 24` still works (no regression).
+3. `nvm install 22` completes without hanging.
+4. Ctrl+C during a long bash command kills the process (not ignored).
+5. Ctrl+C in nushell mode still works (handler re-registered after brush).
+6. `cargo test` passes.
