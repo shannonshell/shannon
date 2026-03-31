@@ -87,7 +87,7 @@ fn run_startup_script_from(state: ShellState, config_path: Option<PathBuf>) -> S
 }
 
 /// Parse bash `export -p` output plus __SHANNON_ markers.
-fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
+pub fn parse_bash_env(contents: &str) -> Option<(HashMap<String, String>, PathBuf)> {
     let mut env = HashMap::new();
     let mut cwd: Option<PathBuf> = None;
 

@@ -39,10 +39,6 @@ nu-cmd-plugin = { path = "nushell/crates/nu-cmd-plugin", optional = true }
 nu-plugin-engine = { path = "nushell/crates/nu-plugin-engine", optional = true }
 nu-mcp = { path = "nushell/crates/nu-mcp", optional = true }
 
-# Brush (embedded bash)
-brush-core = { path = "brush/brush-core" }
-brush-builtins = { path = "brush/brush-builtins" }
-
 # Core deps
 crossterm = "0.29.0"
 ctrlc = "3.5"
