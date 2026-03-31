@@ -1,7 +1,6 @@
 ---
 import DocPage from "../../components/DocPage.astro"
-import CodeBlock from "../../components/CodeBlock.astro"
-import ShellSession from "../../components/ShellSession.astro"
+const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
 ---
 
 <DocPage title="Architecture">
@@ -40,7 +39,7 @@ import ShellSession from "../../components/ShellSession.astro"
 
   <p>Defined in nu-cli:</p>
 
-  <CodeBlock><span class="text-accent">pub trait</span> <span class="text-warning">ModeDispatcher</span>: Send &#123;
+  <pre class={cb}><code><span class="text-accent">pub trait</span> <span class="text-warning">ModeDispatcher</span>: Send &#123;
     <span class="text-accent">fn</span> <span class="text-primary">execute</span>(
         &amp;<span class="text-accent">mut</span> self,
         mode: &amp;<span class="text-accent">str</span>,
@@ -48,7 +47,7 @@ import ShellSession from "../../components/ShellSession.astro"
         env_vars: HashMap&lt;String, String&gt;,
         cwd: PathBuf,
     ) -&gt; ModeResult;
-&#125;</CodeBlock>
+&#125;</code></pre>
 
   <p>
     The dispatcher receives string env vars (converted from nushell's typed

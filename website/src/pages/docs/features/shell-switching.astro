@@ -1,6 +1,6 @@
 ---
 import DocPage from "../../../components/DocPage.astro"
-import ShellSession from "../../../components/ShellSession.astro"
+const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
 ---
 
 <DocPage title="Mode Switching">
@@ -18,7 +18,7 @@ import ShellSession from "../../../components/ShellSession.astro"
 
   <h2>Switching in Action</h2>
 
-  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; ls | where size &gt; 1mb
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; ls | where size &gt; 1mb
 <span class="text-muted">...</span>
 <span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
 
@@ -27,7 +27,7 @@ hello
 world
 <span class="text-accent">[bash]</span> ~/project &gt; &lt;Shift+Tab&gt;
 
-<span class="text-success">[nu]</span> ~/project &gt;</ShellSession>
+<span class="text-success">[nu]</span> ~/project &gt;</code></pre>
 
   <p>The prompt updates immediately to show the active mode.</p>
 

@@ -1,7 +1,6 @@
 ---
 import DocPage from "../../components/DocPage.astro"
-import ShellSession from "../../components/ShellSession.astro"
-import CodeBlock from "../../components/CodeBlock.astro"
+const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
 ---
 
 <DocPage title="Getting Started">
@@ -9,13 +8,13 @@ import CodeBlock from "../../components/CodeBlock.astro"
 
   <h2>Installation</h2>
 
-  <CodeBlock>cargo install --git https://github.com/shannonshell/shannon</CodeBlock>
+  <pre class={cb}><code>cargo install --git https://github.com/shannonshell/shannon</code></pre>
 
   <p>Or build from source:</p>
 
-  <CodeBlock>git clone https://github.com/shannonshell/shannon.git
+  <pre class={cb}><code>git clone https://github.com/shannonshell/shannon.git
 cd shannon
-cargo build --release</CodeBlock>
+cargo build --release</code></pre>
 
   <h2>Setting Up Your Environment</h2>
 
@@ -34,13 +33,13 @@ cargo build --release</CodeBlock>
 
   <p>If you use zsh (macOS default), grab your PATH:</p>
 
-  <CodeBlock><span class="text-muted"># Run this in your current shell to see your PATH</span>
-echo $PATH</CodeBlock>
+  <pre class={cb}><code><span class="text-muted"># Run this in your current shell to see your PATH</span>
+echo $PATH</code></pre>
 
   <p>Then create env.sh with it:</p>
 
-  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.sh</span>
-<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.cargo/bin"</span></CodeBlock>
+  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.cargo/bin"</span></code></pre>
 
   <h3>Option 2: Copy your bash/zsh setup</h3>
 
@@ -52,7 +51,7 @@ echo $PATH</CodeBlock>
     <code class="text-secondary">eval</code> lines into env.sh:
   </p>
 
-  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.sh</span>
+  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
 
 <span class="text-muted"># Homebrew</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
@@ -64,7 +63,7 @@ echo $PATH</CodeBlock>
 <span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/go/bin"</span>
 
 <span class="text-muted"># Node (nvm, fnm, etc.)</span>
-<span class="text-accent">eval</span> <span class="text-success">"$(fnm env)"</span></CodeBlock>
+<span class="text-accent">eval</span> <span class="text-success">"$(fnm env)"</span></code></pre>
 
   <h3>Option 3: Use nushell's env.nu</h3>
 
@@ -74,9 +73,9 @@ echo $PATH</CodeBlock>
     using nushell syntax:
   </p>
 
-  <CodeBlock><span class="text-muted"># ~/.config/shannon/env.nu</span>
+  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.nu</span>
 <span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | prepend <span class="text-success">"/opt/homebrew/bin"</span>)
-<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | append (<span class="text-warning">$env</span>.HOME | path join <span class="text-success">".cargo/bin"</span>))</CodeBlock>
+<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | append (<span class="text-warning">$env</span>.HOME | path join <span class="text-success">".cargo/bin"</span>))</code></pre>
 
   <h3>Loading order</h3>
 
@@ -96,19 +95,17 @@ echo $PATH</CodeBlock>
 
   <h2>First Run</h2>
 
-  <CodeBlock>shannon</CodeBlock>
+  <pre class={cb}><code>shannon</code></pre>
 
   <p>You'll see:</p>
 
-  <ShellSession>Welcome to <span class="text-success font-bold">Shannon</span>, based on the <span class="text-success">Nu</span> language, where all data is structured!
+  <pre class={cb}><code>Welcome to <span class="text-success font-bold">Shannon</span>, based on the <span class="text-success">Nu</span> language, where all data is structured!
 Version: <span class="text-success">0.3.8</span>
 Startup Time: <span class="text-success font-bold">125ms</span>
 
-<span class="text-success">[nu]</span> ~/projects &gt;</ShellSession>
+<span class="text-success">[nu]</span> ~/projects &gt;</code></pre>
 
-  <p>
-    Shannon starts in nushell mode. All nushell commands work.
-  </p>
+  <p>Shannon starts in nushell mode. All nushell commands work.</p>
 
   <p>
     If commands like <code class="text-secondary">git</code>,
@@ -121,8 +118,8 @@ Startup Time: <span class="text-success font-bold">125ms</span>
 
   <p>Press <strong>Shift+Tab</strong> to toggle between modes:</p>
 
-  <ShellSession><span class="text-success">[nu]</span> ~/projects &gt; ls | where size &gt; 1mb    <span class="text-muted">← nushell</span>
-<span class="text-accent">[bash]</span> ~/projects &gt; grep -r TODO src/     <span class="text-muted">← bash</span></ShellSession>
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/projects &gt; ls | where size &gt; 1mb    <span class="text-muted">← nushell</span>
+<span class="text-accent">[bash]</span> ~/projects &gt; grep -r TODO src/     <span class="text-muted">← bash</span></code></pre>
 
   <p>Your environment variables and working directory carry over when you switch.</p>
 
@@ -130,13 +127,13 @@ Startup Time: <span class="text-success font-bold">125ms</span>
 
   <p>In <strong>nu mode</strong>, use nushell syntax:</p>
 
-  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; ls | sort-by modified
-<span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.HOME</ShellSession>
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; ls | sort-by modified
+<span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.HOME</code></pre>
 
   <p>In <strong>bash mode</strong>, use bash syntax:</p>
 
-  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; echo hello &amp;&amp; echo world
-<span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">FOO</span>=bar</ShellSession>
+  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; echo hello &amp;&amp; echo world
+<span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">FOO</span>=bar</code></pre>
 
   <h2>Exiting</h2>
 

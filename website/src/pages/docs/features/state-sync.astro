@@ -1,6 +1,6 @@
 ---
 import DocPage from "../../../components/DocPage.astro"
-import ShellSession from "../../../components/ShellSession.astro"
+const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
 ---
 
 <DocPage title="State Synchronization">
@@ -13,17 +13,17 @@ import ShellSession from "../../../components/ShellSession.astro"
 
   <h2>Environment Variables</h2>
 
-  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
+  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
 <span class="text-accent">[bash]</span> ~/project &gt; &lt;Shift+Tab&gt;
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.API_KEY
-sk-1234</ShellSession>
+sk-1234</code></pre>
 
   <p>It works both ways:</p>
 
-  <ShellSession><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
 <span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
 <span class="text-accent">[bash]</span> ~/project &gt; echo <span class="text-warning">$FOO</span>
-hello</ShellSession>
+hello</code></pre>
 
   <h2>Typed Value Conversion</h2>
 
@@ -44,15 +44,13 @@ hello</ShellSession>
     </li>
   </ul>
 
-  <p>
-    You don't need to do anything — PATH, LS_COLORS, and other typed vars just work.
-  </p>
+  <p>You don't need to do anything — PATH, LS_COLORS, and other typed vars just work.</p>
 
   <h2>Working Directory</h2>
 
-  <ShellSession><span class="text-accent">[bash]</span> ~/project &gt; cd /tmp
+  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; cd /tmp
 <span class="text-accent">[bash]</span> /tmp &gt; &lt;Shift+Tab&gt;
-<span class="text-success">[nu]</span> /tmp &gt;</ShellSession>
+<span class="text-success">[nu]</span> /tmp &gt;</code></pre>
 
   <h2>The Strings-Only Boundary</h2>
 
