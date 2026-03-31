@@ -52,10 +52,10 @@ Pressing Ctrl+C disrupts the signal state enough for the process to continue.
 ### Chosen approach
 
 Replace `ctrlc` with `signal-hook` directly in Shannon's signal setup.
-`signal-hook::register()` returns a registration ID that can be used
-with `signal-hook::unregister()`. Before calling
-`dispatcher.execute()`, temporarily unregister nushell's SIGINT handler so
-brush's tokio signal handlers work uncontested. Re-register after brush returns.
+`signal-hook::register()` returns a registration ID that can be used with
+`signal-hook::unregister()`. Before calling `dispatcher.execute()`, temporarily
+unregister nushell's SIGINT handler so brush's tokio signal handlers work
+uncontested. Re-register after brush returns.
 
 ### Implementation sketch
 
@@ -88,9 +88,8 @@ if mode != "nu" {
 
 - The `ctrlc` crate is also used by nushell's upstream code. Removing it may
   require changes to how nushell's signal handlers are registered.
-- `signal-hook` registration IDs need to be threaded through to the
-  REPL dispatch code. May need to store on `EngineState` or pass via
-  `LoopContext`.
+- `signal-hook` registration IDs need to be threaded through to the REPL
+  dispatch code. May need to store on `EngineState` or pass via `LoopContext`.
 - Need to ensure the handler is always re-registered, even on panic (use a
   guard/drop pattern).
 
@@ -100,8 +99,8 @@ if mode != "nu" {
 
 #### Description
 
-Replace the `ctrlc` crate with `signal-hook` for SIGINT handling. Store
-the registration `SigId` so it can be unregistered before brush execution and
+Replace the `ctrlc` crate with `signal-hook` for SIGINT handling. Store the
+registration `SigId` so it can be unregistered before brush execution and
 re-registered after.
 
 #### Changes
@@ -184,17 +183,18 @@ impl ModeDispatcher for ShannonDispatcher {
 **Result:** Fail
 
 `nvm install 24` still hangs until Ctrl+C is pressed. Unregistering nushell's
-signal-hook handler did not fix the issue. The `ctrlc` crate's handler is
-STILL registered — we added a signal-hook handler but never removed the ctrlc
-one. The `ctrlc` crate registers its own handler at startup (internally, via
-nushell's upstream code or our own call), and that handler persists regardless
-of what we do with signal-hook. Two handlers are now registered: the original
-ctrlc one and our new signal-hook one.
+signal-hook handler did not fix the issue. The `ctrlc` crate's handler is STILL
+registered — we added a signal-hook handler but never removed the ctrlc one. The
+`ctrlc` crate registers its own handler at startup (internally, via nushell's
+upstream code or our own call), and that handler persists regardless of what we
+do with signal-hook. Two handlers are now registered: the original ctrlc one and
+our new signal-hook one.
 
 The root cause may not be what we assumed. Possibilities:
+
 1. The `ctrlc` crate handler is still active and consuming SIGINT
-2. The issue isn't about handler competition but about how brush's tokio
-   runtime handles signals inside `block_on()`
+2. The issue isn't about handler competition but about how brush's tokio runtime
+   handles signals inside `block_on()`
 3. The child process isn't in the right process group to receive SIGINT
 
 #### Conclusion
@@ -208,6 +208,7 @@ investigate whether the root cause is something else entirely.
 #### Description
 
 We don't know where exactly the hang occurs. Possible locations:
+
 1. `processes.rs` `wait()` — the `tokio::select!` loop never fires
 2. The shell function execution path — `nvm install` doesn't go through
    `ChildProcess::wait()` at all
@@ -219,6 +220,7 @@ Add `eprintln!` debug logs at key points to trace execution flow when
 #### Changes
 
 **`src/dispatcher.rs`** — log entry/exit of brush execution:
+
 ```rust
 eprintln!("[shannon] entering brush execute: {command}");
 // ... brush.execute(command) ...
@@ -226,6 +228,7 @@ eprintln!("[shannon] brush execute complete");
 ```
 
 **`brush/brush-core/src/processes.rs`** — log inside the `wait()` loop:
+
 ```rust
 eprintln!("[brush:processes] entering wait loop");
 // Inside tokio::select!:
@@ -236,12 +239,14 @@ eprintln!("[brush:processes] entering wait loop");
 ```
 
 **`brush/brush-core/src/commands.rs`** — log command type detection:
+
 ```rust
 // Where commands are dispatched (function vs external vs builtin)
 eprintln!("[brush:commands] executing: {name} as {type}");
 ```
 
 **`brush/brush-core/src/sys/unix/signal.rs`** — log signal listener creation:
+
 ```rust
 eprintln!("[brush:signal] creating SIGTSTP listener");
 eprintln!("[brush:signal] creating SIGCHLD listener");
@@ -258,3 +263,30 @@ eprintln!("[brush:signal] creating ctrl_c listener");
    - Which branch (if any) fires when Ctrl+C is pressed?
    - Is the hang before, during, or after the `wait()` loop?
 4. Report findings and design next experiment based on results
+
+**Result:** Pass (diagnostic success)
+
+The logs revealed the hang is NOT a signal handler conflict. Key findings:
+
+1. `processes.rs wait()` IS reached — many child processes start and complete
+   normally during `nvm install`.
+2. The `tokio::select!` loop works correctly — `exec_future completed` and
+   `SIGCHLD received` fire as expected for most processes.
+3. The hang occurs on the LAST child process nvm spawns — `entering select
+   loop` appears without a corresponding `exec_future completed`.
+4. `SIGINT/ctrl_c received` only fires when the user presses Ctrl+C to
+   unstick it — confirming the child process is blocked, not the signal
+   system.
+5. After Ctrl+C: SIGCHLD fires (child dies), exec_future completes,
+   `brush execute complete` follows — everything unblocks normally.
+
+**The root cause is NOT competing signal handlers.** The last child process
+spawned by nvm is blocked (probably waiting on stdin or a missing signal).
+The signal-hook changes from experiment 1 were unnecessary.
+
+#### Conclusion
+
+The hang is caused by a specific child process that nvm spawns at the end
+of its install sequence. This process blocks indefinitely until killed.
+Next: identify which command is hanging by logging the command name when
+`ChildProcess` is created.
