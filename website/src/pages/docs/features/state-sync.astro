@@ -14,16 +14,16 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Environment Variables</h2>
 
   <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
-<span class="text-accent">[bash]</span> ~/project &gt; &lt;Shift+Tab&gt;
+<span class="text-accent">[bash]</span> ~/project &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.API_KEY
-sk-1234</code></pre>
+<span class="text-muted">sk-1234</span></code></pre>
 
   <p>It works both ways:</p>
 
   <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
-<span class="text-success">[nu]</span> ~/project &gt; &lt;Shift+Tab&gt;
-<span class="text-accent">[bash]</span> ~/project &gt; echo <span class="text-warning">$FOO</span>
-hello</code></pre>
+<span class="text-success">[nu]</span> ~/project &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
+<span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">echo</span> <span class="text-warning">$FOO</span>
+<span class="text-muted">hello</span></code></pre>
 
   <h2>Typed Value Conversion</h2>
 
@@ -48,8 +48,8 @@ hello</code></pre>
 
   <h2>Working Directory</h2>
 
-  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; cd /tmp
-<span class="text-accent">[bash]</span> /tmp &gt; &lt;Shift+Tab&gt;
+  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">cd</span> /tmp
+<span class="text-accent">[bash]</span> /tmp &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 <span class="text-success">[nu]</span> /tmp &gt;</code></pre>
 
   <h2>The Strings-Only Boundary</h2>

@@ -8,13 +8,13 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <h2>Installation</h2>
 
-  <pre class={cb}><code>cargo install --git https://github.com/shannonshell/shannon</code></pre>
+  <pre class={cb}><code><span class="text-primary">cargo</span> install --git <span class="text-success">https://github.com/shannonshell/shannon</span></code></pre>
 
   <p>Or build from source:</p>
 
-  <pre class={cb}><code>git clone https://github.com/shannonshell/shannon.git
-cd shannon
-cargo build --release</code></pre>
+  <pre class={cb}><code><span class="text-primary">git</span> clone <span class="text-success">https://github.com/shannonshell/shannon.git</span>
+<span class="text-primary">cd</span> shannon
+<span class="text-primary">cargo</span> build --release</code></pre>
 
   <h2>Setting Up Your Environment</h2>
 
@@ -95,7 +95,7 @@ echo $PATH</code></pre>
 
   <h2>First Run</h2>
 
-  <pre class={cb}><code>shannon</code></pre>
+  <pre class={cb}><code><span class="text-primary">shannon</span></code></pre>
 
   <p>You'll see:</p>
 
@@ -118,8 +118,8 @@ Startup Time: <span class="text-success font-bold">125ms</span>
 
   <p>Press <strong>Shift+Tab</strong> to toggle between modes:</p>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/projects &gt; ls | where size &gt; 1mb    <span class="text-muted">← nushell</span>
-<span class="text-accent">[bash]</span> ~/projects &gt; grep -r TODO src/     <span class="text-muted">← bash</span></code></pre>
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/projects &gt; <span class="text-primary">ls</span> | <span class="text-primary">where</span> size &gt; 1mb    <span class="text-muted">← nushell</span>
+<span class="text-accent">[bash]</span> ~/projects &gt; <span class="text-primary">grep</span> -r TODO src/     <span class="text-muted">← bash</span></code></pre>
 
   <p>Your environment variables and working directory carry over when you switch.</p>
 
@@ -127,12 +127,12 @@ Startup Time: <span class="text-success font-bold">125ms</span>
 
   <p>In <strong>nu mode</strong>, use nushell syntax:</p>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; ls | sort-by modified
+  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-primary">ls</span> | <span class="text-primary">sort-by</span> modified
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.HOME</code></pre>
 
   <p>In <strong>bash mode</strong>, use bash syntax:</p>
 
-  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; echo hello &amp;&amp; echo world
+  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">echo</span> hello &amp;&amp; <span class="text-primary">echo</span> world
 <span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">FOO</span>=bar</code></pre>
 
   <h2>Exiting</h2>
