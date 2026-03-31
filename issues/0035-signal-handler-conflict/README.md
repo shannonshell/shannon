@@ -290,3 +290,29 @@ The hang is caused by a specific child process that nvm spawns at the end
 of its install sequence. This process blocks indefinitely until killed.
 Next: identify which command is hanging by logging the command name when
 `ChildProcess` is created.
+
+### Experiment 3: Log which command hangs
+
+#### Description
+
+Add a debug log in `brush/brush-core/src/commands.rs` at the
+`execute_external_command()` function (~line 585) where the command name
+and args are available just before spawning. This will identify the exact
+command that hangs at the end of `nvm install`.
+
+Brush already has `tracing::debug!` at this location — add our
+`debug_log()` call next to it.
+
+#### Changes
+
+**`brush/brush-core/src/commands.rs`** (~line 585):
+- Add `debug_log()` call logging the command program and arguments
+  right before `sys::process::spawn(cmd)`
+
+#### Verification
+
+1. `cargo build` succeeds
+2. `rm -f /tmp/shannon-debug.log`
+3. `tail -f /tmp/shannon-debug.log` in another terminal
+4. Run `nvm install 24` in bash mode
+5. The last command logged before the hang is the culprit
