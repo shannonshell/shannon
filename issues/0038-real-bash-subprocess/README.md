@@ -247,3 +247,21 @@ Env capture (`capture_env() -> HashMap`):
 6. Manual test: Ctrl+C during a long-running command → interrupts it
 7. Manual test: switch to bash → run command → switch to nu → check env vars
    propagated
+
+**Result:** Pass
+
+All verification steps confirmed:
+- `cargo build` compiles without brush dependencies (net -278 lines)
+- `cargo test` — all 15 library tests pass (8 new bash_process + 5 executor + 2 shell)
+- `echo hello` → `hello` ✓
+- `export FOO=bar` then `echo $FOO` → `bar` (state persists across commands) ✓
+- Switch to nu mode → `echo $env.FOO` → `bar` (env propagation works) ✓
+- Switch back to bash → `echo $FOO` → `bar` (round-trip works) ✓
+- `nvm install 24` → completes without hanging ✓ (the original issue 35 bug)
+
+#### Conclusion
+
+Real bash subprocess works on the first attempt. The sentinel-based protocol
+correctly captures env vars, cwd, and exit codes. State persists across
+commands (env vars, functions from env.sh). The pipeline deadlock that plagued
+brush is gone — real bash uses fork() for pipeline stages natively.
