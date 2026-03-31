@@ -316,3 +316,47 @@ Brush already has `tracing::debug!` at this location — add our
 3. `tail -f /tmp/shannon-debug.log` in another terminal
 4. Run `nvm install 24` in bash mode
 5. The last command logged before the hang is the culprit
+
+**Result:** Pass (diagnostic success)
+
+The command logs combined with pipeline stage logs revealed the true root
+cause. Key findings:
+
+1. The hanging command is `/usr/bin/curl -q --fail --compressed -L -s
+   https://nodejs.org/dist/index.tab -o -` — a curl downloading a file.
+
+2. This curl runs as **pipeline stage 1/1** — a standalone command, NOT part
+   of a multi-command pipeline. This means it's inside a **command
+   substitution** like `$(curl ...)` in nvm's bash script.
+
+3. The pipeline logs confirm: the curl `stage 1/1 returned: StartedProcess`,
+   then `entering wait()` / `entering select loop` with no further progress
+   until Ctrl+C.
+
+4. **Root cause identified: held pipe writer in command substitution.**
+   Brush's `invoke_command_in_subshell_and_get_output()` in `commands.rs`
+   (lines 727-763) creates a pipe, moves the writer into `params`, spawns
+   the command via `tokio::spawn(run_substitution_command(subshell, params, s))`,
+   then reads from the pipe with `async_reader.read_to_string().await`.
+
+   The problem: the pipe writer is held inside `params` which lives in the
+   spawned task. When curl finishes writing and closes its stdout fd, the
+   reader still doesn't see EOF because the writer copy in `params` is
+   still alive. `read_to_string()` blocks forever waiting for EOF.
+
+   This is a classic **held pipe writer** bug — the reader blocks because
+   not all writers have been dropped.
+
+5. **This is NOT a signal handling conflict.** The original issue title is
+   wrong. The root cause is a brush bug in command substitution pipe
+   management. The signal-hook changes from experiment 1 were unnecessary.
+
+#### Conclusion
+
+The hang is caused by a held pipe writer in brush's command substitution
+code. When `$(curl ...)` runs, brush creates a pipe, passes the writer to
+the child process, but also keeps a copy in the execution parameters struct.
+After curl finishes, the reader never sees EOF because the extra writer is
+still alive. Fix: ensure the writer is dropped from params after the child
+process is spawned. This is a brush-core bug that we can fix directly in
+our monorepo.
