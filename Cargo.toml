@@ -46,7 +46,6 @@ brush-builtins = { path = "brush/brush-builtins" }
 # Core deps
 crossterm = "0.29.0"
 ctrlc = "3.5"
-signal-hook = "0.4"
 chrono = "0.4"
 dirs = "6"
 lexopt = "0.3"

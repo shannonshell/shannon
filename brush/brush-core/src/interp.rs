@@ -509,28 +509,9 @@ async fn spawn_pipeline_processes(
             }
         };
 
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/shannon-debug.log") {
-                let _ = writeln!(f, "[brush:pipeline] spawning pipeline stage {}/{} (run_in_current_shell={})", current_pipeline_index + 1, pipeline_len, run_in_current_shell);
-            }
-        }
-
         let spawn_result = command
             .execute_in_pipeline(pipeline_context, cmd_params)
             .await?;
-
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/shannon-debug.log") {
-                let variant = match &spawn_result {
-                    ExecutionSpawnResult::StartedProcess(_) => "StartedProcess",
-                    ExecutionSpawnResult::Completed(_) => "Completed",
-                    ExecutionSpawnResult::StartedTask(_) => "StartedTask",
-                };
-                let _ = writeln!(f, "[brush:pipeline] stage {}/{} returned: {}", current_pipeline_index + 1, pipeline_len, variant);
-            }
-        }
 
         // Update the process group ID if something was spawned.
         if let ExecutionSpawnResult::StartedProcess(child) = &spawn_result {

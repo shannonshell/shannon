@@ -1,6 +1,5 @@
 //! Command execution
 
-use std::io::Write;
 use std::{
     borrow::Cow,
     ffi::OsStr,
@@ -24,16 +23,6 @@ use crate::{
     results::ExecutionSpawnResult,
     sys, trace_categories, traps, variables,
 };
-
-fn debug_log(msg: &str) {
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/tmp/shannon-debug.log")
-    {
-        let _ = writeln!(f, "{msg}");
-    }
-}
 
 /// Encapsulates the result of waiting for a command to complete.
 pub enum CommandWaitResult {
@@ -602,33 +591,6 @@ pub(crate) fn execute_external_command(
             .join(" ")
     );
 
-    // Debug log to /tmp/shannon-debug.log
-    {
-        fn fd_type_name(f: &OpenFile) -> &'static str {
-            match f {
-                OpenFile::Stdin(_) => "Stdin",
-                OpenFile::Stdout(_) => "Stdout",
-                OpenFile::Stderr(_) => "Stderr",
-                OpenFile::File(_) => "File",
-                OpenFile::PipeReader(_) => "PipeReader",
-                OpenFile::PipeWriter(_) => "PipeWriter",
-                OpenFile::Stream(_) => "Stream",
-            }
-        }
-        let stdin_type = context.try_fd(OpenFiles::STDIN_FD)
-            .as_ref().map(fd_type_name).unwrap_or("inherited");
-        let stdout_type = context.try_fd(OpenFiles::STDOUT_FD)
-            .as_ref().map(fd_type_name).unwrap_or("inherited");
-        let stderr_type = context.try_fd(OpenFiles::STDERR_FD)
-            .as_ref().map(fd_type_name).unwrap_or("inherited");
-        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
-        debug_log(&format!(
-            "[brush:commands] spawning: {} {} | stdin={} stdout={} stderr={}",
-            cmd.get_program().to_string_lossy(), args.join(" "),
-            stdin_type, stdout_type, stderr_type,
-        ));
-    }
-
     match sys::process::spawn(cmd) {
         Ok(child) => {
             // Retrieve the pid.
@@ -770,15 +732,12 @@ pub(crate) async fn invoke_command_in_subshell_and_get_output(
     // Set up pipe so we can read the output.
     let (reader, writer) = std::io::pipe()?;
     params.set_fd(OpenFiles::STDOUT_FD, writer.into());
-    debug_log("[brush:subst] pipe created, spawning task");
 
     let mut async_reader = sys::async_pipe::AsyncPipeReader::new(reader)?;
 
     let cmd_join_handle = tokio::spawn(run_substitution_command(subshell, params, s));
-    debug_log("[brush:subst] task spawned, reading output...");
 
     let output_str = async_reader.read_to_string().await?;
-    debug_log("[brush:subst] read_to_string completed");
 
     // Now observe the command's completion.
     let run_result = cmd_join_handle.await?;
@@ -795,8 +754,6 @@ async fn run_substitution_command(
     mut params: ExecutionParameters,
     command: String,
 ) -> Result<ExecutionResult, error::Error> {
-    debug_log("[brush:subst] entering run_substitution_command");
-
     // Parse the string into a whole shell program.
     let parse_result = shell.parse_string(command);
 
@@ -815,11 +772,10 @@ async fn run_substitution_command(
     let source_info = crate::SourceInfo::from("main");
 
     // Handle the parse result using default shell behavior.
-    let result = shell
+    // Handle the parse result using default shell behavior.
+    shell
         .run_parsed_result(parse_result, &source_info, &params)
-        .await;
-    debug_log("[brush:subst] run_parsed_result returned");
-    result
+        .await
 }
 
 // Detects a subshell command that consists solely of a single input redirection

@@ -1,19 +1,8 @@
 //! Process management
 
-use std::io::Write;
 use futures::FutureExt;
 
 use crate::{error, sys};
-
-fn debug_log(msg: &str) {
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/tmp/shannon-debug.log")
-    {
-        let _ = writeln!(f, "{msg}");
-    }
-}
 
 /// A waitable future that will yield the results of a child process's execution.
 pub(crate) type WaitableChildProcess = std::pin::Pin<
@@ -56,32 +45,27 @@ impl ChildProcess {
 
     /// Waits for the process to exit.
     pub async fn wait(&mut self) -> Result<ProcessWaitResult, error::Error> {
-        debug_log("[brush:processes] entering wait()");
+
         #[allow(unused_mut, reason = "only mutated on some platforms")]
         let mut sigtstp = sys::signal::tstp_signal_listener()?;
         #[allow(unused_mut, reason = "only mutated on some platforms")]
         let mut sigchld = sys::signal::chld_signal_listener()?;
 
-        debug_log("[brush:processes] entering select loop");
         #[allow(clippy::ignored_unit_patterns)]
         loop {
             tokio::select! {
                 output = &mut self.exec_future => {
-                    debug_log("[brush:processes] exec_future completed");
                     break Ok(ProcessWaitResult::Completed(output?))
                 },
                 _ = sigtstp.recv() => {
-                    debug_log("[brush:processes] SIGTSTP received");
                     break Ok(ProcessWaitResult::Stopped)
                 },
                 _ = sigchld.recv() => {
-                    debug_log("[brush:processes] SIGCHLD received");
                     if sys::signal::poll_for_stopped_children()? {
                         break Ok(ProcessWaitResult::Stopped);
                     }
                 },
                 _ = sys::signal::await_ctrl_c() => {
-                    debug_log("[brush:processes] SIGINT/ctrl_c received");
                     // SIGINT got thrown. Handle it and continue looping. The child should
                     // have received it as well, and either handled it or ended up getting
                     // terminated (in which case we'll see the child exit).

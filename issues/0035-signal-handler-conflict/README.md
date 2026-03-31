@@ -597,3 +597,19 @@ loop (line 467) to split on `run_in_current_shell`:
 5. `seq 1 100000 | head -5` works (large output, early termination)
 6. `ls | sort | head` works (3-stage pipeline)
 7. Ctrl+C during a pipeline kills all stages
+
+**Result:** Fail
+
+`nvm install 24` still hangs. Worse: Ctrl+C no longer unsticks it — the
+process freezes permanently, requiring the terminal to be killed. The
+`tokio::spawn` approach broke signal delivery: the spawned task runs in a
+different tokio context where SIGINT doesn't reach the child process, and
+the parent shell's signal handling can't communicate with the detached task.
+
+#### Conclusion
+
+Spawning non-last pipeline stages in `tokio::spawn` is not the right fix.
+The task runs in a separate async context that doesn't receive signals
+properly, making Ctrl+C unable to kill the child process. The sequential
+pipeline execution is more deeply embedded in brush's architecture than
+a simple spawn-and-wait can solve. Need a different approach.

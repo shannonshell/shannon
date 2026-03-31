@@ -123,11 +123,9 @@ fn main() -> Result<()> {
     let handle_ctrlc = !parsed_nu_cli_args.mcp;
     #[cfg(not(feature = "mcp"))]
     let handle_ctrlc = true;
-    let sigint_handler = if handle_ctrlc {
-        Some(ctrlc_protection(&mut engine_state))
-    } else {
-        None
-    };
+    if handle_ctrlc {
+        ctrlc_protection(&mut engine_state);
+    }
 
     #[cfg(all(feature = "rustls-tls", feature = "network"))]
     nu_command::tls::CRYPTO_PROVIDER.default();
@@ -641,7 +639,6 @@ fn main() -> Result<()> {
             stack,
             parsed_nu_cli_args,
             entire_start_time,
-            sigint_handler,
         )?;
 
         cleanup_exit(0, &engine_state, 0);
