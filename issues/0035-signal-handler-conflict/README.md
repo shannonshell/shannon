@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-30"
+closed = "2026-03-31"
 +++
 
 # Issue 35: Signal handler conflict between nushell and brush
@@ -613,3 +614,36 @@ The task runs in a separate async context that doesn't receive signals
 properly, making Ctrl+C unable to kill the child process. The sequential
 pipeline execution is more deeply embedded in brush's architecture than
 a simple spawn-and-wait can solve. Need a different approach.
+
+## Conclusion
+
+Over six experiments, we traced the `nvm install` hang from an initial
+hypothesis (competing signal handlers) to the true root cause: brush
+executes pipeline stages sequentially, so `$(nvm_download ... | sed ...)`
+deadlocks when the shell function in stage 1 fills the pipe buffer before
+stage 2 starts.
+
+The fix — spawning non-last stages concurrently via `tokio::spawn` —
+broke signal delivery, making Ctrl+C permanently freeze the shell.
+Alternative approaches (spawn_blocking, async buffering) have similar
+problems because brush's architecture assumes signal-sensitive code runs
+in the main async task.
+
+This is a fundamental limitation of brush as a bash reimplementation in
+Rust. Real bash uses `fork()` to run pipeline stages as concurrent OS
+processes — a model that brush cannot replicate with its async runtime.
+The pipeline deadlock is one symptom, but any complex bash script that
+relies on Unix process semantics (signals, process groups, job control,
+pipelines) risks hitting similar edge cases.
+
+**Decision: replace brush with a real bash subprocess.** Shannon will
+spawn a persistent bash process, inject commands via stdin, and capture
+env vars/cwd after each command. This guarantees full bash compatibility
+— no reimplementation edge cases, no signal conflicts, no pipeline
+deadlocks. Shell functions like nvm work exactly as they do in bash
+because they ARE running in bash.
+
+All experimental code changes (signal-hook, debug logs) have been
+reverted. The brush crate remains in the monorepo for now but will no
+longer be used for runtime command execution once the bash subprocess
+engine is implemented.
