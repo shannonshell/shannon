@@ -51,9 +51,9 @@ Pressing Ctrl+C disrupts the signal state enough for the process to continue.
 
 ### Chosen approach
 
-Replace `ctrlc` with `signal-hook-registry` directly in Shannon's signal setup.
-`signal-hook-registry::register()` returns a registration ID that can be used
-with `signal-hook-registry::unregister()`. Before calling
+Replace `ctrlc` with `signal-hook` directly in Shannon's signal setup.
+`signal-hook::register()` returns a registration ID that can be used
+with `signal-hook::unregister()`. Before calling
 `dispatcher.execute()`, temporarily unregister nushell's SIGINT handler so
 brush's tokio signal handlers work uncontested. Re-register after brush returns.
 
@@ -81,14 +81,14 @@ if mode != "nu" {
 
 **`shannon/Cargo.toml`:**
 
-- Add `signal-hook-registry` dependency
+- Add `signal-hook` dependency
 - Remove `ctrlc` dependency (if no longer needed)
 
 ### Complications
 
 - The `ctrlc` crate is also used by nushell's upstream code. Removing it may
   require changes to how nushell's signal handlers are registered.
-- `signal-hook-registry` registration IDs need to be threaded through to the
+- `signal-hook` registration IDs need to be threaded through to the
   REPL dispatch code. May need to store on `EngineState` or pass via
   `LoopContext`.
 - Need to ensure the handler is always re-registered, even on panic (use a
@@ -96,31 +96,35 @@ if mode != "nu" {
 
 ## Experiments
 
-### Experiment 1: Replace ctrlc with signal-hook-registry, unregister during brush
+### Experiment 1: Replace ctrlc with signal-hook, unregister during brush
 
 #### Description
 
-Replace the `ctrlc` crate with `signal-hook-registry` for SIGINT handling.
-Store the registration `SigId` so it can be unregistered before brush
-execution and re-registered after.
+Replace the `ctrlc` crate with `signal-hook` for SIGINT handling. Store
+the registration `SigId` so it can be unregistered before brush execution and
+re-registered after.
 
 #### Changes
 
 **`src/signals.rs`:**
+
 - Replace `ctrlc::set_handler(closure)` with
   `signal_hook_registry::register(SIGINT, closure)`
 - Return the `SigId` from the function
 - Change function signature to return the SigId
 
 **`src/main.rs`:**
+
 - Capture the `SigId` returned from `ctrlc_protection()`
-- Store it somewhere accessible to the REPL — either on `EngineState`
-  (requires adding a field) or as a separate value passed through
+- Store it somewhere accessible to the REPL — either on `EngineState` (requires
+  adding a field) or as a separate value passed through
 
 **`src/run.rs`:**
+
 - Pass the `SigId` to the dispatcher so it can unregister/re-register
 
 **`src/dispatcher.rs`:**
+
 - Accept the `SigId` in `ShannonDispatcher::new()` or `execute()`
 - Before calling `brush.execute()`, call
   `signal_hook_registry::unregister(sigid)`
@@ -129,18 +133,20 @@ execution and re-registered after.
 - Use a drop guard to ensure re-registration on panic
 
 **`nushell/crates/nu-cli/src/repl.rs`:**
+
 - The `ModeDispatcher::execute()` trait doesn't need to change — the
-  unregister/re-register happens inside `ShannonDispatcher::execute()`,
-  not in the REPL
+  unregister/re-register happens inside `ShannonDispatcher::execute()`, not in
+  the REPL
 
 **`Cargo.toml`:**
-- Add `signal-hook-registry` dependency
+
+- Add `signal-hook` dependency
 - Keep `ctrlc` (nushell's upstream code may still reference it)
 
 **Actually, simpler approach:** Do the unregister/re-register inside
-`ShannonDispatcher::execute()` itself, not in the REPL. The dispatcher
-owns the SigId and the handler closure. This avoids threading anything
-through LoopContext or EngineState.
+`ShannonDispatcher::execute()` itself, not in the REPL. The dispatcher owns the
+SigId and the handler closure. This avoids threading anything through
+LoopContext or EngineState.
 
 ```rust
 impl ShannonDispatcher {
