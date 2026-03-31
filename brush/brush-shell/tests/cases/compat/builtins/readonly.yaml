@@ -1,0 +1,26 @@
+name: "Builtins: readonly"
+cases:
+  - name: "making var readonly"
+    stdin: |
+      my_var="value"
+      readonly my_var
+
+      echo "Invoking declare -p..."
+      declare -p my_var
+
+  - name: "using readonly with value"
+    stdin: |
+      readonly my_var="my_value"
+
+      echo "Invoking declare -p..."
+      declare -p my_var
+
+  - name: "readonly array after append"
+    stdin: |
+      ARR=()
+      f() {
+          ARR+=("a" "b")
+          readonly ARR
+          echo "${#ARR[@]}"
+      }
+      f
