@@ -591,6 +591,19 @@ pub(crate) fn execute_external_command(
             .join(" ")
     );
 
+    // Debug log to /tmp/shannon-debug.log
+    {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/shannon-debug.log")
+        {
+            let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+            let _ = writeln!(f, "[brush:commands] spawning: {} {}", cmd.get_program().to_string_lossy(), args.join(" "));
+        }
+    }
+
     match sys::process::spawn(cmd) {
         Ok(child) => {
             // Retrieve the pid.
