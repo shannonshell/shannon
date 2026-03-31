@@ -148,3 +148,102 @@ fn execute(
    needed since we're writing to bash's stdin parser.
 4. **Performance**: One extra process + pipe I/O per command. Should be
    negligible compared to the command itself.
+
+## Experiments
+
+### Experiment 1: Replace BrushEngine with BashProcess
+
+Replace `src/brush_engine.rs` with a new `src/bash_process.rs` that spawns a
+persistent bash subprocess and communicates via stdin/stdout pipes with
+sentinel-based state capture.
+
+#### Changes
+
+**New file: `src/bash_process.rs`**
+
+The `BashProcess` struct holds:
+- `child: std::process::Child` — the persistent bash process
+- `stdin: ChildStdin` — write commands here
+- `stdout_reader: BufReader<ChildStdout>` — read output line-by-line
+
+Constructor (`BashProcess::new()`):
+1. Spawn `bash --norc --noprofile` with stdin/stdout/stderr piped
+2. Store child, take ownership of stdin/stdout/stderr
+
+Command execution protocol (`execute(command) -> ShellState`):
+
+Write to stdin:
+```bash
+{command}
+__shannon_ec=$?
+echo "==SHANNON_SENTINEL_START=="
+export -p
+echo "__SHANNON_CWD=$(pwd)"
+echo "__SHANNON_EXIT=$__shannon_ec"
+echo "==SHANNON_SENTINEL_END=="
+```
+
+Read stdout line-by-line:
+- Lines before `==SHANNON_SENTINEL_START==` → write to real stdout (user sees
+  command output)
+- Lines between sentinel start/end → collect into a buffer
+- When `==SHANNON_SENTINEL_END==` seen → parse the buffer using the existing
+  `parse_bash_env()` from executor.rs, plus extract exit code
+
+State injection (`inject_state(state)`):
+
+Write to stdin:
+```bash
+cd '{cwd}'
+```
+For env vars, write `export KEY='VALUE'` for each var. Single-quote values with
+embedded single quotes escaped as `'\''`.
+
+Stderr handling:
+- Spawn a dedicated thread that reads stderr line-by-line and writes to real
+  stderr. This runs for the lifetime of the bash process.
+
+Env capture (`capture_env() -> HashMap`):
+- Run a no-op command through the execute protocol to trigger `export -p` and
+  parse the result. (Used by `dispatcher.env_vars()` at startup.)
+
+**Modify: `src/dispatcher.rs`**
+
+- Replace `use crate::brush_engine::BrushEngine` with
+  `use crate::bash_process::BashProcess`
+- Replace `brush: BrushEngine` with `bash: BashProcess`
+- In `new()`: create `BashProcess::new()` instead of `BrushEngine::new()`.
+  Source `env.sh` the same way (inject state, execute source command).
+- In `env_vars()`: call `self.bash.capture_env()`
+- In `execute()`: call `self.bash.inject_state()` / `self.bash.execute()`
+
+**Modify: `src/lib.rs`**
+
+- Replace `mod brush_engine` with `mod bash_process`
+
+**Modify: `Cargo.toml`**
+
+- Remove `brush-core` and `brush-builtins` from `[dependencies]`
+
+**Modify: `src/executor.rs`**
+
+- Make `parse_bash_env`, `parse_declare_line`, and `unescape_bash_value` `pub`
+  so `bash_process.rs` can reuse them.
+
+**Keep unchanged:**
+- `src/shell_engine.rs` — `BashProcess` implements `ShellEngine` same as before
+- `src/shell.rs` — `ShellState` unchanged
+- `src/run.rs` — calls `dispatcher.env_vars()` and `dispatcher.execute()` which
+  are unchanged
+- `src/signals.rs` — Ctrl+C handler stays as-is (ctrlc crate)
+
+#### Verification
+
+1. `cargo build` — compiles without brush dependencies
+2. `cargo test` — existing tests pass, especially executor.rs tests
+3. Manual test: `shannon` → switch to bash mode → `echo hello` → shows output
+4. Manual test: `export FOO=bar` → `echo $FOO` → prints `bar` (state persists)
+5. Manual test: `nvm install 24` — completes without hanging
+6. Manual test: Ctrl+C during a long-running command → interrupts it
+7. Manual test: switch to bash → run command → switch to nu → check env vars
+   propagated
