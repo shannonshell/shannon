@@ -1,0 +1,26 @@
+[package]
+authors = ["The Nushell Project Developers"]
+description = "Nushell table printing"
+repository = "https://github.com/nushell/nushell/tree/main/crates/nu-table"
+edition = "2024"
+license = "MIT"
+name = "shannon-nu-table"
+version = "0.111.2"
+
+[lib]
+bench = false
+
+[lints]
+workspace = true
+
+[dependencies]
+nu-protocol = { path = "../nu-protocol", version = "0.111.1", default-features = false, package = "shannon-nu-protocol"}
+nu-utils = { path = "../nu-utils", version = "0.111.1", default-features = false, package = "shannon-nu-utils"}
+nu-engine = { path = "../nu-engine", version = "0.111.1", default-features = false, package = "shannon-nu-engine"}
+nu-color-config = { path = "../nu-color-config", version = "0.111.1", package = "shannon-nu-color-config"}
+nu-ansi-term = { workspace = true }
+fancy-regex = { workspace = true }
+tabled = { workspace = true, features = ["ansi"], default-features = false }
+
+[dev-dependencies]
+# nu-test-support = { path="../nu-test-support", version = "0.111.1"  }
