@@ -550,47 +550,43 @@ fine — they return `StartedProcess` immediately. But shell functions return
 (e.g., `nvm_download` which internally runs curl) and stage 2 is `sed`,
 stage 1 fills the pipe buffer and blocks because stage 2 hasn't started.
 
-The fix: for non-last pipeline stages (`run_in_current_shell=false`), wrap
-the `execute_in_pipeline` call in a `tokio::spawn` so it runs concurrently.
-Push the resulting `JoinHandle` as a `StartedTask` into `spawn_results`.
-The existing `wait_for_pipeline_processes_and_update_status` already handles
-`StartedTask` via `join_handle.await`.
+The fix has two parts:
 
-The challenge is lifetimes: `PipelineExecutionContext` holds
-`ShellForCommand::OwnedShell { target, parent }` where `parent` is
-`&'a mut Shell`. `tokio::spawn` requires `'static`. For non-last stages,
-the parent ref is only used for error display (interp.rs:1247). We can
-restructure the non-last stage path to use a fully owned shell with no
-parent reference:
+**Part 1: Add `Clone` to AST types.**
 
-1. Clone the shell into a `Box<Shell>`
-2. Clone the command (it's an AST node, should be `Clone`)
-3. `tokio::spawn` an async block that:
-   a. Creates a `PipelineExecutionContext` with `ParentShell(&mut shell)`
-      using the owned shell
-   b. Calls `command.execute_in_pipeline(context, params).await`
-   c. Converts the result to `ExecutionResult` (awaiting if needed)
-4. Push `StartedTask(join_handle)` into `spawn_results`
+`ast::Command` does not implement `Clone`. We need it to clone commands
+into `tokio::spawn` tasks. The AST types are pure data (parse trees) and
+should be cloneable. Add `#[derive(Clone)]` to `Command` and any
+constituent types that need it in `brush-parser/src/ast.rs`.
 
-This matches the pattern used by `execute_via_builtin_in_owned_shell`
-(commands.rs:448) which already uses `tokio::task::spawn_blocking` with a
-fully owned shell.
+If adding `Clone` fails due to non-Clone fields deep in the AST, bail
+and report which types block it.
+
+**Part 2: Spawn non-last stages in tokio tasks.**
+
+For non-last pipeline stages (`run_in_current_shell=false`), instead of
+awaiting `execute_in_pipeline` sequentially:
+
+1. Clone the shell and the command
+2. `tokio::spawn` an async block that creates a `PipelineExecutionContext`
+   with `ParentShell(&mut owned_shell)` and runs `execute_in_pipeline`
+   to completion (converting any `StartedProcess` or `StartedTask` result
+   to `ExecutionResult` via `.wait()`)
+3. Push `StartedTask(join_handle)` into `spawn_results`
+
+For `run_in_current_shell=true` (last stage or single command), keep the
+current sequential `.await` behavior unchanged.
 
 #### Changes
 
-**`brush/brush-core/src/interp.rs`** — modify `spawn_pipeline_processes`:
+**`brush/brush-parser/src/ast.rs`** — add `Clone` derive to `Command` and
+any types it contains that aren't already `Clone`.
 
-In the loop at line 467, split the logic based on `run_in_current_shell`:
+**`brush/brush-core/src/interp.rs`** — modify `spawn_pipeline_processes`
+loop (line 467) to split on `run_in_current_shell`:
 
-- **`run_in_current_shell=true`** (last stage or single command): keep the
-  current sequential `.await` behavior unchanged.
-
-- **`run_in_current_shell=false`** (non-last stages): clone the shell,
-  spawn a tokio task that runs `execute_in_pipeline` to completion, push
-  `StartedTask(join_handle)`.
-
-Also remove the process_group_id update for `StartedTask` results (line
-536-540) since tasks don't have a pgid.
+- `true`: keep current `.await` path
+- `false`: clone shell + command, `tokio::spawn`, push `StartedTask`
 
 #### Verification
 
