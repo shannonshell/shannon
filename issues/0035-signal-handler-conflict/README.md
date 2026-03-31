@@ -360,3 +360,99 @@ After curl finishes, the reader never sees EOF because the extra writer is
 still alive. Fix: ensure the writer is dropped from params after the child
 process is spawned. This is a brush-core bug that we can fix directly in
 our monorepo.
+
+### Experiment 4: Fix held pipe writer in command substitution
+
+#### Description
+
+In `brush/brush-core/src/commands.rs`, `invoke_command_in_subshell_and_get_output()`
+creates a pipe writer, stores it in `params` via `set_fd`, then spawns a tokio
+task with `params`. Inside that task, `run_substitution_command` calls
+`shell.run_parsed_result()` which spawns child processes. The child processes
+get a CLONE of the writer (via `try_fd` → `f.clone()` at `interp.rs:130`).
+When the child exits, the clone closes, but the original writer in `params`
+stays alive until `run_substitution_command` returns. The reader blocks on
+`read_to_string()` waiting for EOF that never arrives until the task completes.
+
+The fix: in `run_substitution_command`, clear the stdout fd from `params`
+AFTER `run_parsed_result` has spawned its child processes but BEFORE waiting
+for them to complete. Or simpler: clear it right after `run_parsed_result`
+returns, which would allow the reader to see EOF. But that doesn't help —
+we need the reader to see EOF WHILE the pipeline is still running.
+
+Actually, the simplest fix: clear the stdout fd from `params` BEFORE calling
+`run_parsed_result`. The child processes don't need `params` to hold the
+writer — they get their own clone when they're spawned (via `compose_std_command`
+→ `try_fd` → `clone`). So we can drop it from params right after the parse
+and before execution.
+
+Wait — `run_parsed_result` passes `params` to the pipeline executor, which
+passes it to each command. If we clear stdout from params, the commands won't
+get the pipe writer at all.
+
+Better approach: clear the stdout fd from `params` inside
+`run_substitution_command` AFTER `run_parsed_result` returns. The issue is
+that `read_to_string` runs concurrently and needs to see EOF. Since
+`run_parsed_result` awaits until all pipeline processes complete, and the
+child processes hold their own cloned fds, by the time `run_parsed_result`
+returns all child fds should be closed. But `params` still holds the
+original writer, preventing EOF.
+
+So: drop `params` (or clear the fd) after `run_parsed_result` returns,
+BEFORE the function returns. Then the reader sees EOF and `read_to_string`
+completes.
+
+Actually wait — the reader runs concurrently. `read_to_string` is at line
+753, awaited in the CALLER. `run_substitution_command` is in the tokio task.
+When the task returns, `params` drops, writer closes, reader sees EOF. This
+SHOULD work already.
+
+Unless `run_parsed_result` itself is blocked. If the pipeline waits for the
+LAST command in the pipeline, and that last command reads from stdin (piped
+from the previous command), and the previous command is still writing...
+but that's a different issue.
+
+Let me reconsider: the hang happens with a **single command** (`curl` as
+stage 1/1). There's no pipeline. `run_parsed_result` runs curl, waits for
+curl to complete. Curl writes to stdout (the pipe). The reader runs
+concurrently. Curl should complete, `run_parsed_result` returns, params
+drops, writer closes, reader sees EOF.
+
+So why does it hang? Maybe `run_parsed_result` is NOT the bottleneck.
+Maybe the tokio spawn task itself is blocking. Let me add a log inside
+`run_substitution_command` to confirm.
+
+#### Changes
+
+**`brush/brush-core/src/commands.rs`** — add debug logs in
+`run_substitution_command` (line ~765):
+
+```rust
+async fn run_substitution_command(...) -> ... {
+    debug_log("[brush:subst] entering run_substitution_command");
+    let parse_result = shell.parse_string(command);
+    debug_log("[brush:subst] parsed, executing...");
+    let result = shell.run_parsed_result(parse_result, &source_info, &params).await;
+    debug_log("[brush:subst] run_parsed_result returned");
+    result
+}
+```
+
+Also add a log right after the writer is created in
+`invoke_command_in_subshell_and_get_output`:
+
+```rust
+debug_log("[brush:subst] pipe created, spawning task");
+// after tokio::spawn:
+debug_log("[brush:subst] task spawned, reading output...");
+// after read_to_string:
+debug_log("[brush:subst] read_to_string completed");
+```
+
+#### Verification
+
+1. `cargo build` succeeds
+2. Run `nvm install 24`, check /tmp/shannon-debug.log
+3. Determine: does `run_parsed_result` return? Or does it hang?
+4. If it hangs: the issue is inside pipeline execution, not the pipe writer
+5. If it returns but reader blocks: the pipe writer theory is confirmed
