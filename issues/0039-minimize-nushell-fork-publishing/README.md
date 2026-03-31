@@ -96,14 +96,86 @@ nu-protocol = { version = "0.111.0", path = "nushell/crates/nu-protocol" }
 This might be the cleanest approach — no changes to the development workflow,
 but crates.io publishing uses upstream versions for unmodified deps.
 
+## Prior art
+
+We already publish 30+ `shannon-*` crates to crates.io (e.g., `shannon-nu-cli`,
+`shannon-nu-protocol`, `shannon-nu-path`, etc.) at versions 0.111.3–0.111.4. We
+also published `shannon-brush-core`, `shannon-brush-builtins`, and
+`shannon-brush-parser` — those are now dead since brush was removed.
+
+The current state publishes **everything** as forked crates. The goal is to stop
+publishing unmodified crates and use upstream versions from crates.io instead.
+
+Upstream crates.io has nushell crates at **0.111.0**. Our fork is at
+**0.111.2**. Reedline **0.46.0** matches crates.io exactly.
+
 ## Open questions
 
-1. Can nushell 0.111.2 forked crates (nu-cli) depend on 0.111.0 crates.io deps
-   without breakage?
+1. Can our forked `shannon-nu-cli` depend on upstream `nu-protocol = "0.111.0"`
+   (crates.io) instead of `shannon-nu-protocol = "0.111.4"`? Are there breaking
+   API changes between 0.111.0 and 0.111.2?
 2. Is the `path` + `version` dual approach sufficient, or do we need separate
    publish manifests?
 3. Can the nu-path config dir change be solved at runtime instead of by forking?
 4. Do the `nu-command` and `nu-cmd-lang` trivial fixes even matter against
    crates.io 0.111.0?
-5. What namespace/naming convention for forked crates? (`shannon-nu-cli` vs
-   `nu-cli-shannon` vs something else?)
+5. Can we use stock `reedline = "0.46.0"` from crates.io?
+6. What happens to the dead `shannon-brush-*` crates? (Yank them?)
+
+## Experiments
+
+### Experiment 1: Audit version compatibility and determine minimum fork set
+
+Before changing any code, answer all open questions by examining the actual
+crate APIs and testing version compatibility.
+
+#### Steps
+
+**Step 1: Check if our nushell fork can build against upstream 0.111.0 deps**
+
+In a temporary branch, change Shannon's `Cargo.toml` to use crates.io versions
+for all unmodified crates while keeping path deps for `nu-cli` and `nu-path`.
+Attempt `cargo build`. Record which crates fail and why.
+
+Specifically, test this Cargo.toml pattern for unmodified crates:
+
+```toml
+nu-protocol = { version = "0.111.0", path = "nushell/crates/nu-protocol" }
+```
+
+The `path` takes precedence locally, but `version` is what gets published. The
+question is whether `nu-cli` (0.111.2 in our fork) can compile against
+`nu-protocol` 0.111.0 APIs.
+
+To actually test crates.io resolution (not path override), temporarily remove
+the `path` for one unmodified crate and see if it resolves from crates.io and
+links cleanly.
+
+**Step 2: Check reedline compatibility**
+
+Test whether stock `reedline = "0.46.0"` from crates.io works. Our fork has no
+code changes, but we need to confirm the `bashisms` feature exists in the
+published version.
+
+**Step 3: Check nu-path runtime alternative**
+
+Read `nushell/crates/nu-path/src/helpers.rs` to see if `nu_config_dir()` checks
+any env var before defaulting to `"shannon"` (our change) or `"nushell"`
+(upstream). If not, evaluate whether we can add one and upstream it, or if
+fork-publishing `shannon-nu-path` is simpler.
+
+**Step 4: Check nu-command and nu-cmd-lang trivial fixes**
+
+Read the specific lines we changed in `nu-command` and `nu-cmd-lang`. Check
+whether the upstream 0.111.0 crates.io versions have the same issues, or if our
+fixes were for problems specific to our workspace configuration.
+
+#### Deliverable
+
+A clear answer for each open question, plus the definitive minimum set of crates
+that need fork-publishing.
+
+#### Verification
+
+All questions answered with evidence (build output, source code, crates.io
+metadata). No guessing.
