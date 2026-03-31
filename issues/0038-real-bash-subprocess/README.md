@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-31"
+closed = "2026-03-31"
 +++
 
 # Issue 38: Replace brush with a real bash subprocess
@@ -297,3 +298,35 @@ Line 3 doc comment mentions "brush". Update to remove the brush reference.
 2. `cargo test` — all tests pass
 3. `grep -r "brush" src/` — no remaining references
 4. Manual smoke test: `shannon` → bash mode → `echo hello` → works
+
+**Result:** Pass
+
+All verification steps confirmed. 653 files deleted, 91,187 lines removed.
+Zero "brush" references remain in `src/`.
+
+## Conclusion
+
+Shannon's bash mode now runs on a real bash subprocess instead of brush, a Rust
+reimplementation of bash. The change was motivated by a fundamental pipeline
+deadlock in brush (issue 35): brush executed pipeline stages sequentially,
+causing hangs when a shell function filled a pipe buffer before the next stage
+started reading. Real bash uses `fork()` for pipeline stages, eliminating the
+problem entirely.
+
+The new `BashProcess` engine spawns a single persistent `bash --norc --noprofile`
+process at startup and communicates via stdin/stdout pipes. A sentinel-based
+protocol captures environment variables (`export -p`), working directory (`pwd`),
+and exit code (`$?`) after each command. State persists across commands —
+functions defined in `env.sh` (like nvm) survive the entire session.
+
+Key implementation details:
+- `trap 'true' INT` prevents bash from dying on Ctrl+C while still allowing
+  child processes to receive SIGINT normally
+- Stderr forwarded via a dedicated reader thread
+- Env injection prepended to each command (cd + exports), parsed back via the
+  existing `parse_bash_env()` / `declare -x` parser from `executor.rs`
+- The `ModeDispatcher` trait interface is unchanged — `BashProcess` is a
+  drop-in replacement for `BrushEngine`
+
+Net result: 91,187 lines removed. Shannon no longer depends on brush-core or
+brush-builtins. Full bash compatibility is guaranteed because it IS bash.
