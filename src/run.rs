@@ -184,6 +184,7 @@ pub(crate) fn run_repl(
     mut stack: Stack,
     parsed_nu_cli_args: command::NushellCliArgs,
     entire_start_time: std::time::Instant,
+    sigint_handler: Option<(signal_hook::SigId, std::sync::Arc<dyn Fn() + Send + Sync>)>,
 ) -> Result<(), miette::ErrReport> {
     trace!("run_repl");
     let start_time = std::time::Instant::now();
@@ -191,7 +192,7 @@ pub(crate) fn run_repl(
     // Create the dispatcher early — it sources env.sh in the embedded brush
     // engine so bash functions (like nvm) persist. Also captures env vars
     // to inject into nushell's stack before config loading.
-    let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
+    let dispatcher = shannonshell::dispatcher::ShannonDispatcher::new(sigint_handler);
     if parsed_nu_cli_args.no_config_file.is_none() {
         for (key, value) in dispatcher.env_vars() {
             stack.add_env_var(
