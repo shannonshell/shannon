@@ -43,12 +43,20 @@ impl BashProcess {
             }
         });
 
-        BashProcess {
+        let mut bp = BashProcess {
             _child: child,
             stdin,
             stdout_reader: BufReader::new(stdout),
             pending_state: None,
-        }
+        };
+
+        // Trap SIGINT so bash doesn't die when the user presses Ctrl+C.
+        // Using `trap 'true' INT` (not `trap '' INT`) ensures children still
+        // receive SIGINT with default handling — only SIG_IGN is inherited
+        // across exec, not trap actions.
+        bp.run_command("trap 'true' INT");
+
+        bp
     }
 
     /// Capture all exported env vars by running a no-op command.
