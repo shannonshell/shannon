@@ -1,9 +1,20 @@
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use nu_cli::{ModeDispatcher, ModeResult};
 use signal_hook::SigId;
+
+fn debug_log(msg: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/shannon-debug.log")
+    {
+        let _ = writeln!(f, "{msg}");
+    }
+}
 
 use crate::brush_engine::BrushEngine;
 use crate::shell::ShellState;
@@ -93,8 +104,10 @@ impl ModeDispatcher for ShannonDispatcher {
                     None
                 };
 
+                debug_log(&format!("[shannon:dispatcher] entering brush execute: {command}"));
                 self.brush.inject_state(&state);
                 let result = self.brush.execute(command);
+                debug_log("[shannon:dispatcher] brush execute complete");
                 // _reregister drops here, re-registering the handler
 
                 ModeResult {
