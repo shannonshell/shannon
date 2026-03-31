@@ -604,15 +604,29 @@ pub(crate) fn execute_external_command(
 
     // Debug log to /tmp/shannon-debug.log
     {
-        use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/shannon-debug.log")
-        {
-            let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
-            let _ = writeln!(f, "[brush:commands] spawning: {} {}", cmd.get_program().to_string_lossy(), args.join(" "));
+        fn fd_type_name(f: &OpenFile) -> &'static str {
+            match f {
+                OpenFile::Stdin(_) => "Stdin",
+                OpenFile::Stdout(_) => "Stdout",
+                OpenFile::Stderr(_) => "Stderr",
+                OpenFile::File(_) => "File",
+                OpenFile::PipeReader(_) => "PipeReader",
+                OpenFile::PipeWriter(_) => "PipeWriter",
+                OpenFile::Stream(_) => "Stream",
+            }
         }
+        let stdin_type = context.try_fd(OpenFiles::STDIN_FD)
+            .as_ref().map(fd_type_name).unwrap_or("inherited");
+        let stdout_type = context.try_fd(OpenFiles::STDOUT_FD)
+            .as_ref().map(fd_type_name).unwrap_or("inherited");
+        let stderr_type = context.try_fd(OpenFiles::STDERR_FD)
+            .as_ref().map(fd_type_name).unwrap_or("inherited");
+        let args: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+        debug_log(&format!(
+            "[brush:commands] spawning: {} {} | stdin={} stdout={} stderr={}",
+            cmd.get_program().to_string_lossy(), args.join(" "),
+            stdin_type, stdout_type, stderr_type,
+        ));
     }
 
     match sys::process::spawn(cmd) {
