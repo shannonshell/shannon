@@ -414,3 +414,81 @@ debug_log("[brush:subst] run_parsed_result returned");
      pipe writer theory confirmed — something else holds the writer open
    - If `run_parsed_result returned` does NOT appear:
      `run_parsed_result` itself hangs — issue is inside pipeline execution
+
+**Result:** Pass (diagnostic success)
+
+All command substitutions completed normally — every `pipe created` had a
+matching `read_to_string completed`. The held pipe writer theory was wrong
+for command substitutions.
+
+The actual hang: curl spawned as a direct pipeline stage (NOT inside a
+command substitution). At line 6024 in the log: `spawning: /usr/bin/curl -q
+--fail --compressed -L -s https://nodejs.org/dist/index.tab -o -`. Then
+`entering wait()` / `entering select loop` with no completion until Ctrl+C
+(SIGINT) at line 6028. After SIGINT, curl exits and everything proceeds.
+
+#### Conclusion
+
+The hang is not in command substitution pipes. It's a direct external command
+(`curl`) that blocks indefinitely when spawned by brush. Ctrl+C kills it and
+everything unsticks. Next: log the fd configuration at spawn time to
+understand why curl blocks — is stdout connected to a pipe nobody reads? Is
+stdin connected to something that doesn't close?
+
+### Experiment 5: Log fd configuration at external command spawn
+
+#### Description
+
+Experiment 4 showed that curl hangs as a direct pipeline stage, not inside
+a command substitution. The hang is in `processes.rs` `wait()` — the child
+process never exits on its own.
+
+In `compose_std_command` (commands.rs:237-262), fds from `params` are cloned
+onto the `Command` via `context.try_fd()`. Each `try_fd` call clones the
+underlying fd (`PipeWriter::try_clone()`, etc.) — the original stays in
+`params`. After spawn, the child holds its clone, but `params` still holds
+the original.
+
+If stdout is a `PipeWriter` and the read end of that pipe is never consumed,
+curl will block when the pipe buffer fills. We need to know:
+1. What fd types (Stdin/Stdout/Stderr/PipeWriter/PipeReader/File) are
+   configured in `params` when this curl is spawned
+2. Whether stdout is redirected to a pipe
+
+#### Changes
+
+**`brush/brush-core/src/commands.rs`** — enhance the existing spawn log
+(~line 605) to include fd type information:
+
+```rust
+// Replace the existing debug_log block at spawn with:
+{
+    let stdin_type = context.try_fd(OpenFiles::STDIN_FD)
+        .map(|f| format!("{:?}", std::mem::discriminant(&f)))
+        .unwrap_or("inherited".to_string());
+    let stdout_type = context.try_fd(OpenFiles::STDOUT_FD)
+        .map(|f| format!("{:?}", std::mem::discriminant(&f)))
+        .unwrap_or("inherited".to_string());
+    let stderr_type = context.try_fd(OpenFiles::STDERR_FD)
+        .map(|f| format!("{:?}", std::mem::discriminant(&f)))
+        .unwrap_or("inherited".to_string());
+    debug_log(&format!(
+        "[brush:commands] spawning: {} {} | stdin={} stdout={} stderr={}",
+        cmd.get_program().to_string_lossy(),
+        cmd.get_args().map(|a| a.to_string_lossy().to_string()).join(" "),
+        stdin_type, stdout_type, stderr_type,
+    ));
+}
+```
+
+Note: `OpenFile` may not implement `Debug` with useful variant names. If so,
+add a helper method or match on variants to produce readable names like
+"PipeWriter", "Stdout", "File", etc.
+
+#### Verification
+
+1. `cargo build` succeeds
+2. `rm -f /tmp/shannon-debug.log && tail -f /tmp/shannon-debug.log`
+3. Run `nvm install 24` in bash mode
+4. Find the hanging curl line in the log — check its stdin/stdout/stderr types
+5. Compare with non-hanging commands to see what's different

@@ -1,5 +1,6 @@
 //! Command execution
 
+use std::io::Write;
 use std::{
     borrow::Cow,
     ffi::OsStr,
@@ -23,6 +24,16 @@ use crate::{
     results::ExecutionSpawnResult,
     sys, trace_categories, traps, variables,
 };
+
+fn debug_log(msg: &str) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/shannon-debug.log")
+    {
+        let _ = writeln!(f, "{msg}");
+    }
+}
 
 /// Encapsulates the result of waiting for a command to complete.
 pub enum CommandWaitResult {
@@ -745,12 +756,15 @@ pub(crate) async fn invoke_command_in_subshell_and_get_output(
     // Set up pipe so we can read the output.
     let (reader, writer) = std::io::pipe()?;
     params.set_fd(OpenFiles::STDOUT_FD, writer.into());
+    debug_log("[brush:subst] pipe created, spawning task");
 
     let mut async_reader = sys::async_pipe::AsyncPipeReader::new(reader)?;
 
     let cmd_join_handle = tokio::spawn(run_substitution_command(subshell, params, s));
+    debug_log("[brush:subst] task spawned, reading output...");
 
     let output_str = async_reader.read_to_string().await?;
+    debug_log("[brush:subst] read_to_string completed");
 
     // Now observe the command's completion.
     let run_result = cmd_join_handle.await?;
@@ -767,6 +781,8 @@ async fn run_substitution_command(
     mut params: ExecutionParameters,
     command: String,
 ) -> Result<ExecutionResult, error::Error> {
+    debug_log("[brush:subst] entering run_substitution_command");
+
     // Parse the string into a whole shell program.
     let parse_result = shell.parse_string(command);
 
@@ -785,9 +801,11 @@ async fn run_substitution_command(
     let source_info = crate::SourceInfo::from("main");
 
     // Handle the parse result using default shell behavior.
-    shell
+    let result = shell
         .run_parsed_result(parse_result, &source_info, &params)
-        .await
+        .await;
+    debug_log("[brush:subst] run_parsed_result returned");
+    result
 }
 
 // Detects a subshell command that consists solely of a single input redirection
