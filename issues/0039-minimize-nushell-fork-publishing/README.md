@@ -179,3 +179,137 @@ that need fork-publishing.
 
 All questions answered with evidence (build output, source code, crates.io
 metadata). No guessing.
+
+**Result:** Pass
+
+Answers:
+
+1. **Can forked nu-cli use upstream 0.111.0 deps?** Not as-is — our fork is
+   based on upstream 0.111.2, which has breaking API changes (GenericError
+   refactor). However, Shannon's own additions use only 0.111.0-era APIs. We can
+   rebase our changes onto stock 0.111.0.
+2. **Path + version dual approach?** Works once we're on 0.111.0.
+3. **Nu-path runtime override?** No mechanism exists. Fork-publish required.
+4. **Nu-command / nu-cmd-lang fixes?** Already reverted — no Shannon changes
+   remain in those crates.
+5. **Stock reedline?** Yes — `bashisms` feature exists in crates.io 0.46.0.
+6. **Dead brush crates?** Yank from crates.io.
+
+#### Conclusion
+
+Minimum fork set is 2 crates: `shannon-nu-cli` and `shannon-nu-path`. But we
+must first rebase our nushell fork onto 0.111.0 so our nu-cli changes compile
+against crates.io APIs. Experiment 2 does this.
+
+### Experiment 2: Rebase nushell fork onto 0.111.0
+
+Replace the current nushell subtree (based on post-0.111.0 upstream main) with
+stock nushell 0.111.0 (the crates.io release), then re-apply only Shannon's
+changes on top.
+
+#### Why
+
+Our fork is at 0.111.2, which includes ~90 upstream commits after 0.111.0 with
+breaking API changes. Shannon's own changes don't use any of those new APIs.
+Rebasing onto 0.111.0 aligns our fork with crates.io, so unmodified crates can
+come from upstream.
+
+#### Changes
+
+**Step 1: Move the current nushell subtree aside**
+
+Rename so we have the current code as reference while working:
+
+```sh
+git mv nushell nushell-old
+git commit -m "Move nushell aside for rebase"
+```
+
+**Step 2: Add stock nushell 0.111.0 subtree**
+
+```sh
+git subtree add --prefix nushell upstream-nushell 0.111.0
+```
+
+Now we have both `nushell/` (clean 0.111.0) and `nushell-old/` (our 0.111.2 fork
+with Shannon changes) side by side.
+
+**Step 3: Re-apply Shannon's nu-cli changes**
+
+Port changes from `nushell-old/crates/nu-cli/` to `nushell/crates/nu-cli/`,
+using the old files as reference.
+
+Apply these changes to `nushell/crates/nu-cli/`:
+
+1. **New file: `src/mode_dispatcher.rs`** — Copy from our current fork. Uses
+   only `HashMap` and `PathBuf`, no nushell APIs. No changes needed.
+
+2. **New file: `src/bash_highlight.rs`** — Copy from our current fork. Uses
+   `nu_color_config::get_shape_color`, `nu_protocol::Config`,
+   `reedline::Highlighter` — all exist in 0.111.0.
+
+3. **Modify: `src/lib.rs`** — Add `mod bash_highlight`, `mod mode_dispatcher`,
+   and their `pub use` exports. The 0.111.0 lib.rs won't have the `hints` mod
+   that 0.111.2 added, so the diff is cleaner.
+
+4. **Modify: `src/repl.rs`** — Add Shannon's ~100 lines:
+   - Import `mode_dispatcher::ModeDispatcher`
+   - `evaluate_repl()` gains `mode_dispatcher` param
+   - SHANNON_MODE check + dispatch block in the command execution section
+   - Highlighter swapping (BashHighlighter vs NuHighlighter based on mode)
+   - `__shannon_switch` handler in the host command section
+   - Shift+Tab keybinding registration
+
+   **Key:** The 0.111.0 repl.rs won't have ExternalHinter or other 0.111.2
+   additions. Apply Shannon's changes to the 0.111.0 code, not the 0.111.2 code.
+
+5. **Modify: `src/nu_highlight.rs`** — Add `NoOpHighlighter` struct.
+
+6. **Modify: `Cargo.toml`** — Add `tree-sitter`, `tree-sitter-bash`,
+   `tree-sitter-language` dependencies.
+
+**Step 3: Re-apply Shannon's nu-path change**
+
+In `nushell/crates/nu-path/src/helpers.rs`, change `p.push("nushell")` to
+`p.push("shannon")`.
+
+**Step 4: Update Shannon's root Cargo.toml**
+
+Change all nushell path deps to include both `version` and `path`:
+
+```toml
+nu-cli = { version = "0.111.0", path = "nushell/crates/nu-cli" }
+nu-protocol = { version = "0.111.0", path = "nushell/crates/nu-protocol" }
+```
+
+Change reedline to crates.io:
+
+```toml
+reedline = { version = "0.46.0", features = ["sqlite", "bashisms"] }
+```
+
+Keep `path` for local development (path takes precedence). The `version` is used
+when publishing to crates.io.
+
+**Step 6: Verify local build uses path deps**
+
+`cargo build` should still use local path deps and compile everything from the
+nushell subtree, same as today.
+
+**Step 7: Delete nushell-old**
+
+```sh
+git rm -r nushell-old/
+git commit -m "Remove old nushell subtree"
+```
+
+#### Verification
+
+1. `cargo build` — compiles successfully against 0.111.0 nushell
+2. `cargo test` — all tests pass
+3. Manual test: `shannon` → bash mode → `echo hello` → works
+4. Manual test: `export FOO=bar` → `echo $FOO` → `bar`
+5. Manual test: `nvm install 24` → completes
+6. Manual test: Shift+Tab mode switching works
+7. Manual test: bash syntax highlighting works
+8. `grep -r "0.111.2" nushell/` — no 0.111.2 references remain
