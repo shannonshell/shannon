@@ -7,11 +7,11 @@
     "deploy": "bun run build && wrangler pages deploy dist"
   },
   "dependencies": {
-    "astro": "^6.1.1",
+    "astro": "^6.1.2",
     "tailwindcss": "^4.2.2",
     "@tailwindcss/vite": "^4.2.2"
   },
   "devDependencies": {
-    "wrangler": "^4.22.0"
+    "wrangler": "^4.79.0"
   }
 }
