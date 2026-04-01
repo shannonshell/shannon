@@ -5,9 +5,10 @@ import Footer from "../components/Footer.astro"
 
 interface Props {
   title?: string
+  showHeaderBrand?: boolean
 }
 
-const { title = "Shannon" } = Astro.props
+const { title = "Shannon", showHeaderBrand = true } = Astro.props
 ---
 
 <!doctype html>
@@ -20,7 +21,7 @@ const { title = "Shannon" } = Astro.props
   </head>
   <body class="text-sm">
     <div class="max-w-3xl mx-auto px-4 py-6">
-      <Header />
+      <Header showBrand={showHeaderBrand} />
       <main class="mt-6">
         <slot />
       </main>
