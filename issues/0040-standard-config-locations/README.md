@@ -180,3 +180,24 @@ is still needed (for `ShellState`).
 6. `export FOO=bar` in bash → `echo $env.FOO` in nu → `bar` (env propagation)
 7. Shift+Tab mode switching still works
 8. No references to `~/.config/shannon` remain in Shannon's source code
+
+**Result:** Pass
+
+All verification steps confirmed. One additional fix was needed: `src/main.rs`
+had two `.join("shannon")` references in the XDG_CONFIG_HOME validation block
+(lines 144 and 156) that needed reverting to `.join("nushell")`. Without this,
+nushell's XDG validation compared `~/.config/nushell` against `~/.config/shannon`
+and reported an invalid config error.
+
+Env vars from both config systems confirmed working:
+- `$env.SHANNON_NUSHELL` set in `~/.config/nushell/env.nu` → available in nu mode
+- `$SHANNON_BASH` set in `.bash_profile` → available in bash mode
+
+#### Conclusion
+
+Shannon no longer maintains its own config directory. Nushell config lives in
+`~/.config/nushell/` (stock location), bash config lives in `.bash_profile`/
+`.bashrc` (standard login shell). The nu-path fork is eliminated — only the
+1-line `"nushell"` string was reverted. The `env.sh` sourcing logic, `config_dir()`,
+and `history_db()` helpers were all removed. The bash subprocess now initializes
+via `bash --login` instead of `bash --norc --noprofile` + manual env.sh sourcing.

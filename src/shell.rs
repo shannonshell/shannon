@@ -1,23 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Returns the shannon config directory, respecting XDG_CONFIG_HOME.
-/// Falls back to ~/.config/shannon.
-pub fn config_dir() -> PathBuf {
-    let base = match std::env::var("XDG_CONFIG_HOME") {
-        Ok(val) if !val.is_empty() => PathBuf::from(val),
-        _ => dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".config"),
-    };
-    base.join("shannon")
-}
-
-/// Returns the path to the shared SQLite history database.
-pub fn history_db() -> PathBuf {
-    config_dir().join("history.db")
-}
-
 #[derive(Clone)]
 pub struct ShellState {
     pub env: HashMap<String, String>,

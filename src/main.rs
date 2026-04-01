@@ -141,7 +141,7 @@ fn main() -> Result<()> {
         if nushell_config_path
             != absolute_with(&xdg_config_home, &init_cwd)
                 .unwrap_or(PathBuf::from(&xdg_config_home))
-                .join("shannon")
+                .join("nushell")
         {
             report_shell_error(
                 None,
@@ -153,7 +153,7 @@ fn main() -> Result<()> {
             );
         } else if let Some(old_config) = dirs::config_dir()
             .and_then(|p| absolute(p).ok())
-            .map(|p| p.join("shannon"))
+            .map(|p| p.join("nushell"))
         {
             let xdg_config_empty = nushell_config_path
                 .read_dir()

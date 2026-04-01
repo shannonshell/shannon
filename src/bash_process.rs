@@ -19,7 +19,7 @@ pub struct BashProcess {
 impl BashProcess {
     pub fn new() -> Self {
         let mut child = Command::new("bash")
-            .args(["--norc", "--noprofile"])
+            .args(["--login"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

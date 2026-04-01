@@ -188,9 +188,9 @@ pub(crate) fn run_repl(
     trace!("run_repl");
     let start_time = std::time::Instant::now();
 
-    // Create the dispatcher early — it sources env.sh in the persistent bash
-    // process so bash functions (like nvm) persist. Also captures env vars
-    // to inject into nushell's stack before config loading.
+    // Create the dispatcher early — the persistent bash subprocess initializes
+    // via --login (sourcing .bash_profile/.bashrc). Capture the resulting env
+    // vars to inject into nushell's stack before config loading.
     let mut dispatcher = shannonshell::dispatcher::ShannonDispatcher::new();
     if parsed_nu_cli_args.no_config_file.is_none() {
         for (key, value) in dispatcher.env_vars() {
