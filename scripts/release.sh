@@ -23,18 +23,34 @@ cargo test
 # Publish to crates.io (3 crates, in dependency order)
 echo "==> Publishing to crates.io..."
 
-echo "  Publishing shannon-nu-cli..."
-cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-cli --allow-dirty
-echo "  Waiting for crates.io index..."
-sleep 30
+try_publish() {
+  local crate="$1"
+  local manifest="${2:-}"
+  local output
+  local rc
 
-echo "  Publishing shannon-nu-lsp..."
-cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-lsp --allow-dirty
-echo "  Waiting for crates.io index..."
-sleep 30
+  echo "  Publishing $crate..."
+  if [ -n "$manifest" ]; then
+    output=$(cargo publish --manifest-path "$manifest" -p "$crate" --allow-dirty 2>&1) || rc=$?
+  else
+    output=$(cargo publish --allow-dirty 2>&1) || rc=$?
+  fi
 
-echo "  Publishing shannonshell..."
-cargo publish --allow-dirty
+  if echo "$output" | grep -q "already exists"; then
+    echo "  $crate already published, skipping"
+  elif [ "${rc:-0}" -ne 0 ]; then
+    echo "$output" >&2
+    exit 1
+  else
+    echo "$output"
+    echo "  Waiting for crates.io index..."
+    sleep 30
+  fi
+}
+
+try_publish shannon-nu-cli nushell/Cargo.toml
+try_publish shannon-nu-lsp nushell/Cargo.toml
+try_publish shannonshell
 
 # Commit and tag
 echo "==> Committing and tagging..."
