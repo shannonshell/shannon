@@ -337,42 +337,69 @@ crates.io 0.111.0 versions. Root Cargo.toml has both `version` and `path` for
 every dep — path used locally, version used for publishing. Still need to delete
 `nushell-old/` (step 7).
 
-### Experiment 3: Configure Cargo.toml for crates.io publishing
+### Experiment 3: Eliminate nu-path fork, publish only nu-cli
 
-Set up the `package` field in Cargo.toml so that locally we use path deps (the
-fork), but when published to crates.io, only `shannon-nu-cli` and
-`shannon-nu-path` are our crates — everything else resolves to stock upstream.
+The `package` rename approach failed — renaming `nu-path` to `shannon-nu-path`
+breaks every other nushell crate in the workspace. More fundamentally, since
+`nu-protocol` depends on `nu-path`, publishing a separate `shannon-nu-path`
+would create two conflicting `nu-path` crates in the dependency tree.
+
+The solution: eliminate the nu-path fork entirely. Add a runtime env var check
+to `nu_config_dir()` so stock nu-path works for Shannon. Then only `nu-cli`
+needs forking — and nothing else in the tree depends on nu-cli, so the rename
+is clean.
 
 #### Changes
 
-**`nushell/crates/nu-path/Cargo.toml`**
+**`nushell/crates/nu-path/src/helpers.rs`**
 
-- Set `name = "shannon-nu-path"` (crates.io package name)
-- Set `version = "0.111.0"` (match upstream)
+Revert the `p.push("shannon")` change. Instead, add an env var override:
+
+```rust
+pub fn nu_config_dir() -> Option<AbsolutePathBuf> {
+    configurable_dir_path("XDG_CONFIG_HOME", dirs::config_dir).map(|mut p| {
+        let dir_name = std::env::var("NU_APP_NAME").unwrap_or_else(|_| "nushell".into());
+        p.push(&dir_name);
+        p
+    })
+}
+```
+
+Apply the same pattern to `nu_data_dir()` and `nu_cache_dir()` if they also
+hardcode "nushell".
+
+**`src/main.rs` (or early in startup)**
+
+Set `NU_APP_NAME=shannon` before any nushell code runs:
+
+```rust
+std::env::set_var("NU_APP_NAME", "shannon");
+```
+
+This must happen before `nu_config_dir()` is first called.
 
 **`nushell/crates/nu-cli/Cargo.toml`**
 
 - Set `name = "shannon-nu-cli"` (crates.io package name)
-- Set `version = "0.111.0"` (match upstream)
-- Change nu-path dep to use our fork:
-  `nu-path = { path = "../nu-path", version = "0.111.0", package = "shannon-nu-path" }`
-- All other `nu-*` deps keep their stock names and `version = "0.111.0"`
 
 **`Cargo.toml` (root — shannonshell)**
 
 - Change nu-cli dep:
   `nu-cli = { version = "0.111.0", path = "nushell/crates/nu-cli", package = "shannon-nu-cli", ... }`
-- Change nu-path dep:
-  `nu-path = { version = "0.111.0", path = "nushell/crates/nu-path", package = "shannon-nu-path" }`
+- Remove `nu-path` path dep entirely — use stock from crates.io:
+  `nu-path = "0.111.0"`
 - All other `nu-*` deps: keep `version = "0.111.0"` and `path = ...` as-is
-  (stock names, stock versions)
-- Reedline: keep `version = "0.46.0"` and `path = "reedline"` (stock name)
+
+#### Result
+
+Only **1 crate** needs fork-publishing: `shannon-nu-cli`. Everything else
+(including nu-path) uses stock crates.io versions.
 
 #### Verification
 
-1. `cargo build` — path deps still take precedence locally, everything compiles
+1. `cargo build` — compiles with the env var approach
 2. `cargo test --lib` — all tests pass
-3. `cargo publish --dry-run -p shannon-nu-path` — verify nu-path can be packaged
-4. `cargo publish --dry-run -p shannon-nu-cli` — verify nu-cli can be packaged
-5. `cargo publish --dry-run` — verify shannonshell can be packaged
-6. Manual smoke test: `shannon` → bash mode → `echo hello` → works
+3. Shannon uses `~/.config/shannon/` (not `~/.config/nushell/`)
+4. Manual smoke test: `shannon` → bash mode → `echo hello` → works
+5. `cargo publish --dry-run -p shannon-nu-cli` — verify nu-cli can be packaged
+6. `cargo publish --dry-run` — verify shannonshell can be packaged
