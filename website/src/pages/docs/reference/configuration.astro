@@ -7,36 +7,40 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h1>Configuration</h1>
 
   <p>
-    Shannon stores its files in <code class="text-secondary">~/.config/shannon/</code>.
-    The config directory respects <code class="text-secondary">XDG_CONFIG_HOME</code>
-    — if set, shannon uses <code class="text-secondary">$XDG_CONFIG_HOME/shannon/</code> instead.
+    Shannon uses standard config locations — no custom config directory.
+    Your existing nushell and bash config works automatically.
   </p>
 
-  <h2>Files</h2>
+  <h2>Config Locations</h2>
 
   <table>
     <thead>
-      <tr><th>File</th><th>Purpose</th></tr>
+      <tr><th>Config</th><th>Location</th><th>Purpose</th></tr>
     </thead>
     <tbody>
       <tr>
-        <td><code class="text-secondary">env.sh</code></td>
-        <td>Bash environment setup — PATH, env vars, API keys (runs first)</td>
+        <td>Bash</td>
+        <td><code class="text-secondary">~/.bash_profile</code> / <code class="text-secondary">~/.bashrc</code></td>
+        <td>PATH, env vars, nvm, homebrew, etc.</td>
       </tr>
       <tr>
-        <td><code class="text-secondary">env.nu</code></td>
-        <td>Nushell env setup (runs after env.sh)</td>
+        <td>Nushell</td>
+        <td><code class="text-secondary">~/.config/nushell/env.nu</code></td>
+        <td>Nushell env setup</td>
       </tr>
       <tr>
-        <td><code class="text-secondary">config.nu</code></td>
-        <td>Nushell config — keybindings, colors, hooks, completions</td>
+        <td>Nushell</td>
+        <td><code class="text-secondary">~/.config/nushell/config.nu</code></td>
+        <td>Keybindings, colors, hooks, completions</td>
       </tr>
       <tr>
-        <td><code class="text-secondary">login.nu</code></td>
+        <td>Nushell</td>
+        <td><code class="text-secondary">~/.config/nushell/login.nu</code></td>
         <td>Login shell config</td>
       </tr>
       <tr>
-        <td><code class="text-secondary">history.sqlite3</code></td>
+        <td>Nushell</td>
+        <td><code class="text-secondary">~/.config/nushell/history.sqlite3</code></td>
         <td>SQLite command history</td>
       </tr>
     </tbody>
@@ -44,14 +48,16 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>None of these files are required. Shannon works out of the box.</p>
 
-  <h2>env.sh (Bash Environment)</h2>
+  <h2>Bash Config</h2>
 
   <p>
-    Shannon runs an optional bash script at startup to set up the environment.
-    Create <code class="text-secondary">~/.config/shannon/env.sh</code>:
+    Shannon's bash subprocess starts as a login shell (<code class="text-secondary">bash --login</code>),
+    loading your <code class="text-secondary">~/.bash_profile</code> (which conventionally
+    sources <code class="text-secondary">~/.bashrc</code>). At startup, the resulting env
+    vars are captured and injected into nushell's Stack.
   </p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+  <pre class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 
 <span class="text-muted"># Homebrew</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
@@ -64,32 +70,35 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 <span class="text-accent">export</span> <span class="text-warning">EDITOR</span>=<span class="text-success">"nvim"</span></code></pre>
 
   <p>
-    This runs once when shannon starts, before <code class="text-secondary">env.nu</code>
-    and <code class="text-secondary">config.nu</code>. The resulting environment
-    variables are injected into nushell's Stack.
+    Any tutorial that says "add this to your
+    <code class="text-secondary">.bashrc</code>" — just do it. Shannon picks it up
+    automatically.
   </p>
 
-  <p>
-    This is critical for compatibility — tutorials always say "add this to your
-    <code class="text-secondary">.bashrc</code>." Shannon's
-    <code class="text-secondary">env.sh</code> lets you follow those instructions directly.
-  </p>
-
-  <h2>env.nu and config.nu (Nushell Config)</h2>
+  <h2>Nushell Config</h2>
 
   <p>
-    These are nushell's native config files. See the
+    Nushell config lives in the standard <code class="text-secondary">~/.config/nushell/</code>
+    directory. If you already use nushell, Shannon shares your existing config. See the
     <a href="https://nushell.sh/book/configuration.html">Nushell configuration docs</a>
     for full details.
   </p>
 
   <p>Common settings:</p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/config.nu</span>
+  <pre class={cb}><code><span class="text-muted"># ~/.config/nushell/config.nu</span>
 
 <span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>          <span class="text-muted"># disable startup banner</span>
 <span class="text-warning">$env</span>.config.edit_mode = <span class="text-success">"vi"</span>             <span class="text-muted"># vi or emacs keybindings</span>
 <span class="text-warning">$env</span>.config.history.file_format = <span class="text-success">"sqlite"</span></code></pre>
+
+  <h2>Loading Order</h2>
+
+  <ol>
+    <li><code class="text-secondary">~/.bash_profile</code> → <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell)</li>
+    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment</li>
+    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings</li>
+  </ol>
 
   <h2>Banner</h2>
 

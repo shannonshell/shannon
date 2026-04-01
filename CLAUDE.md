@@ -42,8 +42,7 @@ history preserved (via `git subtree add`). Shannon uses path deps to reference
 their crates. No crates.io publishing needed for dependencies.
 
 - **nushell/** — fork of `nushell/nushell`. Changes: `ModeDispatcher` trait
-  in nu-cli, `BashHighlighter` in nu-cli, Shift+Tab keybinding, config dir
-  `~/.config/shannon/`.
+  in nu-cli, `BashHighlighter` in nu-cli, Shift+Tab keybinding.
 - **reedline/** — fork of `nushell/reedline`. No code changes.
 
 Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
@@ -68,8 +67,8 @@ Upstream sync: `git subtree pull --prefix nushell upstream-nushell main`
 - `dispatcher.rs` — `ShannonDispatcher` implementing `ModeDispatcher`
 - `bash_process.rs` — `BashProcess` (persistent bash subprocess with sentinel protocol)
 - `shell_engine.rs` — `ShellEngine` trait
-- `shell.rs` — `ShellState` (env, cwd, exit code), config directory helpers
-- `executor.rs` — startup script (`env.sh`) execution via bash
+- `shell.rs` — `ShellState` (env, cwd, exit code)
+- `executor.rs` — bash `export -p` output parsing
 
 ### How command execution works
 
@@ -143,22 +142,25 @@ Each mode gets appropriate syntax highlighting:
 
 ## Config
 
-Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
+Shannon uses standard config locations — no custom config directory:
 
-- `env.sh` — bash script for PATH, env vars, API keys (sourced first in bash)
-- `env.nu` — nushell env setup (runs after env.sh)
-- `config.nu` — nushell config (keybindings, colors, hooks, etc.)
-- `login.nu` — login shell config
-- `history.sqlite3` — SQLite command history
+- **Nushell config**: `~/.config/nushell/` (stock nushell location)
+  - `env.nu` — nushell env setup
+  - `config.nu` — nushell config (keybindings, colors, hooks, etc.)
+  - `login.nu` — login shell config
+  - `history.sqlite3` — SQLite command history
+- **Bash config**: `~/.bash_profile` / `~/.bashrc` (standard bash locations)
 
-Config is nushell-native. Shannon adds no custom configuration beyond what
-nushell provides. All shell settings (keybindings, colors, hooks, completions)
-are configured via nushell's `config.nu`.
+The persistent bash subprocess starts with `bash --login`, which sources
+`.bash_profile` (and conventionally `.bashrc`). This means "add this to your
+.bashrc" instructions just work — no separate `env.sh` needed.
 
-The `env.sh` feature is critical — it lets users follow bash-style setup
-instructions ("add this to your .bashrc") directly. Shannon sources it in
-the persistent bash subprocess at startup and injects the resulting env vars
-into nushell's Stack.
+At startup, Shannon captures bash's post-login env vars and injects them into
+nushell's Stack, so PATH, nvm, homebrew, etc. are available in both modes.
+
+Shannon adds no custom configuration beyond what nushell provides. All shell
+settings (keybindings, colors, hooks, completions) are configured via nushell's
+`config.nu`.
 
 ## Issues and Experiments
 

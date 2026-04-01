@@ -110,17 +110,20 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Configuration</h2>
 
   <p>
-    Shannon uses <code class="text-secondary">~/.config/shannon/</code> with
-    nushell's native config system:
+    Shannon uses standard config locations — no custom config directory:
   </p>
 
   <ol>
-    <li><code class="text-secondary">env.sh</code> — bash environment setup (runs first)</li>
-    <li><code class="text-secondary">env.nu</code> — nushell env setup</li>
-    <li><code class="text-secondary">config.nu</code> — nushell config (keybindings, colors, hooks)</li>
+    <li><code class="text-secondary">~/.bash_profile</code> / <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell at startup)</li>
+    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell env setup</li>
+    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell config (keybindings, colors, hooks)</li>
   </ol>
 
-  <p>Shannon adds no custom configuration — nushell's <code class="text-secondary">config.nu</code> handles everything.</p>
+  <p>
+    The bash subprocess starts with <code class="text-secondary">bash --login</code>,
+    loading the user's standard bash config. Shannon adds no custom configuration
+    — nushell's <code class="text-secondary">config.nu</code> handles everything.
+  </p>
 
   <h2>Syntax Highlighting</h2>
 

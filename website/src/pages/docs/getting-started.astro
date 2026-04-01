@@ -16,42 +16,23 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 <span class="text-primary">cd</span> shannon
 <span class="text-primary">cargo</span> build --release</code></pre>
 
-  <h2>Setting Up Your Environment</h2>
+  <h2>Configuration</h2>
 
   <p>
-    <strong>This is the most important step.</strong> Shannon is a new shell —
-    it doesn't automatically inherit your PATH, homebrew, or other environment
-    setup from bash/zsh. You need to tell Shannon where your programs are.
+    Shannon uses your existing config files — no custom config directory needed.
   </p>
+
+  <h3>Bash config</h3>
 
   <p>
-    The easiest way: create <code class="text-secondary">~/.config/shannon/env.sh</code>
-    and put your PATH setup there. This is a bash script that runs at startup.
+    Shannon's bash subprocess starts as a login shell, loading your
+    <code class="text-secondary">~/.bash_profile</code> (which conventionally
+    sources <code class="text-secondary">~/.bashrc</code>). Any tutorial that
+    says "add this to your <code class="text-secondary">.bashrc</code>" — just
+    do it. Shannon picks it up automatically.
   </p>
 
-  <h3>Option 1: Copy from your existing shell (recommended)</h3>
-
-  <p>If you use zsh (macOS default), grab your PATH:</p>
-
-  <pre class={cb}><code><span class="text-muted"># Run this in your current shell to see your PATH</span>
-<span class="text-primary">echo</span> <span class="text-warning">$PATH</span></code></pre>
-
-  <p>Then create env.sh with it:</p>
-
-  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
-<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.cargo/bin"</span></code></pre>
-
-  <h3>Option 2: Copy your bash/zsh setup</h3>
-
-  <p>
-    If you have a <code class="text-secondary">.bashrc</code>,
-    <code class="text-secondary">.bash_profile</code>, or
-    <code class="text-secondary">.zshrc</code> with environment setup,
-    copy the relevant <code class="text-secondary">export</code> and
-    <code class="text-secondary">eval</code> lines into env.sh:
-  </p>
-
-  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+  <pre class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 
 <span class="text-muted"># Homebrew</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
@@ -59,39 +40,34 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 <span class="text-muted"># Cargo/Rust</span>
 <span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.cargo/bin"</span>
 
-<span class="text-muted"># Go</span>
-<span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/go/bin"</span>
-
 <span class="text-muted"># Node (nvm, fnm, etc.)</span>
-<span class="text-accent">eval</span> <span class="text-success">"$(fnm env)"</span></code></pre>
-
-  <h3>Option 3: Use nushell's env.nu</h3>
+<span class="text-accent">.</span> <span class="text-success">"$HOME/.nvm/nvm.sh"</span></code></pre>
 
   <p>
-    If you're already a nushell user, put your PATH in
-    <code class="text-secondary">~/.config/shannon/env.nu</code>
-    using nushell syntax:
+    At startup, Shannon captures bash's env vars and injects them into nushell,
+    so PATH, nvm, homebrew, etc. are available in both modes.
   </p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.config/shannon/env.nu</span>
-<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | prepend <span class="text-success">"/opt/homebrew/bin"</span>)
-<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | append (<span class="text-warning">$env</span>.HOME | path join <span class="text-success">".cargo/bin"</span>))</code></pre>
+  <h3>Nushell config</h3>
+
+  <p>
+    Nushell config lives in the standard location:
+    <code class="text-secondary">~/.config/nushell/</code>.
+    If you already use nushell, Shannon shares your existing config.
+  </p>
+
+  <pre class={cb}><code><span class="text-muted"># ~/.config/nushell/env.nu</span>
+<span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | prepend <span class="text-success">"/opt/homebrew/bin"</span>)</code></pre>
 
   <h3>Loading order</h3>
 
   <p>Shannon loads configuration in this order:</p>
 
   <ol>
-    <li><code class="text-secondary">~/.config/shannon/env.sh</code> — bash environment (sourced at startup)</li>
-    <li><code class="text-secondary">~/.config/shannon/env.nu</code> — nushell environment</li>
-    <li><code class="text-secondary">~/.config/shannon/config.nu</code> — nushell settings</li>
+    <li><code class="text-secondary">~/.bash_profile</code> → <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell)</li>
+    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment</li>
+    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings</li>
   </ol>
-
-  <p>
-    Any tutorial that says "add this to your
-    <code class="text-secondary">.bashrc</code>" — put it in
-    <code class="text-secondary">env.sh</code>.
-  </p>
 
   <h2>First Run</h2>
 

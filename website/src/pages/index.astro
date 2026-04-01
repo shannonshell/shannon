@@ -60,16 +60,18 @@ import Base from "../layouts/Base.astro"
       </li>
     </ul>
 
-    <h2 class="text-primary font-bold mb-3">env.sh: bash setup, nushell power</h2>
+    <h2 class="text-primary font-bold mb-3">Your existing config, just works</h2>
 
     <p class="text-foreground-dark mb-4">
+      Shannon uses your existing <span class="text-secondary">.bash_profile</span>
+      and <span class="text-secondary">~/.config/nushell/</span> config.
       When a tool says <em>"add this to your
-      <span class="text-secondary">.bashrc</span>"</em> — just put it in
-      <span class="text-secondary">env.sh</span>. Shannon sources it with bash
-      at startup and injects the environment into nushell. No translation needed.
+      <span class="text-secondary">.bashrc</span>"</em> — just do it.
+      Shannon's bash subprocess loads your bash config automatically and injects
+      the environment into nushell. No translation needed.
     </p>
 
-    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-muted"># ~/.config/shannon/env.sh</span>
+    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
 <span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.cargo/bin"</span>
 <span class="text-accent">.</span> <span class="text-success">"$HOME/.nvm/nvm.sh"</span></code></pre>

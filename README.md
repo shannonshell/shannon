@@ -41,8 +41,7 @@ Shannon IS nushell — you get all nushell features out of the box:
 - **Shift+Tab** to switch to `[bash]` mode for bash commands
 - Bash syntax highlighting (tree-sitter-bash, Tokyo Night colors)
 - Environment variables sync between nushell and bash automatically
-- `env.sh` for bash-style setup (PATH, API keys) — follow any tutorial that
-  says "add this to your .bashrc"
+- Standard bash config — `.bash_profile` and `.bashrc` loaded automatically
 
 ### Environment Sync
 
@@ -53,16 +52,16 @@ Shannon IS nushell — you get all nushell features out of the box:
 
 ## Configuration
 
-Shannon uses `~/.config/shannon/` (respects `XDG_CONFIG_HOME`):
+Shannon uses standard config locations — no custom config directory:
 
-| File | Purpose |
-|------|---------|
-| `env.sh` | Bash environment setup — PATH, env vars, API keys (runs first) |
-| `env.nu` | Nushell env setup (runs after env.sh) |
-| `config.nu` | Nushell config — keybindings, colors, hooks, completions |
-| `history.sqlite3` | SQLite command history |
+| Config | Location | Purpose |
+|--------|----------|---------|
+| Bash | `~/.bash_profile` / `~/.bashrc` | PATH, env vars, nvm, homebrew, etc. |
+| Nushell | `~/.config/nushell/env.nu` | Nushell env setup |
+| Nushell | `~/.config/nushell/config.nu` | Keybindings, colors, hooks, completions |
 
-No config files are required — shannon works out of the box.
+No config files are required — shannon works out of the box. If you already
+have nushell and bash configured, shannon uses your existing setup automatically.
 
 ## Installation
 
