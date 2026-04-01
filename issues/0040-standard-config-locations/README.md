@@ -10,8 +10,8 @@ opened = "2026-04-01"
 Eliminate Shannon's custom config directory (`~/.config/shannon/`) for shell
 configuration. Use nushell's default config location (`~/.config/nushell/`) for
 nushell config and bash's default config files (`~/.bash_profile`/`.bashrc`) for
-bash setup. No Shannon-specific config file is needed at this time — there are no
-Shannon-specific settings that aren't covered by nushell's `config.nu`.
+bash setup. No Shannon-specific config file is needed at this time — there are
+no Shannon-specific settings that aren't covered by nushell's `config.nu`.
 
 ## Background
 
@@ -109,3 +109,74 @@ This eliminates the nu-path fork entirely. The minimum fork set drops from 2
 crates (`nu-cli` + `nu-path`) to 1 crate (`nu-cli` only). Since nothing else in
 the nushell tree depends on `nu-cli`, it can be published as `shannon-nu-cli`
 without conflicts.
+
+## Experiments
+
+### Experiment 1: Replace env.sh with bash --login, revert nu-path fork
+
+Two changes in one experiment because they're tightly coupled — both eliminate
+Shannon's custom config directory.
+
+#### Changes
+
+**`nushell/crates/nu-path/src/helpers.rs`** — Revert config dir name
+
+Change `p.push("shannon")` back to `p.push("nushell")`. This makes
+`nu_config_dir()` return `~/.config/nushell/` (stock behavior). Shannon now
+shares nushell's config directory.
+
+**`src/bash_process.rs`** — Launch bash as login shell
+
+Change `Command::new("bash").args(["--norc", "--noprofile"])` to
+`Command::new("bash").args(["--login"])`. The bash subprocess now self-
+initializes via `.bash_profile` → `.bashrc`, loading the user's PATH, nvm,
+homebrew, etc. automatically.
+
+**`src/dispatcher.rs`** — Remove env.sh sourcing
+
+Delete the `env.sh` sourcing block in `ShannonDispatcher::new()`. The bash
+subprocess already initialized itself. Still call `capture_env()` to get the
+bash env vars for injection into nushell.
+
+Simplify to:
+
+```rust
+pub fn new() -> Self {
+    let bash = BashProcess::new();
+    ShannonDispatcher { bash }
+}
+```
+
+**`src/run.rs`** — Keep env var injection, update comment
+
+The `dispatcher.env_vars()` call stays — it captures bash's post-login env vars
+and injects them into nushell's Stack. Update the comment to reflect that these
+come from bash's login initialization, not env.sh.
+
+**`src/executor.rs`** — Remove `run_startup_script` and related functions
+
+Delete `run_startup_script()`, `run_startup_script_from()`, and all their tests.
+Keep `parse_bash_env()`, `parse_declare_line()`, and `unescape_bash_value()` —
+these are still used by `BashProcess` for sentinel parsing.
+
+**`src/shell.rs`** — Remove `config_dir()` and `history_db()`
+
+Delete the `config_dir()` and `history_db()` functions. Keep `ShellState` and
+its impl/tests — those are still used everywhere.
+
+**`src/lib.rs`** — No changes needed
+
+The `executor` module is still needed (for `parse_bash_env`). The `shell` module
+is still needed (for `ShellState`).
+
+#### Verification
+
+1. `cargo build` — compiles
+2. `cargo test --lib` — all tests pass (executor tests removed, remaining pass)
+3. `shannon` starts and loads user's nushell config from `~/.config/nushell/`
+4. `$nu.config-path` shows `~/.config/nushell/config.nu`
+5. Bash mode has env vars from `.bash_profile`/`.bashrc` (e.g., `echo $PATH`
+   includes homebrew, cargo, nvm paths)
+6. `export FOO=bar` in bash → `echo $env.FOO` in nu → `bar` (env propagation)
+7. Shift+Tab mode switching still works
+8. No references to `~/.config/shannon` remain in Shannon's source code
