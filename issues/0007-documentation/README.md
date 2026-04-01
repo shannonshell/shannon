@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-21"
+closed = "2026-04-01"
 +++
 
 # Issue 7: Documentation system
@@ -255,3 +256,14 @@ just how to use it.
 4. Each doc file has at least one concrete example or terminal snippet.
 5. All internal links between docs are correct.
 6. Files are plain markdown with no generator-specific syntax.
+
+**Result:** Pass (superseded)
+
+The docs were written but later replaced by a full Astro website at `website/`.
+
+## Conclusion
+
+Documentation system is live. The original plan called for markdown files in
+`docs/` — instead, Shannon got a full Astro static site deployed to Cloudflare
+Pages. The website covers getting started, features, and reference docs. The
+markdown-first approach from Experiment 1 informed the site structure.

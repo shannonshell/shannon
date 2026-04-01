@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-26"
+closed = "2026-04-01"
 +++
 
 # Issue 32: Rearchitect shannon as a fork of the nushell binary
@@ -839,3 +840,14 @@ binary source (~4,600 lines) was copied into shannon and modified with ~100
 lines of glue code. The nushell fork got ~80 lines added (trait, dispatch hook,
 keybinding). Env propagation, mode switching, and all three engines work
 correctly.
+
+## Conclusion
+
+Shannon was successfully rearchitected as a nushell fork. The binary copies
+nushell's startup code and adds mode dispatch via a `ModeDispatcher` trait
+injected into nu-cli's REPL loop. Shannon gets all nushell features for free:
+job control, plugins, multiline editing, completions, hooks, and native config.
+Bash mode runs via a persistent subprocess with sentinel-based env capture. AI
+mode was later removed (issue 38) and brush was replaced by the simpler
+BashProcess, leaving two modes: nu and bash. The nushell and reedline source
+trees are merged directly into the repo via git subtree with full history.

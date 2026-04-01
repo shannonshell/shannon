@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-31"
+closed = "2026-04-01"
 +++
 
 # Issue 39: Minimize nushell fork publishing for crates.io
@@ -403,3 +404,37 @@ Only **1 crate** needs fork-publishing: `shannon-nu-cli`. Everything else
 4. Manual smoke test: `shannon` → bash mode → `echo hello` → works
 5. `cargo publish --dry-run -p shannon-nu-cli` — verify nu-cli can be packaged
 6. `cargo publish --dry-run` — verify shannonshell can be packaged
+
+**Result:** Not implemented
+
+Experiment 3 was designed but not implemented. The `package` rename approach
+(renaming `nu-path` to `shannon-nu-path`) was attempted first and failed —
+renaming the crate breaks every other nushell crate in the workspace that
+depends on `nu-path`. The `NU_APP_NAME` env var approach would work but requires
+forking nu-path (adding the env var check), and since `nu-protocol` depends on
+`nu-path`, forking it means forking the entire dependency chain.
+
+#### Conclusion
+
+The experiment was superseded by a better insight: Shannon doesn't need its own
+config directory at all. By using nushell's standard `~/.config/nushell/` for
+nushell config and bash's standard `~/.bashrc` for bash config, the nu-path fork
+is eliminated entirely. Shannon-specific settings can live in a minimal
+`~/.config/shannon/config.toml`. This approach is pursued in issue 40.
+
+## Conclusion
+
+The fork was successfully rebased from 0.111.2 onto stock 0.111.0 (experiment
+2), aligning all unmodified crates with crates.io versions. Root Cargo.toml now
+has both `version` and `path` for every dep — path for local dev, version for
+publishing.
+
+The minimum fork set analysis revealed that `nu-cli` is the only crate with
+heavy modifications. `nu-path` has a 1-line config dir change, but it can't be
+fork-published independently because `nu-protocol` (and most of the tree)
+depends on it — two conflicting `nu-path` crates would exist in the dependency
+graph.
+
+Rather than solving the nu-path problem with env var hacks or publishing 20+
+crates, the decision was made to eliminate the nu-path fork entirely by adopting
+nushell and bash's standard config locations. This is pursued in issue 40.

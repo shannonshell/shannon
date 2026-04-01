@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-03-24"
+closed = "2026-04-01"
 +++
 
 # Issue 24: Per-shell internal state with env propagation on switch
@@ -1150,3 +1151,13 @@ workaround, not a proper fix.
 Double-registering signal-hook for SIGINT reliably fixes Ctrl+C. The root
 cause is unknown — likely a signal handler overwrite during startup by one of
 our dependencies. Keeping the workaround with a comment for now.
+
+## Conclusion
+
+Per-shell state is fully resolved. The rearchitecture in issue 32 (Shannon IS
+nushell) eliminated the original problem entirely — nushell's REPL naturally
+preserves its own internal state, and bash state persists in the `BashProcess`
+subprocess. Env propagation between modes uses `env_to_strings()` (nu→bash) and
+`add_env_var()` (bash→nu). The Ctrl+C workaround (double signal-hook
+registration) was also resolved — Shannon now uses nushell's own signal handling
+via the `ctrlc` crate, which works correctly.
