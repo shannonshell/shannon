@@ -1,22 +1,36 @@
 ---
 interface Props {
-  showBrand?: boolean
+  showBrand?: boolean;
 }
-const { showBrand = true } = Astro.props
+const { showBrand = true } = Astro.props;
 ---
 
 <header class="flex items-center gap-4 text-sm">
-  {showBrand && (
-    <a href="/" class="flex items-center gap-2 text-foreground hover:text-primary font-bold">
-      <picture>
-        <source srcset="/images/shannon-2-dark.png" media="(prefers-color-scheme: dark)" />
-        <img src="/images/shannon-2-light.png" alt="Shannon logo" class="w-5 h-5" />
-      </picture>
-      Shannon
-    </a>
-  )}
-  <nav class="flex gap-3 text-muted">
+  {
+    showBrand && (
+      <a
+        href="/"
+        class="text-foreground hover:text-primary flex items-center gap-2 font-bold"
+      >
+        <picture>
+          <source
+            srcset="/images/shannon-2-dark.png"
+            media="(prefers-color-scheme: dark)"
+          />
+          <img
+            src="/images/shannon-2-light.png"
+            alt="Shannon logo"
+            class="h-5 w-5"
+          />
+        </picture>
+        Shannon
+      </a>
+    )
+  }
+  <nav class="text-muted flex gap-3">
     <a href="/docs" class="hover:text-accent">Docs</a>
-    <a href="https://github.com/shannonshell/shannon" class="hover:text-accent">GitHub</a>
+    <a href="https://github.com/shannonshell/shannon" class="hover:text-accent"
+      >GitHub</a
+    >
   </nav>
 </header>

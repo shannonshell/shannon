@@ -1,6 +1,7 @@
 ---
-import DocPage from "../../../components/DocPage.astro"
-const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
+import DocPage from "../../../components/DocPage.astro";
+const cb =
+  "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto";
 ---
 
 <DocPage title="State Synchronization">
@@ -13,14 +14,16 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <h2>Environment Variables</h2>
 
-  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
+  <pre
+    class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">API_KEY</span>=<span class="text-success">"sk-1234"</span>
 <span class="text-accent">[bash]</span> ~/project &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.API_KEY
 <span class="text-muted">sk-1234</span></code></pre>
 
   <p>It works both ways:</p>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
+  <pre
+    class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.FOO = <span class="text-success">"hello"</span>
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 <span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">echo</span> <span class="text-warning">$FOO</span>
 <span class="text-muted">hello</span></code></pre>
@@ -34,21 +37,29 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <ul>
     <li>
-      <strong>Nu to Bash:</strong> <code class="text-secondary">env_to_strings()</code>
-      converts typed values to strings using <code class="text-secondary">ENV_CONVERSIONS</code>
+      <strong>Nu to Bash:</strong>
+      <code class="text-secondary">env_to_strings()</code>
+      converts typed values to strings using <code class="text-secondary"
+        >ENV_CONVERSIONS</code
+      >
       <code class="text-secondary">to_string</code> closures
     </li>
     <li>
       <strong>Bash to Nu:</strong> String env vars are written back. Nushell automatically
-      applies <code class="text-secondary">from_string</code> conversions on the next REPL iteration
+      applies <code class="text-secondary">from_string</code> conversions on the next
+      REPL iteration
     </li>
   </ul>
 
-  <p>You don't need to do anything — PATH, LS_COLORS, and other typed vars just work.</p>
+  <p>
+    You don't need to do anything — PATH, LS_COLORS, and other typed vars just
+    work.
+  </p>
 
   <h2>Working Directory</h2>
 
-  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">cd</span> /tmp
+  <pre
+    class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">cd</span> /tmp
 <span class="text-accent">[bash]</span> /tmp &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 <span class="text-success">[nu]</span> /tmp &gt;</code></pre>
 
@@ -60,8 +71,15 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   </p>
 
   <ul>
-    <li>Nushell variables (<code class="text-secondary">let x = 5</code>) stay in nushell</li>
+    <li>
+      Nushell variables (<code class="text-secondary">let x = 5</code>) stay in
+      nushell
+    </li>
     <li>Bash local variables and aliases stay in bash</li>
-    <li>Use <code class="text-secondary">export</code> / <code class="text-secondary">$env.X = ...</code> for values that need to cross</li>
+    <li>
+      Use <code class="text-secondary">export</code> / <code
+        class="text-secondary">$env.X = ...</code
+      > for values that need to cross
+    </li>
   </ul>
 </DocPage>

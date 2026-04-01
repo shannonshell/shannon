@@ -1,14 +1,14 @@
 ---
-import "../styles/style.css"
-import Header from "../components/Header.astro"
-import Footer from "../components/Footer.astro"
+import "../styles/style.css";
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
 
 interface Props {
-  title?: string
-  showHeaderBrand?: boolean
+  title?: string;
+  showHeaderBrand?: boolean;
 }
 
-const { title = "Shannon", showHeaderBrand = true } = Astro.props
+const { title = "Shannon", showHeaderBrand = true } = Astro.props;
 ---
 
 <!doctype html>
@@ -20,7 +20,7 @@ const { title = "Shannon", showHeaderBrand = true } = Astro.props
     <title>{title}</title>
   </head>
   <body class="text-sm">
-    <div class="max-w-3xl mx-auto px-4 py-6">
+    <div class="mx-auto max-w-3xl px-4 py-6">
       <Header showBrand={showHeaderBrand} />
       <main class="mt-6">
         <slot />

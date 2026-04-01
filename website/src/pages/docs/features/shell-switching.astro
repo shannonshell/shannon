@@ -1,6 +1,7 @@
 ---
-import DocPage from "../../../components/DocPage.astro"
-const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
+import DocPage from "../../../components/DocPage.astro";
+const cb =
+  "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto";
 ---
 
 <DocPage title="Mode Switching">
@@ -10,7 +11,7 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
     Shannon has two modes — press <strong>Shift+Tab</strong> to toggle between them:
   </p>
 
-  <p class="text-center text-base my-4">
+  <p class="my-4 text-center text-base">
     <span class="text-success font-bold">nu</span>
     <span class="text-muted">↔</span>
     <span class="text-accent font-bold">bash</span>
@@ -18,7 +19,8 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <h2>Switching in Action</h2>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-primary">ls</span> | <span class="text-primary">where</span> size &gt; 1mb
+  <pre
+    class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-primary">ls</span> | <span class="text-primary">where</span> size &gt; 1mb
 <span class="text-muted">...</span>
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-secondary">&lt;Shift+Tab&gt;</span>
 
@@ -50,7 +52,9 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>
     Environment variables are converted automatically between nushell's typed
-    values and bash strings using <code class="text-secondary">ENV_CONVERSIONS</code>.
+    values and bash strings using <code class="text-secondary"
+      >ENV_CONVERSIONS</code
+    >.
   </p>
 
   <h2>What Doesn't Carry Over</h2>
@@ -58,7 +62,10 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <p>Shell-internal data stays within its mode:</p>
 
   <ul>
-    <li>Nushell variables (<code class="text-secondary">let x = 5</code>) don't exist in bash</li>
+    <li>
+      Nushell variables (<code class="text-secondary">let x = 5</code>) don't
+      exist in bash
+    </li>
     <li>Bash local variables and aliases don't exist in nushell</li>
     <li>Only exported environment variables cross the boundary</li>
   </ul>

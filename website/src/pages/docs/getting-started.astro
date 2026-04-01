@@ -1,6 +1,7 @@
 ---
-import DocPage from "../../components/DocPage.astro"
-const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
+import DocPage from "../../components/DocPage.astro";
+const cb =
+  "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto";
 ---
 
 <DocPage title="Getting Started">
@@ -12,15 +13,18 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
     Requires the <a href="https://rustup.rs">Rust toolchain</a>.
   </p>
 
-  <pre class={cb}><code><span class="text-primary">cargo</span> install shannonshell</code></pre>
+  <pre
+    class={cb}><code><span class="text-primary">cargo</span> install shannonshell</code></pre>
 
   <p>Or install from git (latest development version):</p>
 
-  <pre class={cb}><code><span class="text-primary">cargo</span> install --git <span class="text-success">https://github.com/shannonshell/shannon</span></code></pre>
+  <pre
+    class={cb}><code><span class="text-primary">cargo</span> install --git <span class="text-success">https://github.com/shannonshell/shannon</span></code></pre>
 
   <p>Or build from source:</p>
 
-  <pre class={cb}><code><span class="text-primary">git</span> clone <span class="text-success">https://github.com/shannonshell/shannon.git</span>
+  <pre
+    class={cb}><code><span class="text-primary">git</span> clone <span class="text-success">https://github.com/shannonshell/shannon.git</span>
 <span class="text-primary">cd</span> shannon
 <span class="text-primary">cargo</span> build --release</code></pre>
 
@@ -34,13 +38,14 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>
     Shannon's bash subprocess starts as a login shell, loading your
-    <code class="text-secondary">~/.bash_profile</code> (which conventionally
-    sources <code class="text-secondary">~/.bashrc</code>). Any tutorial that
-    says "add this to your <code class="text-secondary">.bashrc</code>" — just
-    do it. Shannon picks it up automatically.
+    <code class="text-secondary">~/.bash_profile</code> (which conventionally sources
+    <code class="text-secondary">~/.bashrc</code>). Any tutorial that says "add
+    this to your <code class="text-secondary">.bashrc</code>" — just do it.
+    Shannon picks it up automatically.
   </p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
+  <pre
+    class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 
 <span class="text-muted"># Homebrew</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
@@ -60,11 +65,12 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>
     Nushell config lives in the standard location:
-    <code class="text-secondary">~/.config/nushell/</code>.
-    If you already use nushell, Shannon shares your existing config.
+    <code class="text-secondary">~/.config/nushell/</code>. If you already use
+    nushell, Shannon shares your existing config.
   </p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.config/nushell/env.nu</span>
+  <pre
+    class={cb}><code><span class="text-muted"># ~/.config/nushell/env.nu</span>
 <span class="text-warning">$env</span>.PATH = (<span class="text-warning">$env</span>.PATH | prepend <span class="text-success">"/opt/homebrew/bin"</span>)</code></pre>
 
   <h3>Loading order</h3>
@@ -72,9 +78,17 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <p>Shannon loads configuration in this order:</p>
 
   <ol>
-    <li><code class="text-secondary">~/.bash_profile</code> → <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell)</li>
-    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment</li>
-    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings</li>
+    <li>
+      <code class="text-secondary">~/.bash_profile</code> → <code
+        class="text-secondary">~/.bashrc</code
+      > — bash login init (env vars injected into nushell)
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings
+    </li>
   </ol>
 
   <h2>First Run</h2>
@@ -83,7 +97,8 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>You'll see:</p>
 
-  <pre class={cb}><code>Welcome to <span class="text-success font-bold">Shannon</span>, based on the <span class="text-success">Nu</span> language, where all data is structured!
+  <pre
+    class={cb}><code>Welcome to <span class="text-success font-bold">Shannon</span>, based on the <span class="text-success">Nu</span> language, where all data is structured!
 Version: <span class="text-success">0.5.2</span> (nushell <span class="text-success">0.111.0</span>)
 Startup Time: <span class="text-success font-bold">27ms</span>
 
@@ -94,35 +109,42 @@ Startup Time: <span class="text-success font-bold">27ms</span>
   <p>
     If commands like <code class="text-secondary">git</code>,
     <code class="text-secondary">node</code>, or
-    <code class="text-secondary">brew</code> aren't found, your PATH isn't
-    set up — go back to the environment setup step above.
+    <code class="text-secondary">brew</code> aren't found, your PATH isn't set up
+    — go back to the environment setup step above.
   </p>
 
   <h2>Switching Modes</h2>
 
   <p>Press <strong>Shift+Tab</strong> to toggle between modes:</p>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/projects &gt; <span class="text-primary">ls</span> | <span class="text-primary">where</span> size &gt; 1mb    <span class="text-muted">← nushell</span>
+  <pre
+    class={cb}><code><span class="text-success">[nu]</span> ~/projects &gt; <span class="text-primary">ls</span> | <span class="text-primary">where</span> size &gt; 1mb    <span class="text-muted">← nushell</span>
 <span class="text-accent">[bash]</span> ~/projects &gt; <span class="text-primary">grep</span> -r TODO src/     <span class="text-muted">← bash</span></code></pre>
 
-  <p>Your environment variables and working directory carry over when you switch.</p>
+  <p>
+    Your environment variables and working directory carry over when you switch.
+  </p>
 
   <h2>Running Commands</h2>
 
   <p>In <strong>nu mode</strong>, use nushell syntax:</p>
 
-  <pre class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-primary">ls</span> | <span class="text-primary">sort-by</span> modified
+  <pre
+    class={cb}><code><span class="text-success">[nu]</span> ~/project &gt; <span class="text-primary">ls</span> | <span class="text-primary">sort-by</span> modified
 <span class="text-success">[nu]</span> ~/project &gt; <span class="text-warning">$env</span>.HOME</code></pre>
 
   <p>In <strong>bash mode</strong>, use bash syntax:</p>
 
-  <pre class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">echo</span> hello &amp;&amp; <span class="text-primary">echo</span> world
+  <pre
+    class={cb}><code><span class="text-accent">[bash]</span> ~/project &gt; <span class="text-primary">echo</span> hello &amp;&amp; <span class="text-primary">echo</span> world
 <span class="text-accent">[bash]</span> ~/project &gt; <span class="text-accent">export</span> <span class="text-warning">FOO</span>=bar</code></pre>
 
   <h2>Exiting</h2>
 
   <ul>
     <li><strong>Ctrl+D</strong> — exit shannon</li>
-    <li>Type <code class="text-secondary">exit</code> — also exits (works in all modes)</li>
+    <li>
+      Type <code class="text-secondary">exit</code> — also exits (works in all modes)
+    </li>
   </ul>
 </DocPage>

@@ -1,6 +1,7 @@
 ---
-import DocPage from "../../components/DocPage.astro"
-const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
+import DocPage from "../../components/DocPage.astro";
+const cb =
+  "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto";
 ---
 
 <DocPage title="Architecture">
@@ -22,24 +23,31 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <p>Shannon has two modes, toggled via Shift+Tab:</p>
 
   <ul>
-    <li><span class="text-success font-bold">nu</span> — nushell's native evaluation (default)</li>
-    <li><span class="text-accent font-bold">bash</span> — bash commands via a persistent bash subprocess</li>
+    <li>
+      <span class="text-success font-bold">nu</span> — nushell's native evaluation
+      (default)
+    </li>
+    <li>
+      <span class="text-accent font-bold">bash</span> — bash commands via a persistent
+      bash subprocess
+    </li>
   </ul>
 
   <p>
     The mode is stored in <code class="text-secondary">$env.SHANNON_MODE</code>.
-    When the mode is "nu", commands go through nushell's parser and evaluator
-    as normal. When the mode is "bash", a
-    <code class="text-secondary">ModeDispatcher</code> trait intercepts the
-    command in <code class="text-secondary">loop_iteration()</code> and routes
-    it to the bash subprocess.
+    When the mode is "nu", commands go through nushell's parser and evaluator as
+    normal. When the mode is "bash", a
+    <code class="text-secondary">ModeDispatcher</code> trait intercepts the command
+    in <code class="text-secondary">loop_iteration()</code> and routes it to the bash
+    subprocess.
   </p>
 
   <h3>ModeDispatcher Trait</h3>
 
   <p>Defined in nu-cli:</p>
 
-  <pre class={cb}><code><span class="text-accent">pub trait</span> <span class="text-warning">ModeDispatcher</span>: Send &#123;
+  <pre
+    class={cb}><code><span class="text-accent">pub trait</span> <span class="text-warning">ModeDispatcher</span>: Send &#123;
     <span class="text-accent">fn</span> <span class="text-primary">execute</span>(
         &amp;<span class="text-accent">mut</span> self,
         mode: &amp;<span class="text-accent">str</span>,
@@ -59,9 +67,9 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Merged Dependencies</h2>
 
   <p>
-    Nushell and reedline source is merged directly into the repo with
-    full git history (via <code class="text-secondary">git subtree add</code>).
-    Shannon uses path deps. No crates.io publishing needed.
+    Nushell and reedline source is merged directly into the repo with full git
+    history (via <code class="text-secondary">git subtree add</code>). Shannon
+    uses path deps. No crates.io publishing needed.
   </p>
 
   <table>
@@ -83,46 +91,79 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   </table>
 
   <p>
-    Upstream sync: <code class="text-secondary">git subtree pull --prefix nushell upstream-nushell main</code>
+    Upstream sync: <code class="text-secondary"
+      >git subtree pull --prefix nushell upstream-nushell main</code
+    >
   </p>
 
   <h2>Environment Propagation</h2>
 
   <p>
-    When switching modes, all exported environment variables and the cwd
-    are preserved:
+    When switching modes, all exported environment variables and the cwd are
+    preserved:
   </p>
 
   <h3>Nu to Bash</h3>
   <ol>
-    <li><code class="text-secondary">env_to_strings()</code> converts nushell's typed values to strings</li>
-    <li><code class="text-secondary">ENV_CONVERSIONS</code> <code class="text-secondary">to_string</code> closures handle typed vars (PATH as list)</li>
-    <li>Strings injected into the bash subprocess via <code class="text-secondary">export</code> commands</li>
+    <li>
+      <code class="text-secondary">env_to_strings()</code> converts nushell's typed
+      values to strings
+    </li>
+    <li>
+      <code class="text-secondary">ENV_CONVERSIONS</code>
+      <code class="text-secondary">to_string</code> closures handle typed vars (PATH
+      as list)
+    </li>
+    <li>
+      Strings injected into the bash subprocess via <code class="text-secondary"
+        >export</code
+      > commands
+    </li>
   </ol>
 
   <h3>Bash to Nu</h3>
   <ol>
-    <li>After each command, <code class="text-secondary">export -p</code> captures all exported env vars</li>
-    <li>Strings written to nushell's Stack via <code class="text-secondary">add_env_var(Value::string(...))</code></li>
-    <li>Nushell's REPL automatically applies <code class="text-secondary">from_string</code> conversions</li>
+    <li>
+      After each command, <code class="text-secondary">export -p</code> captures all
+      exported env vars
+    </li>
+    <li>
+      Strings written to nushell's Stack via <code class="text-secondary"
+        >add_env_var(Value::string(...))</code
+      >
+    </li>
+    <li>
+      Nushell's REPL automatically applies <code class="text-secondary"
+        >from_string</code
+      > conversions
+    </li>
   </ol>
 
   <h2>Configuration</h2>
 
-  <p>
-    Shannon uses standard config locations — no custom config directory:
-  </p>
+  <p>Shannon uses standard config locations — no custom config directory:</p>
 
   <ol>
-    <li><code class="text-secondary">~/.bash_profile</code> / <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell at startup)</li>
-    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell env setup</li>
-    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell config (keybindings, colors, hooks)</li>
+    <li>
+      <code class="text-secondary">~/.bash_profile</code> / <code
+        class="text-secondary">~/.bashrc</code
+      > — bash login init (env vars injected into nushell at startup)
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/env.nu</code> — nushell env setup
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/config.nu</code> — nushell config
+      (keybindings, colors, hooks)
+    </li>
   </ol>
 
   <p>
-    The bash subprocess starts with <code class="text-secondary">bash --login</code>,
-    loading the user's standard bash config. Shannon adds no custom configuration
-    — nushell's <code class="text-secondary">config.nu</code> handles everything.
+    The bash subprocess starts with <code class="text-secondary"
+      >bash --login</code
+    >, loading the user's standard bash config. Shannon adds no custom
+    configuration — nushell's <code class="text-secondary">config.nu</code> handles
+    everything.
   </p>
 
   <h2>Syntax Highlighting</h2>
@@ -130,13 +171,22 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <p>Each mode has its own highlighter, rebuilt every REPL iteration:</p>
 
   <ul>
-    <li><span class="text-success font-bold">Nu mode:</span> <code class="text-secondary">NuHighlighter</code> (nushell's native highlighter)</li>
-    <li><span class="text-accent font-bold">Bash mode:</span> <code class="text-secondary">BashHighlighter</code> (tree-sitter-bash, colors from nushell config)</li>
+    <li>
+      <span class="text-success font-bold">Nu mode:</span>
+      <code class="text-secondary">NuHighlighter</code> (nushell's native highlighter)
+    </li>
+    <li>
+      <span class="text-accent font-bold">Bash mode:</span>
+      <code class="text-secondary">BashHighlighter</code> (tree-sitter-bash, colors
+      from nushell config)
+    </li>
   </ul>
 
   <h2>Source Code Layout</h2>
 
-  <p><strong>Copied from nushell binary</strong> (startup, terminal, signals):</p>
+  <p>
+    <strong>Copied from nushell binary</strong> (startup, terminal, signals):
+  </p>
   <p>
     <code class="text-secondary">main.rs</code>,
     <code class="text-secondary">run.rs</code>,

@@ -1,14 +1,15 @@
 ---
-import DocPage from "../../../components/DocPage.astro"
-const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto"
+import DocPage from "../../../components/DocPage.astro";
+const cb =
+  "bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-6 overflow-x-auto";
 ---
 
 <DocPage title="Configuration">
   <h1>Configuration</h1>
 
   <p>
-    Shannon uses standard config locations — no custom config directory.
-    Your existing nushell and bash config works automatically.
+    Shannon uses standard config locations — no custom config directory. Your
+    existing nushell and bash config works automatically.
   </p>
 
   <h2>Config Locations</h2>
@@ -20,7 +21,11 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
     <tbody>
       <tr>
         <td>Bash</td>
-        <td><code class="text-secondary">~/.bash_profile</code> / <code class="text-secondary">~/.bashrc</code></td>
+        <td
+          ><code class="text-secondary">~/.bash_profile</code> / <code
+            class="text-secondary">~/.bashrc</code
+          ></td
+        >
         <td>PATH, env vars, nvm, homebrew, etc.</td>
       </tr>
       <tr>
@@ -40,7 +45,10 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
       </tr>
       <tr>
         <td>Nushell</td>
-        <td><code class="text-secondary">~/.config/nushell/history.sqlite3</code></td>
+        <td
+          ><code class="text-secondary">~/.config/nushell/history.sqlite3</code
+          ></td
+        >
         <td>SQLite command history</td>
       </tr>
     </tbody>
@@ -51,13 +59,15 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Bash Config</h2>
 
   <p>
-    Shannon's bash subprocess starts as a login shell (<code class="text-secondary">bash --login</code>),
-    loading your <code class="text-secondary">~/.bash_profile</code> (which conventionally
-    sources <code class="text-secondary">~/.bashrc</code>). At startup, the resulting env
-    vars are captured and injected into nushell's Stack.
+    Shannon's bash subprocess starts as a login shell (<code
+      class="text-secondary">bash --login</code
+    >), loading your <code class="text-secondary">~/.bash_profile</code> (which conventionally
+    sources <code class="text-secondary">~/.bashrc</code>). At startup, the
+    resulting env vars are captured and injected into nushell's Stack.
   </p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
+  <pre
+    class={cb}><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 
 <span class="text-muted"># Homebrew</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
@@ -71,22 +81,28 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
 
   <p>
     Any tutorial that says "add this to your
-    <code class="text-secondary">.bashrc</code>" — just do it. Shannon picks it up
-    automatically.
+    <code class="text-secondary">.bashrc</code>" — just do it. Shannon picks it
+    up automatically.
   </p>
 
   <h2>Nushell Config</h2>
 
   <p>
-    Nushell config lives in the standard <code class="text-secondary">~/.config/nushell/</code>
-    directory. If you already use nushell, Shannon shares your existing config. See the
-    <a href="https://nushell.sh/book/configuration.html">Nushell configuration docs</a>
+    Nushell config lives in the standard <code class="text-secondary"
+      >~/.config/nushell/</code
+    >
+    directory. If you already use nushell, Shannon shares your existing config. See
+    the
+    <a href="https://nushell.sh/book/configuration.html"
+      >Nushell configuration docs</a
+    >
     for full details.
   </p>
 
   <p>Common settings:</p>
 
-  <pre class={cb}><code><span class="text-muted"># ~/.config/nushell/config.nu</span>
+  <pre
+    class={cb}><code><span class="text-muted"># ~/.config/nushell/config.nu</span>
 
 <span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>          <span class="text-muted"># disable startup banner</span>
 <span class="text-warning">$env</span>.config.edit_mode = <span class="text-success">"vi"</span>             <span class="text-muted"># vi or emacs keybindings</span>
@@ -95,9 +111,17 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
   <h2>Loading Order</h2>
 
   <ol>
-    <li><code class="text-secondary">~/.bash_profile</code> → <code class="text-secondary">~/.bashrc</code> — bash login init (env vars injected into nushell)</li>
-    <li><code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment</li>
-    <li><code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings</li>
+    <li>
+      <code class="text-secondary">~/.bash_profile</code> → <code
+        class="text-secondary">~/.bashrc</code
+      > — bash login init (env vars injected into nushell)
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/env.nu</code> — nushell environment
+    </li>
+    <li>
+      <code class="text-secondary">~/.config/nushell/config.nu</code> — nushell settings
+    </li>
   </ol>
 
   <h2>Banner</h2>
@@ -107,7 +131,8 @@ const cb = "bg-background-dark p-3 border-l-2 border-border text-foreground-dark
     <code class="text-secondary">$env.config.show_banner</code> setting:
   </p>
 
-  <pre class={cb}><code><span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>    <span class="text-muted"># no banner</span>
+  <pre
+    class={cb}><code><span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">false</span>    <span class="text-muted"># no banner</span>
 <span class="text-warning">$env</span>.config.show_banner = <span class="text-success">"short"</span>  <span class="text-muted"># just startup time</span>
 <span class="text-warning">$env</span>.config.show_banner = <span class="text-danger">true</span>     <span class="text-muted"># full welcome message (default)</span></code></pre>
 </DocPage>
