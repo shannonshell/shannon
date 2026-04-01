@@ -316,13 +316,17 @@ git commit -m "Remove old nushell subtree"
 
 **Result:** Pass
 
-All verification steps confirmed. Additional fixes required during implementation:
-- `nu-command` and `nu-cli` needed wildcard match arms for new `reedline::Signal`
-  variant (non-exhaustive enum in reedline 0.46.0 vs 0.111.0 code)
-- `src/logger.rs` used 0.111.2 `ShellError::Generic(GenericError::new_internal())`
-  API — converted to 0.111.0 `ShellError::GenericError { ... }` struct variant
-- `src/main.rs` `IoError::new_internal_with_path` needed a `location!()` argument
-  added (0.111.0 has 4 params, 0.111.2 had 3)
+All verification steps confirmed. Additional fixes required during
+implementation:
+
+- `nu-command` and `nu-cli` needed wildcard match arms for new
+  `reedline::Signal` variant (non-exhaustive enum in reedline 0.46.0 vs 0.111.0
+  code)
+- `src/logger.rs` used 0.111.2
+  `ShellError::Generic(GenericError::new_internal())` API — converted to 0.111.0
+  `ShellError::GenericError { ... }` struct variant
+- `src/main.rs` `IoError::new_internal_with_path` needed a `location!()`
+  argument added (0.111.0 has 4 params, 0.111.2 had 3)
 
 #### Conclusion
 
@@ -332,3 +336,43 @@ nu-path config dir change applied cleanly. All nushell crates now match the
 crates.io 0.111.0 versions. Root Cargo.toml has both `version` and `path` for
 every dep — path used locally, version used for publishing. Still need to delete
 `nushell-old/` (step 7).
+
+### Experiment 3: Configure Cargo.toml for crates.io publishing
+
+Set up the `package` field in Cargo.toml so that locally we use path deps (the
+fork), but when published to crates.io, only `shannon-nu-cli` and
+`shannon-nu-path` are our crates — everything else resolves to stock upstream.
+
+#### Changes
+
+**`nushell/crates/nu-path/Cargo.toml`**
+
+- Set `name = "shannon-nu-path"` (crates.io package name)
+- Set `version = "0.111.0"` (match upstream)
+
+**`nushell/crates/nu-cli/Cargo.toml`**
+
+- Set `name = "shannon-nu-cli"` (crates.io package name)
+- Set `version = "0.111.0"` (match upstream)
+- Change nu-path dep to use our fork:
+  `nu-path = { path = "../nu-path", version = "0.111.0", package = "shannon-nu-path" }`
+- All other `nu-*` deps keep their stock names and `version = "0.111.0"`
+
+**`Cargo.toml` (root — shannonshell)**
+
+- Change nu-cli dep:
+  `nu-cli = { version = "0.111.0", path = "nushell/crates/nu-cli", package = "shannon-nu-cli", ... }`
+- Change nu-path dep:
+  `nu-path = { version = "0.111.0", path = "nushell/crates/nu-path", package = "shannon-nu-path" }`
+- All other `nu-*` deps: keep `version = "0.111.0"` and `path = ...` as-is
+  (stock names, stock versions)
+- Reedline: keep `version = "0.46.0"` and `path = "reedline"` (stock name)
+
+#### Verification
+
+1. `cargo build` — path deps still take precedence locally, everything compiles
+2. `cargo test --lib` — all tests pass
+3. `cargo publish --dry-run -p shannon-nu-path` — verify nu-path can be packaged
+4. `cargo publish --dry-run -p shannon-nu-cli` — verify nu-cli can be packaged
+5. `cargo publish --dry-run` — verify shannonshell can be packaged
+6. Manual smoke test: `shannon` → bash mode → `echo hello` → works
