@@ -8,7 +8,10 @@ const { showBrand = true } = Astro.props
 <header class="flex items-center gap-4 text-sm">
   {showBrand && (
     <a href="/" class="flex items-center gap-2 text-foreground hover:text-primary font-bold">
-      <img src="/images/shannon-1.webp" alt="Shannon logo" class="w-5 h-5" />
+      <picture>
+        <source srcset="/images/shannon-2-dark.png" media="(prefers-color-scheme: dark)" />
+        <img src="/images/shannon-2-light.png" alt="Shannon logo" class="w-5 h-5" />
+      </picture>
       Shannon
     </a>
   )}

@@ -5,7 +5,10 @@ import Base from "../layouts/Base.astro"
 <Base title="Shannon — Nushell + Bash" showHeaderBrand={false}>
   <section>
     <div class="flex items-center gap-4 mb-8">
-      <img src="/images/shannon-1.webp" alt="Shannon logo" class="w-16 h-16" />
+      <picture>
+        <source srcset="/images/shannon-2-dark.png" media="(prefers-color-scheme: dark)" />
+        <img src="/images/shannon-2-light.png" alt="Shannon logo" class="w-16 h-16" />
+      </picture>
       <div>
         <h1 class="text-xl font-bold text-foreground">Shannon</h1>
         <p class="text-primary text-sm font-bold">Nushell + Bash</p>
