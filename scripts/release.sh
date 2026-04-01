@@ -20,6 +20,22 @@ cargo build --release
 echo "==> Running tests..."
 cargo test
 
+# Publish to crates.io (3 crates, in dependency order)
+echo "==> Publishing to crates.io..."
+
+echo "  Publishing shannon-nu-cli..."
+cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-cli --allow-dirty
+echo "  Waiting for crates.io index..."
+sleep 30
+
+echo "  Publishing shannon-nu-lsp..."
+cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-lsp --allow-dirty
+echo "  Waiting for crates.io index..."
+sleep 30
+
+echo "  Publishing shannonshell..."
+cargo publish --allow-dirty
+
 # Commit and tag
 echo "==> Committing and tagging..."
 git add -A
@@ -36,4 +52,5 @@ git push
 git push --tags
 
 echo "==> Released shannon v$VERSION"
-echo "  Install: cargo install --git https://github.com/shannonshell/shannon"
+echo "  Install: cargo install shannonshell"
+echo "  Or: cargo install --git https://github.com/shannonshell/shannon"

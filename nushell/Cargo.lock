@@ -3992,7 +3992,6 @@ dependencies = [
  "miette",
  "multipart-rs",
  "nix",
- "nu-cli",
  "nu-cmd-base",
  "nu-cmd-extra",
  "nu-cmd-lang",
@@ -4001,7 +4000,6 @@ dependencies = [
  "nu-engine",
  "nu-experimental",
  "nu-explore",
- "nu-lsp",
  "nu-mcp",
  "nu-parser",
  "nu-path",
@@ -4019,6 +4017,8 @@ dependencies = [
  "rstest",
  "serde_json",
  "serial_test",
+ "shannon-nu-cli",
+ "shannon-nu-lsp",
  "simplelog",
  "tango-bench",
  "tempfile",
@@ -4033,47 +4033,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
  "windows-sys 0.61.0",
-]
-
-[[package]]
-name = "nu-cli"
-version = "0.111.0"
-dependencies = [
- "chrono",
- "crossterm 0.29.0",
- "fancy-regex",
- "is_executable",
- "log",
- "lscolors",
- "miette",
- "nu-ansi-term",
- "nu-cmd-base",
- "nu-cmd-lang",
- "nu-color-config",
- "nu-command",
- "nu-engine",
- "nu-experimental",
- "nu-glob",
- "nu-parser",
- "nu-path",
- "nu-plugin-engine",
- "nu-protocol",
- "nu-std",
- "nu-test-support",
- "nu-utils",
- "nucleo-matcher",
- "percent-encoding",
- "reedline",
- "rstest",
- "strum 0.27.2",
- "sysinfo",
- "tempfile",
- "tree-sitter",
- "tree-sitter-bash",
- "tree-sitter-language",
- "unicode-segmentation",
- "uuid",
- "which 8.0.0",
 ]
 
 [[package]]
@@ -4360,35 +4319,6 @@ dependencies = [
  "rstest",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "nu-lsp"
-version = "0.111.0"
-dependencies = [
- "assert-json-diff",
- "crossbeam-channel",
- "fancy-regex",
- "lsp-server",
- "lsp-textdocument",
- "lsp-types",
- "memchr",
- "miette",
- "nu-cli",
- "nu-cmd-lang",
- "nu-command",
- "nu-engine",
- "nu-glob",
- "nu-parser",
- "nu-protocol",
- "nu-std",
- "nu-test-support",
- "nu-utils",
- "nucleo-matcher",
- "rstest",
- "serde",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -7395,6 +7325,76 @@ dependencies = [
  "is_debug",
  "time",
  "tzdb",
+]
+
+[[package]]
+name = "shannon-nu-cli"
+version = "0.111.0"
+dependencies = [
+ "chrono",
+ "crossterm 0.29.0",
+ "fancy-regex",
+ "is_executable",
+ "log",
+ "lscolors",
+ "miette",
+ "nu-ansi-term",
+ "nu-cmd-base",
+ "nu-cmd-lang",
+ "nu-color-config",
+ "nu-command",
+ "nu-engine",
+ "nu-experimental",
+ "nu-glob",
+ "nu-parser",
+ "nu-path",
+ "nu-plugin-engine",
+ "nu-protocol",
+ "nu-std",
+ "nu-test-support",
+ "nu-utils",
+ "nucleo-matcher",
+ "percent-encoding",
+ "reedline",
+ "rstest",
+ "strum 0.27.2",
+ "sysinfo",
+ "tempfile",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-language",
+ "unicode-segmentation",
+ "uuid",
+ "which 8.0.0",
+]
+
+[[package]]
+name = "shannon-nu-lsp"
+version = "0.111.0"
+dependencies = [
+ "assert-json-diff",
+ "crossbeam-channel",
+ "fancy-regex",
+ "lsp-server",
+ "lsp-textdocument",
+ "lsp-types",
+ "memchr",
+ "miette",
+ "nu-cmd-lang",
+ "nu-command",
+ "nu-engine",
+ "nu-glob",
+ "nu-parser",
+ "nu-protocol",
+ "nu-std",
+ "nu-test-support",
+ "nu-utils",
+ "nucleo-matcher",
+ "rstest",
+ "serde",
+ "serde_json",
+ "shannon-nu-cli",
+ "url",
 ]
 
 [[package]]

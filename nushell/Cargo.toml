@@ -226,7 +226,7 @@ result_large_err = "allow"
 workspace = true
 
 [dependencies]
-nu-cli = { path = "./crates/nu-cli", version = "0.111.0" }
+nu-cli = { path = "./crates/nu-cli", version = "0.111.0", package = "shannon-nu-cli" }
 nu-cmd-base = { path = "./crates/nu-cmd-base", version = "0.111.0" }
 nu-cmd-extra = { path = "./crates/nu-cmd-extra", version = "0.111.0" }
 nu-cmd-lang = { path = "./crates/nu-cmd-lang", version = "0.111.0" }
@@ -235,7 +235,7 @@ nu-command = { path = "./crates/nu-command", version = "0.111.0", default-featur
 nu-engine = { path = "./crates/nu-engine", version = "0.111.0" }
 nu-experimental = { path = "./crates/nu-experimental", version = "0.111.0" }
 nu-explore = { path = "./crates/nu-explore", version = "0.111.0" }
-nu-lsp = { path = "./crates/nu-lsp/", version = "0.111.0" }
+nu-lsp = { path = "./crates/nu-lsp/", version = "0.111.0", package = "shannon-nu-lsp" }
 nu-parser = { path = "./crates/nu-parser", version = "0.111.0" }
 nu-path = { path = "./crates/nu-path", version = "0.111.0" }
 nu-plugin-engine = { path = "./crates/nu-plugin-engine", optional = true, version = "0.111.0" }

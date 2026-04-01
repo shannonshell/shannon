@@ -4,7 +4,7 @@ description = "CLI-related functionality for Nushell"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-cli"
 edition = "2024"
 license = "MIT"
-name = "nu-cli"
+name = "shannon-nu-cli"
 version = "0.111.0"
 
 [lib]

@@ -1,6 +1,6 @@
 [package]
 name = "shannonshell"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "A poly-shell built on nushell with seamless bash compatibility"
 license = "MIT"
@@ -18,7 +18,7 @@ path = "src/main.rs"
 reedline = { version = "0.46.0", path = "reedline", features = ["sqlite", "bashisms"] }
 
 # Nushell library crates
-nu-cli = { version = "0.111.0", path = "nushell/crates/nu-cli", default-features = false, features = ["plugin"] }
+nu-cli = { version = "0.111.0", path = "nushell/crates/nu-cli", package = "shannon-nu-cli", default-features = false, features = ["plugin"] }
 nu-cmd-base = { version = "0.111.0", path = "nushell/crates/nu-cmd-base" }
 nu-cmd-extra = { version = "0.111.0", path = "nushell/crates/nu-cmd-extra" }
 nu-cmd-lang = { version = "0.111.0", path = "nushell/crates/nu-cmd-lang" }
@@ -26,7 +26,7 @@ nu-command = { version = "0.111.0", path = "nushell/crates/nu-command", default-
 nu-engine = { version = "0.111.0", path = "nushell/crates/nu-engine", features = ["os"] }
 nu-explore = { version = "0.111.0", path = "nushell/crates/nu-explore" }
 nu-experimental = { version = "0.111.0", path = "nushell/crates/nu-experimental" }
-nu-lsp = { version = "0.111.0", path = "nushell/crates/nu-lsp" }
+nu-lsp = { version = "0.111.0", path = "nushell/crates/nu-lsp", package = "shannon-nu-lsp" }
 nu-parser = { version = "0.111.0", path = "nushell/crates/nu-parser" }
 nu-path = { version = "0.111.0", path = "nushell/crates/nu-path" }
 nu-protocol = { version = "0.111.0", path = "nushell/crates/nu-protocol", features = ["os"] }
