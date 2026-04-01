@@ -65,6 +65,14 @@ have nushell and bash configured, shannon uses your existing setup automatically
 
 ## Installation
 
+Requires the [Rust toolchain](https://rustup.rs).
+
+```sh
+cargo install shannonshell
+```
+
+Or install from git (latest development version):
+
 ```sh
 cargo install --git https://github.com/shannonshell/shannon
 ```
