@@ -9,8 +9,23 @@ cd "$REPO_DIR"
 
 echo "==> Releasing shannon v$VERSION"
 
-# Update version in Cargo.toml
-sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+# Bump version in all shannon crates
+echo "==> Bumping versions to $VERSION..."
+
+# shannonshell (root) — line 3 is the version
+sed -i '' "3s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+
+# shannon-nu-cli package version
+sed -i '' "s/^version = .*/version = \"$VERSION\"/" nushell/crates/nu-cli/Cargo.toml
+
+# shannon-nu-lsp package version
+sed -i '' "s/^version = .*/version = \"$VERSION\"/" nushell/crates/nu-lsp/Cargo.toml
+
+# Update dep versions on lines referencing shannon-* packages
+# (only these lines have "shannon-nu-" so the pattern is safe)
+sed -i '' "/shannon-nu-/s/version = \"[^\"]*\"/version = \"$VERSION\"/g" Cargo.toml
+sed -i '' "/shannon-nu-/s/version = \"[^\"]*\"/version = \"$VERSION\"/g" nushell/Cargo.toml
+sed -i '' "/shannon-nu-/s/version = \"[^\"]*\"/version = \"$VERSION\"/g" nushell/crates/nu-lsp/Cargo.toml
 
 # Build
 echo "==> Building (release)..."
@@ -23,34 +38,18 @@ cargo test
 # Publish to crates.io (3 crates, in dependency order)
 echo "==> Publishing to crates.io..."
 
-try_publish() {
-  local crate="$1"
-  local manifest="${2:-}"
-  local output
-  local rc
+echo "  Publishing shannon-nu-cli@$VERSION..."
+cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-cli --allow-dirty
+echo "  Waiting for crates.io index..."
+sleep 30
 
-  echo "  Publishing $crate..."
-  if [ -n "$manifest" ]; then
-    output=$(cargo publish --manifest-path "$manifest" -p "$crate" --allow-dirty 2>&1) || rc=$?
-  else
-    output=$(cargo publish --allow-dirty 2>&1) || rc=$?
-  fi
+echo "  Publishing shannon-nu-lsp@$VERSION..."
+cargo publish --manifest-path nushell/Cargo.toml -p shannon-nu-lsp --allow-dirty
+echo "  Waiting for crates.io index..."
+sleep 30
 
-  if echo "$output" | grep -q "already exists"; then
-    echo "  $crate already published, skipping"
-  elif [ "${rc:-0}" -ne 0 ]; then
-    echo "$output" >&2
-    exit 1
-  else
-    echo "$output"
-    echo "  Waiting for crates.io index..."
-    sleep 30
-  fi
-}
-
-try_publish shannon-nu-cli nushell/Cargo.toml
-try_publish shannon-nu-lsp nushell/Cargo.toml
-try_publish shannonshell
+echo "  Publishing shannonshell@$VERSION..."
+cargo publish --allow-dirty
 
 # Commit and tag
 echo "==> Committing and tagging..."
