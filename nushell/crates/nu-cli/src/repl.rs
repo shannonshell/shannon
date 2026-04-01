@@ -73,6 +73,7 @@ pub fn evaluate_repl(
     prerun_command: Option<Spanned<String>>,
     load_std_lib: Option<Spanned<String>>,
     entire_start_time: Instant,
+    mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
 ) -> Result<()> {
     // throughout this code, we hold this stack uniquely.
     // During the main REPL loop, we hand ownership of this value to an Arc,
@@ -205,6 +206,7 @@ pub fn evaluate_repl(
                 use_color,
                 entry_num: &mut entry_num,
                 hostname: hostname.as_deref(),
+                mode_dispatcher: mode_dispatcher.clone(),
             });
 
             // pass the most recent version of the line_editor back
@@ -312,6 +314,7 @@ struct LoopContext<'a> {
     use_color: bool,
     entry_num: &'a mut usize,
     hostname: Option<&'a str>,
+    mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
 }
 
 /// Perform one iteration of the REPL loop
@@ -331,6 +334,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         use_color,
         entry_num,
         hostname,
+        mode_dispatcher,
     } = ctx;
 
     let mut start_time = std::time::Instant::now();
@@ -396,11 +400,24 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         // try to enable bracketed paste
         // It doesn't work on windows system: https://github.com/crossterm-rs/crossterm/issues/737
         .use_bracketed_paste(cfg!(not(target_os = "windows")) && config.bracketed_paste)
-        .with_highlighter(Box::new(NuHighlighter {
-            engine_state: engine_reference.clone(),
-            // STACK-REFERENCE 1
-            stack: stack_arc.clone(),
-        }))
+        // Shannon: use mode-aware highlighter
+        .with_highlighter({
+            let shannon_mode = stack_arc.get_env_var(engine_state, "SHANNON_MODE")
+                .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                .unwrap_or_else(|| "nu".to_string());
+            if shannon_mode == "bash" {
+                Box::new(crate::bash_highlight::BashHighlighter::new(&config))
+                    as Box<dyn reedline::Highlighter>
+            } else if shannon_mode != "nu" {
+                Box::<NoOpHighlighter>::default() as Box<dyn reedline::Highlighter>
+            } else {
+                Box::new(NuHighlighter {
+                    engine_state: engine_reference.clone(),
+                    // STACK-REFERENCE 1
+                    stack: stack_arc.clone(),
+                }) as Box<dyn reedline::Highlighter>
+            }
+        })
         .with_validator(Box::new(NuValidator {
             engine_state: engine_reference.clone(),
         }))
@@ -545,6 +562,37 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
     let line_editor_input_time = std::time::Instant::now();
     match input {
         Ok(Signal::Success(repl_cmd_line_text)) => {
+            // Shannon: handle mode switch command
+            if repl_cmd_line_text.trim() == "__shannon_switch" {
+                if let Some(ref _dispatcher) = mode_dispatcher {
+                    let current = stack
+                        .get_env_var(engine_state, "SHANNON_MODE")
+                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "nu".to_string());
+                    let modes = ["nu", "bash"];
+                    let next_idx = modes.iter().position(|m| *m == current)
+                        .map(|i| (i + 1) % modes.len())
+                        .unwrap_or(0);
+                    stack.add_env_var(
+                        "SHANNON_MODE".to_string(),
+                        Value::string(modes[next_idx], Span::unknown()),
+                    );
+                }
+                return (true, stack, line_editor);
+            }
+            // Shannon: handle exit from non-nu modes
+            if repl_cmd_line_text.trim() == "exit" {
+                if let Some(ref _dispatcher) = mode_dispatcher {
+                    let mode = stack
+                        .get_env_var(engine_state, "SHANNON_MODE")
+                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "nu".to_string());
+                    if mode != "nu" {
+                        return (false, stack, line_editor);
+                    }
+                }
+            }
+
             let history_supports_meta = match engine_state.history_config().map(|h| h.file_format) {
                 #[cfg(feature = "sqlite")]
                 Some(HistoryFileFormat::Sqlite) => true,
@@ -630,6 +678,40 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
             // Actual command execution logic starts from here
             let cmd_execution_start_time = Instant::now();
 
+            // Shannon mode dispatch — intercept non-nushell modes
+            let mut shannon_handled = false;
+            if let Some(ref dispatcher) = mode_dispatcher {
+                let mode = stack
+                    .get_env_var(engine_state, "SHANNON_MODE")
+                    .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+                    .unwrap_or_else(|| "nu".to_string());
+                if mode != "nu" {
+                    #[allow(deprecated)]
+                    let env_strings = env_to_strings(engine_state, &stack).unwrap_or_default();
+                    let cwd = stack
+                        .get_env_var(engine_state, "PWD")
+                        .and_then(|v| v.as_str().ok())
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                    let result = dispatcher.lock().unwrap().execute(
+                        &mode,
+                        &repl_cmd_line_text,
+                        env_strings,
+                        cwd,
+                    );
+                    for (key, value) in &result.env {
+                        stack.add_env_var(
+                            key.clone(),
+                            Value::string(value, Span::unknown()),
+                        );
+                    }
+                    let _ = stack.set_cwd(&result.cwd);
+                    let _ = std::env::set_current_dir(&result.cwd);
+                    shannon_handled = true;
+                }
+            }
+
+            if !shannon_handled {
             match parse_operation(repl_cmd_line_text.clone(), engine_state, &stack) {
                 Ok(operation) => match operation {
                     ReplOperation::AutoCd { cwd, target, span } => {
@@ -667,6 +749,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 },
                 Err(ref e) => error!("Error parsing operation: {e}"),
             }
+            } // end if !shannon_handled
             let cmd_duration = cmd_execution_start_time.elapsed();
 
             stack.add_env_var(
@@ -754,6 +837,9 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 shell_integration_osc633,
                 shell_integration_osc133,
             );
+        }
+        Ok(_) => {
+            // Handle any new reedline Signal variants
         }
     }
     perf!(
@@ -1222,14 +1308,28 @@ fn setup_history(
 fn setup_keybindings(engine_state: &EngineState, line_editor: Reedline) -> Reedline {
     match create_keybindings(engine_state.get_config()) {
         Ok(keybindings) => match keybindings {
-            KeybindingsMode::Emacs(keybindings) => {
+            KeybindingsMode::Emacs(mut keybindings) => {
+                // Shannon: Shift+Tab to cycle shell modes
+                keybindings.add_binding(
+                    crossterm::event::KeyModifiers::SHIFT,
+                    crossterm::event::KeyCode::BackTab,
+                    reedline::ReedlineEvent::ExecuteHostCommand("__shannon_switch".into()),
+                );
                 let edit_mode = Box::new(Emacs::new(keybindings));
                 line_editor.with_edit_mode(edit_mode)
             }
             KeybindingsMode::Vi {
-                insert_keybindings,
-                normal_keybindings,
+                mut insert_keybindings,
+                mut normal_keybindings,
             } => {
+                // Shannon: Shift+Tab to cycle shell modes (both vi modes)
+                for kb in [&mut insert_keybindings, &mut normal_keybindings] {
+                    kb.add_binding(
+                        crossterm::event::KeyModifiers::SHIFT,
+                        crossterm::event::KeyCode::BackTab,
+                        reedline::ReedlineEvent::ExecuteHostCommand("__shannon_switch".into()),
+                    );
+                }
                 let edit_mode = Box::new(Vi::new(insert_keybindings, normal_keybindings));
                 line_editor.with_edit_mode(edit_mode)
             }

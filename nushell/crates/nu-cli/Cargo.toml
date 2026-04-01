@@ -33,6 +33,10 @@ nu-experimental = { path = "../nu-experimental", version = "0.111.0" }
 nu-ansi-term = { workspace = true }
 reedline = { workspace = true, features = ["bashisms"] }
 
+tree-sitter = "0.26"
+tree-sitter-bash = "0.23"
+tree-sitter-language = "0.1"
+
 chrono = { default-features = false, features = ["std"], workspace = true }
 crossterm = { workspace = true }
 fancy-regex = { workspace = true }

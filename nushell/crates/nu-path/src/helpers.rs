@@ -21,7 +21,7 @@ pub fn cache_dir() -> Option<AbsolutePathBuf> {
 /// Return the nushell config directory.
 pub fn nu_config_dir() -> Option<AbsolutePathBuf> {
     configurable_dir_path("XDG_CONFIG_HOME", dirs::config_dir).map(|mut p| {
-        p.push("nushell");
+        p.push("shannon");
         p
     })
 }

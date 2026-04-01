@@ -1,10 +1,12 @@
 #![doc = include_str!("../README.md")]
+mod bash_highlight;
 mod commands;
 mod completions;
 mod config_files;
 mod eval_cmds;
 mod eval_file;
 mod menus;
+mod mode_dispatcher;
 mod nu_highlight;
 mod print;
 mod prompt;
@@ -28,6 +30,8 @@ pub use prompt_update::update_prompt;
 pub use repl::evaluate_repl;
 pub use syntax_highlight::NuHighlighter;
 pub use util::{eval_source, gather_parent_env_vars};
+pub use bash_highlight::BashHighlighter;
+pub use mode_dispatcher::{ModeDispatcher, ModeResult};
 pub use validation::NuValidator;
 
 #[cfg(feature = "plugin")]

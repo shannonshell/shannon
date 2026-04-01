@@ -4068,6 +4068,9 @@ dependencies = [
  "strum 0.27.2",
  "sysinfo",
  "tempfile",
+ "tree-sitter",
+ "tree-sitter-bash",
+ "tree-sitter-language",
  "unicode-segmentation",
  "uuid",
  "which 8.0.0",
@@ -6588,8 +6591,6 @@ dependencies = [
 [[package]]
 name = "reedline"
 version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe9e7c532bfc2759bc8a28902c04e8b993fc13ebd085ee4292eb1b230fa9beef"
 dependencies = [
  "arboard",
  "chrono",
@@ -6601,8 +6602,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strip-ansi-escapes",
- "strum 0.26.3",
- "strum_macros 0.26.4",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "unicase",
  "unicode-segmentation",
@@ -8309,6 +8309,36 @@ dependencies = [
  "urlencoding",
  "windows 0.56.0",
 ]
+
+[[package]]
+name = "tree-sitter"
+version = "0.26.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "887bd495d0582c5e3e0d8ece2233666169fa56a9644d172fc22ad179ab2d0538"
+dependencies = [
+ "cc",
+ "regex",
+ "regex-syntax",
+ "serde_json",
+ "streaming-iterator",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-bash"
+version = "0.23.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "329a4d48623ac337d42b1df84e81a1c9dbb2946907c102ca72db158c1964a52e"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-language"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree_magic_mini"

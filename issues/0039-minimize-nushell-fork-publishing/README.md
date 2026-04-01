@@ -313,3 +313,22 @@ git commit -m "Remove old nushell subtree"
 6. Manual test: Shift+Tab mode switching works
 7. Manual test: bash syntax highlighting works
 8. `grep -r "0.111.2" nushell/` — no 0.111.2 references remain
+
+**Result:** Pass
+
+All verification steps confirmed. Additional fixes required during implementation:
+- `nu-command` and `nu-cli` needed wildcard match arms for new `reedline::Signal`
+  variant (non-exhaustive enum in reedline 0.46.0 vs 0.111.0 code)
+- `src/logger.rs` used 0.111.2 `ShellError::Generic(GenericError::new_internal())`
+  API — converted to 0.111.0 `ShellError::GenericError { ... }` struct variant
+- `src/main.rs` `IoError::new_internal_with_path` needed a `location!()` argument
+  added (0.111.0 has 4 params, 0.111.2 had 3)
+
+#### Conclusion
+
+Nushell fork successfully rebased onto stock 0.111.0. Shannon's nu-cli changes
+(ModeDispatcher, BashHighlighter, REPL hooks, Shift+Tab, NoOpHighlighter) and
+nu-path config dir change applied cleanly. All nushell crates now match the
+crates.io 0.111.0 versions. Root Cargo.toml has both `version` and `path` for
+every dep — path used locally, version used for publishing. Still need to delete
+`nushell-old/` (step 7).
