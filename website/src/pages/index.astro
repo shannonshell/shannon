@@ -1,26 +1,35 @@
 ---
-import Base from "../layouts/Base.astro"
+import Base from "../layouts/Base.astro";
 ---
 
 <Base title="Shannon — Nushell + Bash" showHeaderBrand={false}>
   <section>
-    <div class="flex items-center gap-4 mb-8">
+    <div class="mb-8 flex items-center gap-4">
       <picture>
-        <source srcset="/images/shannon-2-dark.png" media="(prefers-color-scheme: dark)" />
-        <img src="/images/shannon-2-light.png" alt="Shannon logo" class="w-16 h-16" />
+        <source
+          srcset="/images/shannon-2-dark.png"
+          media="(prefers-color-scheme: dark)"
+        />
+        <img
+          src="/images/shannon-2-light.png"
+          alt="Shannon logo"
+          class="h-16 w-16"
+        />
       </picture>
       <div>
-        <h1 class="text-xl font-bold text-foreground">Shannon</h1>
+        <h1 class="text-foreground text-xl font-bold">Shannon</h1>
         <p class="text-primary text-sm font-bold">Nushell + Bash</p>
       </div>
     </div>
 
     <p class="text-foreground mb-6 text-base">
-      Shannon is nushell with a built-in bash mode.
-      Press <span class="text-accent font-bold">Shift+Tab</span> to switch.
+      Shannon is nushell with a built-in bash mode. Press <span
+        class="text-accent font-bold">Shift+Tab</span
+      > to switch.
     </p>
 
-    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-success">[nu]</span> ~ &gt; <span class="text-primary">node</span> --version
+    <pre
+      class="bg-background-dark border-border text-foreground-dark mb-8 border-l-2 p-3 text-xs"><code><span class="text-success">[nu]</span> ~ &gt; <span class="text-primary">node</span> --version
 <span class="text-muted">v22.0.0</span>
 <span class="text-success">[nu]</span> ~ &gt; <span class="text-primary">echo</span> <span class="text-warning">$env</span>.NVM_BIN
 <span class="text-muted">/Users/ryan/.nvm/versions/node/v22.0.0/bin</span>
@@ -39,18 +48,18 @@ import Base from "../layouts/Base.astro"
 <span class="text-success">[nu]</span> ~ &gt; <span class="text-primary">node</span> --version
 <span class="text-muted">v24.0.0</span></code></pre>
 
-    <h2 class="text-primary font-bold mb-3">Why?</h2>
+    <h2 class="text-primary mb-3 font-bold">Why?</h2>
 
     <p class="text-foreground-dark mb-4">
-      Nushell is the best shell. But the world runs on bash. Every tool, every tutorial,
-      every Stack Overflow answer assumes bash. Shannon lets you use both
-      without leaving your shell.
+      Nushell is the best shell. But the world runs on bash. Every tool, every
+      tutorial, every Stack Overflow answer, every AI response assumes bash.
+      Shannon lets you use both without leaving your shell.
     </p>
 
     <ul class="text-foreground-dark mb-6 space-y-2">
       <li>
-        <span class="text-success font-bold">[nu]</span> for structured data,
-        pipelines, and modern shell features
+        <span class="text-success font-bold">[nu]</span> for structured data, pipelines,
+        and modern shell features
       </li>
       <li>
         <span class="text-accent font-bold">[bash]</span> when you need
@@ -58,28 +67,34 @@ import Base from "../layouts/Base.astro"
         <code class="text-secondary">||</code>, or any bash-ism
       </li>
       <li>
-        <span class="text-foreground font-bold">Shift+Tab</span> to switch —
-        env vars and cwd sync automatically
+        <span class="text-foreground font-bold">Shift+Tab</span> to switch — env vars
+        and cwd sync automatically
       </li>
     </ul>
 
-    <h2 class="text-primary font-bold mb-3">Your existing config, just works</h2>
+    <h2 class="text-primary mb-3 font-bold">
+      Your existing config, just works
+    </h2>
 
     <p class="text-foreground-dark mb-4">
-      Shannon uses your existing <span class="text-secondary">.bash_profile</span>
-      and <span class="text-secondary">~/.config/nushell/</span> config.
-      When a tool says <em>"add this to your
-      <span class="text-secondary">.bashrc</span>"</em> — just do it.
-      Shannon's bash subprocess loads your bash config automatically and injects
-      the environment into nushell. No translation needed.
+      Shannon uses your existing <span class="text-secondary"
+        >.bash_profile</span
+      >
+      and <span class="text-secondary">~/.config/nushell/</span> config. When a tool
+      says <em
+        >"add this to your
+        <span class="text-secondary">.bashrc</span>"</em
+      > — just do it. Shannon's bash subprocess loads your bash config automatically
+      and injects the environment into nushell. No translation needed.
     </p>
 
-    <pre class="bg-background-dark p-3 border-l-2 border-border text-foreground-dark text-xs mb-8"><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
+    <pre
+      class="bg-background-dark border-border text-foreground-dark mb-8 border-l-2 p-3 text-xs"><code><span class="text-muted"># ~/.bash_profile (or ~/.bashrc)</span>
 <span class="text-accent">eval</span> <span class="text-success">"$(/opt/homebrew/bin/brew shellenv)"</span>
 <span class="text-accent">export</span> <span class="text-warning">PATH</span>=<span class="text-success">"$PATH:$HOME/.cargo/bin"</span>
 <span class="text-accent">.</span> <span class="text-success">"$HOME/.nvm/nvm.sh"</span></code></pre>
 
-    <h2 class="text-primary font-bold mb-3">Everything nushell, plus bash</h2>
+    <h2 class="text-primary mb-3 font-bold">Everything nushell, plus bash</h2>
 
     <p class="text-foreground-dark mb-4">
       Shannon IS nushell. You get everything — structured data, plugins, job
@@ -87,10 +102,16 @@ import Base from "../layouts/Base.astro"
     </p>
 
     <div class="mt-8 flex gap-4">
-      <a href="/docs/getting-started" class="text-primary hover:text-accent font-bold">
+      <a
+        href="/docs/getting-started"
+        class="text-primary hover:text-accent font-bold"
+      >
         &gt; Get started
       </a>
-      <a href="https://github.com/shannonshell/shannon" class="text-muted hover:text-accent">
+      <a
+        href="https://github.com/shannonshell/shannon"
+        class="text-muted hover:text-accent"
+      >
         GitHub
       </a>
     </div>
