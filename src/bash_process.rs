@@ -50,6 +50,10 @@ impl BashProcess {
             pending_state: None,
         };
 
+        // Enable alias expansion — bash disables it in non-interactive mode
+        // (piped stdin), but users expect aliases to work in bash mode.
+        bp.run_command("shopt -s expand_aliases");
+
         // Trap SIGINT so bash doesn't die when the user presses Ctrl+C.
         // Using `trap 'true' INT` (not `trap '' INT`) ensures children still
         // receive SIGINT with default handling — only SIG_IGN is inherited
