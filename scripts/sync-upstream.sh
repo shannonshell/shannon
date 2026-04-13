@@ -9,10 +9,6 @@ echo "==> Syncing nushell upstream..."
 git subtree pull --prefix nushell upstream-nushell main \
   -m "Merge nushell upstream $DATE"
 
-echo "==> Syncing brush upstream..."
-git subtree pull --prefix brush upstream-brush main \
-  -m "Merge brush upstream $DATE"
-
 echo "==> Syncing reedline upstream..."
 git subtree pull --prefix reedline upstream-reedline main \
   -m "Merge reedline upstream $DATE"
