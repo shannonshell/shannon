@@ -72,6 +72,7 @@ impl PluginCommand for Unique {
                     NuDataFrame::try_from_columns(
                         vec![Column::new("0".to_string(), vec![Value::test_int(2)])],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -97,6 +98,7 @@ impl PluginCommand for Unique {
                             ),
                         ],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -125,6 +127,7 @@ impl PluginCommand for Unique {
                             ),
                         ],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -143,6 +146,7 @@ impl PluginCommand for Unique {
                             vec![Value::test_int(1), Value::test_int(2)],
                         )],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -161,6 +165,7 @@ impl PluginCommand for Unique {
                             vec![Value::test_int(2), Value::test_int(1)],
                         )],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -174,9 +179,9 @@ impl PluginCommand for Unique {
         plugin: &Self::Plugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
-        input: PipelineData,
+        mut input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let metadata = input.metadata();
+        let metadata = input.take_metadata();
         let value = input.into_value(call.head)?;
 
         match PolarsPluginObject::try_from_value(plugin, &value)? {

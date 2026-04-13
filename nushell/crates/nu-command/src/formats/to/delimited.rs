@@ -93,7 +93,7 @@ pub fn to_delimited_data(
     let span = input.span().unwrap_or(head);
     let metadata = Some(
         input
-            .metadata()
+            .take_metadata()
             .unwrap_or_default()
             .with_content_type(content_type),
     );
@@ -132,7 +132,7 @@ pub fn to_delimited_data(
                 Value::Record { val, .. } => val.columns().cloned().collect(),
                 _ => return Err(make_unsupported_input_error(value.get_type(), head, span)),
             };
-            input = PipelineData::value(value, metadata.clone());
+            input = PipelineData::value(value, None);
             columns
         }
     };

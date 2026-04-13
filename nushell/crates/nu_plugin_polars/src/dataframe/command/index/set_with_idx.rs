@@ -70,6 +70,7 @@ impl PluginCommand for SetWithIndex {
                         ],
                     )],
                     None,
+                    Span::test_data(),
                 )
                 .expect("simple df for test should not fail")
                 .into_value(Span::test_data()),

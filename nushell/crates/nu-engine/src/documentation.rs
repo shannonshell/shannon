@@ -12,7 +12,7 @@ use nu_protocol::{
 use nu_utils::terminal_size;
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Write,
     sync::{Arc, LazyLock},
 };
@@ -30,6 +30,7 @@ pub fn get_full_help(
     command: &dyn Command,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) -> String {
     // Precautionary step to capture any command output generated during this operation. We
     // internally call several commands (`table`, `ansi`, `nu-highlight`) and get their
@@ -45,19 +46,19 @@ pub fn get_full_help(
 
     // Create ansi colors
     let mut help_style = HelpStyle::default();
-    help_style.update_from_config(engine_state, &nu_config);
+    help_style.update_from_config(engine_state, &nu_config, head);
 
     let mut long_desc = String::new();
 
     let desc = &sig.description;
     if !desc.is_empty() {
-        long_desc.push_str(&highlight_code(desc, engine_state, stack));
+        long_desc.push_str(&highlight_code(desc, engine_state, stack, head));
         long_desc.push_str("\n\n");
     }
 
     let extra_desc = &sig.extra_description;
     if !extra_desc.is_empty() {
-        long_desc.push_str(&highlight_code(extra_desc, engine_state, stack));
+        long_desc.push_str(&highlight_code(extra_desc, engine_state, stack, head));
         long_desc.push_str("\n\n");
     }
 
@@ -69,6 +70,7 @@ pub fn get_full_help(
             &help_style,
             engine_state,
             stack,
+            head,
         ),
         _ => get_command_documentation(
             &mut long_desc,
@@ -78,6 +80,7 @@ pub fn get_full_help(
             &help_style,
             engine_state,
             stack,
+            head,
         ),
     };
 
@@ -88,7 +91,7 @@ pub fn get_full_help(
     };
 
     if let Some(cmd) = command.as_alias().and_then(|alias| alias.command.as_ref()) {
-        let nested_help = get_full_help(cmd.as_ref(), engine_state, stack);
+        let nested_help = get_full_help(cmd.as_ref(), engine_state, stack, head);
         if !nested_help.is_empty() {
             final_help.push_str("\n\n");
             final_help.push_str(&nested_help);
@@ -104,16 +107,17 @@ fn try_nu_highlight(
     reject_garbage: bool,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) -> Option<String> {
     let highlighter = engine_state.find_decl(b"nu-highlight", &[])?;
 
     let decl = engine_state.get_decl(highlighter);
-    let mut call = Call::new(Span::unknown());
+    let mut call = Call::new(head);
     if reject_garbage {
         call.add_named((
             Spanned {
                 item: "reject-garbage".into(),
-                span: Span::unknown(),
+                span: head,
             },
             None,
             None,
@@ -124,16 +128,21 @@ fn try_nu_highlight(
         engine_state,
         stack,
         &(&call).into(),
-        Value::string(code_string, Span::unknown()).into_pipeline_data(),
+        Value::string(code_string, head).into_pipeline_data(),
     )
-    .and_then(|pipe| pipe.into_value(Span::unknown()))
+    .and_then(|pipe| pipe.into_value(head))
     .and_then(|val| val.coerce_into_string())
     .ok()
 }
 
 /// Syntax highlight code using the `nu-highlight` command if available, falling back to the given string
-fn nu_highlight_string(code_string: &str, engine_state: &EngineState, stack: &mut Stack) -> String {
-    try_nu_highlight(code_string, false, engine_state, stack)
+fn nu_highlight_string(
+    code_string: &str,
+    engine_state: &EngineState,
+    stack: &mut Stack,
+    head: Span,
+) -> String {
+    try_nu_highlight(code_string, false, engine_state, stack, head)
         .unwrap_or_else(|| code_string.to_string())
 }
 
@@ -142,6 +151,7 @@ fn highlight_capture_group(
     captures: &Captures,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) -> String {
     let Some(content) = captures.get(1) else {
         // this shouldn't happen
@@ -157,9 +167,9 @@ fn highlight_capture_group(
     // but not an internal command is highlighted with the fallback style
     let code_style = Value::record(
         record! {
-            "attr" => Value::string("di", Span::unknown()),
+            "attr" => Value::string("di", head),
         },
-        Span::unknown(),
+        head,
     );
     let color_config = &mut config.color_config;
     color_config.insert("shape_external".into(), code_style.clone());
@@ -170,7 +180,7 @@ fn highlight_capture_group(
     stack.config = Some(Arc::new(config));
 
     // Highlight and reject invalid syntax
-    let highlighted = try_nu_highlight(content.into(), true, engine_state, stack)
+    let highlighted = try_nu_highlight(content.into(), true, engine_state, stack, head)
         // // Make highlighted string italic
         .map(|text| {
             let resets = text.match_indices(RESET).count();
@@ -203,6 +213,7 @@ fn highlight_code<'a>(
     text: &'a str,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) -> Cow<'a, str> {
     let config = stack.get_config(engine_state);
     if !config.use_ansi_coloring.get(engine_state) {
@@ -220,10 +231,11 @@ fn highlight_code<'a>(
     static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(PATTERN).expect("valid regex"));
 
     let do_try_highlight =
-        |captures: &Captures| highlight_capture_group(captures, engine_state, stack);
+        |captures: &Captures| highlight_capture_group(captures, engine_state, stack, head);
     RE.replace_all(text, do_try_highlight)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn get_alias_documentation(
     long_desc: &mut String,
     command: &dyn Command,
@@ -231,15 +243,18 @@ fn get_alias_documentation(
     help_style: &HelpStyle,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) {
     let help_section_name = &help_style.section_name;
     let help_subcolor_one = &help_style.subcolor_one;
 
     let alias_name = &sig.name;
 
-    long_desc.push_str(&format!(
+    write!(
+        long_desc,
         "{help_section_name}Alias{RESET}: {help_subcolor_one}{alias_name}{RESET}"
-    ));
+    )
+    .expect("writing to a String is infallible");
     long_desc.push_str("\n\n");
 
     let Some(alias) = command.as_alias() else {
@@ -250,12 +265,15 @@ fn get_alias_documentation(
     let alias_expansion =
         String::from_utf8_lossy(engine_state.get_span_contents(alias.wrapped_call.span));
 
-    long_desc.push_str(&format!(
+    write!(
+        long_desc,
         "{help_section_name}Expansion{RESET}:\n  {}",
-        nu_highlight_string(&alias_expansion, engine_state, stack)
-    ));
+        nu_highlight_string(&alias_expansion, engine_state, stack, head)
+    )
+    .expect("writing to a String is infallible");
 }
 
+#[allow(clippy::too_many_arguments)]
 fn get_command_documentation(
     long_desc: &mut String,
     command: &dyn Command,
@@ -264,6 +282,7 @@ fn get_command_documentation(
     help_style: &HelpStyle,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) {
     let help_section_name = &help_style.section_name;
     let help_subcolor_one = &help_style.subcolor_one;
@@ -271,18 +290,20 @@ fn get_command_documentation(
     let cmd_name = &sig.name;
 
     if !sig.search_terms.is_empty() {
-        let _ = write!(
+        write!(
             long_desc,
             "{help_section_name}Search terms{RESET}: {help_subcolor_one}{}{RESET}\n\n",
             sig.search_terms.join(", "),
-        );
+        )
+        .expect("writing to a String is infallible");
     }
 
-    let _ = write!(
+    write!(
         long_desc,
         "{help_section_name}Usage{RESET}:\n  > {}\n",
         sig.call_signature()
-    );
+    )
+    .expect("writing to a String is infallible");
 
     // TODO: improve the subcommand name resolution
     // issues:
@@ -291,11 +312,13 @@ fn get_command_documentation(
     // - Subcommands are included violating module scoping
     //   - https://github.com/nushell/nushell/issues/11447
     //   - https://github.com/nushell/nushell/issues/11625
+    // - Duplicate entries may appear when a single declaration is visible under multiple names (e.g. script `main` rewritten to filename plus an alias).
+    //   See https://github.com/nushell/nushell/issues/17719.
     let mut subcommands = vec![];
     let signatures = engine_state.get_signatures_and_declids(true);
+    // track which declarations we've already added to `subcommands`
+    let mut seen = HashSet::new();
     for (sig, decl_id) in signatures {
-        let command_type = engine_state.get_decl(decl_id).command_type();
-
         // Prefer the overlay-visible declaration name (if any) for display and matching.
         // Fall back to the signature's name if not present.
         let display_name = engine_state
@@ -303,10 +326,24 @@ fn get_command_documentation(
             .map(|bytes| String::from_utf8_lossy(bytes).to_string())
             .unwrap_or_else(|| sig.name.clone());
 
-        // Don't display removed/deprecated commands in the Subcommands list
-        if display_name.starts_with(&format!("{cmd_name} "))
+        // Don't display removed/deprecated commands in the Subcommands list. We consider a signature a subcommand when either the overlay-visible
+        // `display_name` begins with `cmd_name ` *or* the canonical signature name does; the latter covers cases where `display_name` returns the
+        // alias instead of the script-qualified name due to hashmap ordering.
+        if (display_name.starts_with(&format!("{cmd_name} "))
+            || sig.name.starts_with(&format!("{cmd_name} ")))
             && !matches!(sig.category, Category::Removed)
+            && seen.insert(decl_id)
         {
+            let command_type = engine_state.get_decl(decl_id).command_type();
+
+            // choose which name to show: prefer the overlay-visible one if it actually matches the prefix, otherwise fall back to the canonical
+            // signature name (which is usually the script-qualified form).
+            let name_to_print = if display_name.starts_with(&format!("{cmd_name} ")) {
+                display_name.clone()
+            } else {
+                sig.name.clone()
+            };
+
             // If it's a plugin, alias, or custom command, display that information in the help
             if command_type == CommandType::Plugin
                 || command_type == CommandType::Alias
@@ -314,23 +351,26 @@ fn get_command_documentation(
             {
                 subcommands.push(format!(
                     "  {help_subcolor_one}{} {help_section_name}({}){RESET} - {}",
-                    display_name,
+                    name_to_print,
                     command_type,
-                    highlight_code(&sig.description, engine_state, stack)
+                    highlight_code(&sig.description, engine_state, stack, head)
                 ));
             } else {
                 subcommands.push(format!(
                     "  {help_subcolor_one}{}{RESET} - {}",
-                    display_name,
-                    highlight_code(&sig.description, engine_state, stack)
+                    name_to_print,
+                    highlight_code(&sig.description, engine_state, stack, head)
                 ));
             }
         }
     }
 
     if !subcommands.is_empty() {
-        let _ = write!(long_desc, "\n{help_section_name}Subcommands{RESET}:\n");
+        write!(long_desc, "\n{help_section_name}Subcommands{RESET}:\n")
+            .expect("writing to a String is infallible");
         subcommands.sort();
+        // sort may not remove duplicates when two different names map to the same description string; dedup to be safe.
+        subcommands.dedup();
         long_desc.push_str(&subcommands.join("\n"));
         long_desc.push('\n');
     }
@@ -341,18 +381,27 @@ fn get_command_documentation(
                 &value.to_parsable_string(", ", nu_config),
                 engine_state,
                 stack,
+                head,
             ),
             FormatterValue::CodeString(text) => {
-                highlight_code(text, engine_state, stack).to_string()
+                highlight_code(text, engine_state, stack, head).to_string()
             }
         }))
     }
+
+    write!(
+        long_desc,
+        "\n{help_section_name}Command Type{RESET}:\n  > {}\n",
+        command.command_type()
+    )
+    .expect("writing to a String is infallible");
 
     if !sig.required_positional.is_empty()
         || !sig.optional_positional.is_empty()
         || sig.rest_positional.is_some()
     {
-        let _ = write!(long_desc, "\n{help_section_name}Parameters{RESET}:\n");
+        write!(long_desc, "\n{help_section_name}Parameters{RESET}:\n")
+            .expect("writing to a String is infallible");
         for positional in &sig.required_positional {
             write_positional(
                 long_desc,
@@ -362,6 +411,7 @@ fn get_command_documentation(
                 nu_config,
                 engine_state,
                 stack,
+                head,
             );
         }
         for positional in &sig.optional_positional {
@@ -373,6 +423,7 @@ fn get_command_documentation(
                 nu_config,
                 engine_state,
                 stack,
+                head,
             );
         }
 
@@ -385,6 +436,7 @@ fn get_command_documentation(
                 nu_config,
                 engine_state,
                 stack,
+                head,
             );
         }
     }
@@ -401,16 +453,14 @@ fn get_command_documentation(
         && !sig.input_output_types.is_empty()
         && let Some(decl_id) = engine_state.find_decl(b"table", &[])
     {
-        // FIXME: we may want to make this the span of the help command in the future
-        let span = Span::unknown();
         let mut vals = vec![];
         for (input, output) in &sig.input_output_types {
             vals.push(Value::record(
                 record! {
-                    "input" => Value::string(input.to_string(), span),
-                    "output" => Value::string(output.to_string(), span),
+                    "input" => Value::string(input.to_string(), head),
+                    "output" => Value::string(output.to_string(), head),
                 },
-                span,
+                head,
             ));
         }
 
@@ -420,27 +470,28 @@ fn get_command_documentation(
             caller_stack,
             &Call {
                 decl_id,
-                head: span,
+                head,
                 arguments: vec![Argument::Named((
                     Spanned {
                         item: "width".to_string(),
-                        span: Span::unknown(),
+                        span: head,
                     },
                     None,
                     Some(Expression::new_unknown(
                         Expr::Int(get_term_width() as i64 - 2), // padding, see below
-                        Span::unknown(),
+                        head,
                         Type::Int,
                     )),
                 ))],
                 parser_info: HashMap::new(),
             },
-            PipelineData::value(Value::list(vals, span), None),
-        ) && let Ok((str, ..)) = result.collect_string_strict(span)
+            PipelineData::value(Value::list(vals, head), None),
+        ) && let Ok((str, ..)) = result.collect_string_strict(head)
         {
-            let _ = writeln!(long_desc, "\n{help_section_name}Input/output types{RESET}:");
+            writeln!(long_desc, "\n{help_section_name}Input/output types{RESET}:")
+                .expect("writing to a String is infallible");
             for line in str.lines() {
-                let _ = writeln!(long_desc, "  {line}");
+                writeln!(long_desc, "  {line}").expect("writing to a String is infallible");
             }
         }
     }
@@ -448,29 +499,36 @@ fn get_command_documentation(
     let examples = command.examples();
 
     if !examples.is_empty() {
-        let _ = write!(long_desc, "\n{help_section_name}Examples{RESET}:");
+        write!(long_desc, "\n{help_section_name}Examples{RESET}:")
+            .expect("writing to a String is infallible");
     }
 
     for example in examples {
         long_desc.push('\n');
         long_desc.push_str("  ");
-        long_desc.push_str(&highlight_code(example.description, engine_state, stack));
+        long_desc.push_str(&highlight_code(
+            example.description,
+            engine_state,
+            stack,
+            head,
+        ));
 
         if !nu_config.use_ansi_coloring.get(engine_state) {
-            let _ = write!(long_desc, "\n  > {}\n", example.example);
+            write!(long_desc, "\n  > {}\n", example.example)
+                .expect("writing to a String is infallible");
         } else {
-            let code_string = nu_highlight_string(example.example, engine_state, stack);
-            let _ = write!(long_desc, "\n  > {code_string}\n");
+            let code_string = nu_highlight_string(example.example, engine_state, stack, head);
+            write!(long_desc, "\n  > {code_string}\n").expect("writing to a String is infallible");
         };
 
         if let Some(result) = &example.result {
-            let mut table_call = Call::new(Span::unknown());
+            let mut table_call = Call::new(head);
             if example.example.ends_with("--collapse") {
                 // collapse the result
                 table_call.add_named((
                     Spanned {
                         item: "collapse".to_string(),
-                        span: Span::unknown(),
+                        span: head,
                     },
                     None,
                     None,
@@ -480,7 +538,7 @@ fn get_command_documentation(
                 table_call.add_named((
                     Spanned {
                         item: "expand".to_string(),
-                        span: Span::unknown(),
+                        span: head,
                     },
                     None,
                     None,
@@ -489,12 +547,12 @@ fn get_command_documentation(
             table_call.add_named((
                 Spanned {
                     item: "width".to_string(),
-                    span: Span::unknown(),
+                    span: head,
                 },
                 None,
                 Some(Expression::new_unknown(
                     Expr::Int(get_term_width() as i64 - 2),
-                    Span::unknown(),
+                    head,
                     Type::Int,
                 )),
             ));
@@ -514,14 +572,15 @@ fn get_command_documentation(
                 });
 
             for item in table.into_iter().flatten() {
-                let _ = writeln!(
+                writeln!(
                     long_desc,
                     "  {}",
                     item.to_expanded_string("", nu_config)
                         .trim_end()
                         .trim_start_matches(|c: char| c.is_whitespace() && c != ' ')
                         .replace('\n', "\n  ")
-                );
+                )
+                .expect("writing to a String is infallible");
             }
         }
     }
@@ -534,13 +593,13 @@ fn update_ansi_from_config(
     engine_state: &EngineState,
     nu_config: &Config,
     theme_component: &str,
+    head: Span,
 ) {
     if let Some(color) = &nu_config.color_config.get(theme_component) {
         let caller_stack = &mut Stack::new().collect_value();
-        let span = Span::unknown();
         let span_id = UNKNOWN_SPAN_ID;
 
-        let argument_opt = get_argument_for_color_value(nu_config, color, span, span_id);
+        let argument_opt = get_argument_for_color_value(nu_config, color, head, span_id);
 
         // Call ansi command using argument
         if let Some(argument) = argument_opt
@@ -550,13 +609,13 @@ fn update_ansi_from_config(
                 caller_stack,
                 &Call {
                     decl_id,
-                    head: span,
+                    head,
                     arguments: vec![argument],
                     parser_info: HashMap::new(),
                 },
                 PipelineData::empty(),
             )
-            && let Ok((str, ..)) = result.collect_string_strict(span)
+            && let Ok((str, ..)) = result.collect_string_strict(head)
         {
             *ansi_code = str;
         }
@@ -593,8 +652,8 @@ fn get_argument_for_color_value(
 
             Some(Argument::Positional(Expression::new_existing(
                 Expr::Record(record_exp),
-                Span::unknown(),
-                UNKNOWN_SPAN_ID,
+                span,
+                span_id,
                 Type::Record(
                     [
                         ("fg".to_string(), Type::String),
@@ -606,8 +665,8 @@ fn get_argument_for_color_value(
         }
         Value::String { val, .. } => Some(Argument::Positional(Expression::new_existing(
             Expr::String(val.clone()),
-            Span::unknown(),
-            UNKNOWN_SPAN_ID,
+            span,
+            span_id,
             Type::String,
         ))),
         _ => None,
@@ -646,24 +705,32 @@ impl HelpStyle {
     /// Implementation detail: currently executes `ansi` command internally thus requiring the
     /// [`EngineState`] for execution.
     /// See <https://github.com/nushell/nushell/pull/10623> for details
-    pub fn update_from_config(&mut self, engine_state: &EngineState, nu_config: &Config) {
+    pub fn update_from_config(
+        &mut self,
+        engine_state: &EngineState,
+        nu_config: &Config,
+        head: Span,
+    ) {
         update_ansi_from_config(
             &mut self.section_name,
             engine_state,
             nu_config,
             "shape_string",
+            head,
         );
         update_ansi_from_config(
             &mut self.subcolor_one,
             engine_state,
             nu_config,
             "shape_external",
+            head,
         );
         update_ansi_from_config(
             &mut self.subcolor_two,
             engine_state,
             nu_config,
             "shape_block",
+            head,
         );
     }
 }
@@ -675,6 +742,7 @@ enum PositionalKind {
     Rest,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_positional(
     long_desc: &mut String,
     positional: &PositionalArg,
@@ -683,6 +751,7 @@ fn write_positional(
     nu_config: &Config,
     engine_state: &EngineState,
     stack: &mut Stack,
+    head: Span,
 ) {
     let help_subcolor_one = &help_style.subcolor_one;
     let help_subcolor_two = &help_style.subcolor_two;
@@ -694,39 +763,44 @@ fn write_positional(
     }
     match &positional.shape {
         SyntaxShape::Keyword(kw, shape) => {
-            let _ = write!(
+            write!(
                 long_desc,
                 "{help_subcolor_one}\"{}\" + {RESET}<{help_subcolor_two}{}{RESET}>",
                 String::from_utf8_lossy(kw),
                 shape,
-            );
+            )
+            .expect("writing to a String is infallible");
         }
         _ => {
-            let _ = write!(
+            write!(
                 long_desc,
                 "{help_subcolor_one}{}{RESET} <{help_subcolor_two}{}{RESET}>",
                 positional.name, &positional.shape,
-            );
+            )
+            .expect("writing to a String is infallible");
         }
     };
     if !positional.desc.is_empty() || arg_kind == PositionalKind::Optional {
-        let _ = write!(
+        write!(
             long_desc,
             ": {}",
-            highlight_code(&positional.desc, engine_state, stack)
-        );
+            highlight_code(&positional.desc, engine_state, stack, head)
+        )
+        .expect("writing to a String is infallible");
     }
     if arg_kind == PositionalKind::Optional {
         if let Some(value) = &positional.default_value {
-            let _ = write!(
+            write!(
                 long_desc,
                 " (optional, default: {})",
                 nu_highlight_string(
                     &value.to_parsable_string(", ", nu_config),
                     engine_state,
-                    stack
+                    stack,
+                    head
                 )
-            );
+            )
+            .expect("writing to a String is infallible");
         } else {
             long_desc.push_str(" (optional)");
         };
@@ -759,34 +833,40 @@ fn write_flag_to_long_desc<F>(
     long_desc.push_str("  ");
     // Short flag shown before long flag
     if let Some(short) = flag.short {
-        let _ = write!(long_desc, "{help_subcolor_one}-{short}{RESET}");
+        write!(long_desc, "{help_subcolor_one}-{short}{RESET}")
+            .expect("writing to a String is infallible");
         if !flag.long.is_empty() {
-            let _ = write!(long_desc, "{DEFAULT_COLOR},{RESET} ");
+            write!(long_desc, "{DEFAULT_COLOR},{RESET} ")
+                .expect("writing to a String is infallible");
         }
     }
     if !flag.long.is_empty() {
-        let _ = write!(long_desc, "{help_subcolor_one}--{}{RESET}", flag.long);
+        write!(long_desc, "{help_subcolor_one}--{}{RESET}", flag.long)
+            .expect("writing to a String is infallible");
     }
     if flag.required {
         long_desc.push_str(" (required parameter)")
     }
     // Type/Syntax shape info
     if let Some(arg) = &flag.arg {
-        let _ = write!(long_desc, " <{help_subcolor_two}{arg}{RESET}>");
+        write!(long_desc, " <{help_subcolor_two}{arg}{RESET}>")
+            .expect("writing to a String is infallible");
     }
     if !flag.desc.is_empty() {
-        let _ = write!(
+        write!(
             long_desc,
             ": {}",
             &formatter(FormatterValue::CodeString(&flag.desc))
-        );
+        )
+        .expect("writing to a String is infallible");
     }
     if let Some(value) = &flag.default_value {
-        let _ = write!(
+        write!(
             long_desc,
             " (default: {})",
             &formatter(FormatterValue::DefaultValue(value))
-        );
+        )
+        .expect("writing to a String is infallible");
     }
     long_desc.push('\n');
 }
@@ -794,7 +874,7 @@ fn write_flag_to_long_desc<F>(
 pub fn get_flags_section<F>(
     signature: &Signature,
     help_style: &HelpStyle,
-    mut formatter: F, // format default Value or text with code (because some calls cant access config or nu-highlight)
+    mut formatter: F, // format default Value or text with code (because some calls cannot access config or nu-highlight)
 ) -> String
 where
     F: FnMut(FormatterValue) -> String,
@@ -804,7 +884,8 @@ where
     let help_subcolor_two = &help_style.subcolor_two;
 
     let mut long_desc = String::new();
-    let _ = write!(long_desc, "\n{help_section_name}Flags{RESET}:\n");
+    write!(long_desc, "\n{help_section_name}Flags{RESET}:\n")
+        .expect("writing to a String is infallible");
 
     let help = signature.named.iter().find(|flag| flag.long == "help");
     let required = signature.named.iter().filter(|flag| flag.required);
@@ -850,51 +931,51 @@ mod tests {
         // match: typical example
         let haystack = "Run the `foo` command";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Owned(_)
         ));
 
         // no match: backticks preceded by alphanum
         let haystack = "foo`bar`";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Borrowed(_)
         ));
 
         // match: command at beginning of string is ok
         let haystack = "`my-command` is cool";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Owned(_)
         ));
 
         // match: preceded and followed by newline is ok
-        let haystack = r"
+        let haystack = "
         `command`
         ";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Owned(_)
         ));
 
         // no match: newline between backticks
         let haystack = "// hello `beautiful \n world`";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Borrowed(_)
         ));
 
         // match: backticks followed by period, not letter/number
         let haystack = "try running `my cool command`.";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Owned(_)
         ));
 
         // match: backticks enclosed by parenthesis, not letter/number
         let haystack = "a command (`my cool command`).";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Owned(_)
         ));
 
@@ -902,7 +983,7 @@ mod tests {
         // (the regex sees two backtick pairs with a single backtick inside, which doesn't qualify)
         let haystack = "```\ncode block\n```";
         assert!(matches!(
-            highlight_code(haystack, &engine_state, &mut stack),
+            highlight_code(haystack, &engine_state, &mut stack, Span::test_data()),
             Cow::Borrowed(_)
         ));
     }

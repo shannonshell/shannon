@@ -198,7 +198,7 @@ impl PluginTest {
 
     /// Test a list of plugin examples. Prints an error for each failing example.
     ///
-    /// See [`.test_command_examples()`] for easier usage of this method on a command's examples.
+    /// See [`.test_command_examples()`](Self::test_command_examples) for easier usage of this method on a command's examples.
     ///
     /// # Example
     ///
@@ -346,7 +346,8 @@ impl PluginTest {
                 PluginCustomValueWithSource::add_source_in(&mut b_serialized, &self.source)?;
                 // Now get the plugin reference and execute the comparison
                 let persistent = self.source.persistent(None)?.get_plugin(None)?;
-                let ordering = persistent.custom_value_partial_cmp(serialized, b_serialized)?;
+                let ordering =
+                    persistent.custom_value_partial_cmp(serialized, b_serialized, a.span())?;
                 Ok(matches!(
                     ordering.map(Ordering::from),
                     Some(Ordering::Equal)

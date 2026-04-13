@@ -306,7 +306,8 @@ pub fn response_to_buffer(
     };
 
     // Extract response metadata before consuming the body
-    let metadata = extract_response_metadata(&response, span);
+    let metadata =
+        extract_response_metadata(&response, span).with_content_type(content_type_lowercase);
 
     let reader = UreqTimeoutExtractorReader {
         r: response.into_body().into_reader(),
@@ -510,7 +511,7 @@ fn send_json_request(
 ) -> Result<Response, ShellErrorOrRequestError> {
     match body {
         Value::Int { .. } | Value::Float { .. } | Value::List { .. } | Value::Record { .. } => {
-            let data = value_to_json_value(engine_state, &body, span, serialize_types)?;
+            let data = value_to_json_value(engine_state, body, span, serialize_types)?;
             send_cancellable_request(request_url, Box::new(|| req.send_json(data)), span, signals)
         }
         // If the body type is string, assume it is string json content.
@@ -981,10 +982,7 @@ fn transform_response_using_content_type(
             .map_err(|err| {
                 LabeledError::new(err.to_string())
                     .with_help("cannot parse")
-                    .with_label(
-                        format!("Cannot parse URL: {requested_url}"),
-                        Span::unknown(),
-                    )
+                    .with_label(format!("Cannot parse URL: {requested_url}"), span)
             })?
             .path_segments()
             .and_then(|mut segments| segments.next_back())
@@ -994,7 +992,10 @@ fn transform_response_using_content_type(
                     .extension()
                     .map(|name| name.to_string_lossy().to_string())
             }),
-        _ => Some(content_type.subtype().to_string()),
+        _ => {
+            let subtype = content_type.subtype().as_str();
+            Some(subtype.strip_prefix("x-").unwrap_or(subtype).to_string())
+        }
     };
 
     let output = response_to_buffer(resp, engine_state, span);

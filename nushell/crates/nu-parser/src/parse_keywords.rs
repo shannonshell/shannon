@@ -205,6 +205,7 @@ pub fn parse_def_predecl(working_set: &mut StateWorkingSet, spans: &[Span]) {
 
     if name.contains('#')
         || name.contains('^')
+        || name.contains('%')
         || name.parse::<bytesize::ByteSize>().is_ok()
         || name.parse::<f64>().is_ok()
     {
@@ -247,7 +248,11 @@ pub fn parse_def_predecl(working_set: &mut StateWorkingSet, spans: &[Span]) {
     // The second time is when we actually parse the body itworking_set.
     // We can't reuse the first time because the variables that are created during parse_signature
     // are lost when we exit the scope below.
-    let sig = parse_full_signature(working_set, &spans[signature_pos..]);
+    let sig = parse_full_signature(
+        working_set,
+        &spans[signature_pos..],
+        def_type_name == b"extern",
+    );
     working_set.parse_errors.truncate(starting_error_count);
     working_set.exit_scope();
 
@@ -1209,6 +1214,7 @@ pub fn parse_alias(
         let alias_name = if let Some(name) = alias_name_expr.as_string() {
             if name.contains('#')
                 || name.contains('^')
+                || name.contains('%')
                 || name.parse::<bytesize::ByteSize>().is_ok()
                 || name.parse::<f64>().is_ok()
             {

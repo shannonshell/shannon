@@ -11,8 +11,10 @@ use std::{
     io::{self, BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
+
+use nu_utils::time::Instant;
 
 #[derive(Clone)]
 pub struct Save;
@@ -215,11 +217,7 @@ impl Command for Save {
                 // It's not necessary to check if we are saving to the same file if this is a
                 // collected value, and not a stream
                 if !matches!(input, PipelineData::Value(..) | PipelineData::Empty) {
-                    check_saving_to_source_file(
-                        input.metadata().as_ref(),
-                        &path,
-                        stderr_path.as_ref(),
-                    )?;
+                    check_saving_to_source_file(input.metadata_ref(), &path, stderr_path.as_ref())?;
                 }
 
                 // Try to convert the input pipeline into another type if we know the extension

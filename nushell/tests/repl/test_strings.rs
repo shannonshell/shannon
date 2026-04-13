@@ -59,7 +59,7 @@ fn single_tick_interpolation() -> TestResult {
 
 #[test]
 fn unclosed_interpolation_subexpression() -> TestResult {
-    fail_test("$\"foo (2 + 3\"", "unclosed )")
+    fail_test("$\"foo (2 + 3\"", "expected closing )")
 }
 
 #[test]

@@ -45,6 +45,7 @@ pub fn evaluate_file(
                 "Input file name '{}' is not valid UTF8",
                 file_path.to_string_lossy()
             ),
+            // No call span available during file evaluation startup
             span: Span::unknown(),
         })?;
 
@@ -73,6 +74,7 @@ pub fn evaluate_file(
         )
     })?;
 
+    // These env vars are set before parsing, so no source span is available
     stack.add_env_var(
         "FILE_PWD".to_string(),
         Value::string(parent.to_string_lossy(), Span::unknown()),
@@ -187,16 +189,16 @@ pub fn evaluate_file(
         // Print the pipeline output of the last command of the file.
         print_pipeline(engine_state, stack, pipeline, true)?;
 
-        // Invoke the main command with arguments.  Keep using `main` as the
-        // internal command name so the parser reliably resolves it; the block's
-        // signature was already rewritten to the script filename above, so help
-        // messages will show the correct `script.nu`-qualified name.
-        // Arguments with whitespaces are quoted, thus can be safely concatenated by whitespace.
-        let args = format!("main {}", args.join(" "));
+        // Invoke the main command with arguments. Keep using `main` as the internal command name
+        // so the parser reliably resolves it; the block's signature was already rewritten to the
+        // script filename above, so help messages will show the correct `script.nu`-qualified name.
+        // The CLI parser has already escaped script arguments via `args_to_script`, so we must not
+        // escape them again here or we would double-quote values like `"arg 2"`.
+        let command_line = format!("main {}", args.join(" "));
         eval_source(
             engine_state,
             stack,
-            args.as_bytes(),
+            command_line.as_bytes(),
             "<commandline>",
             input,
             true,
@@ -212,4 +214,59 @@ pub fn evaluate_file(
     info!("evaluate {}:{}:{}", file!(), line!(), column!());
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use nu_test_support::fs::Stub::FileWithContent;
+    use nu_test_support::playground::Playground;
+    use nu_test_support::prelude::*;
+
+    #[test]
+    fn evaluate_file_arg_with_newline_does_not_split_commands2() -> Result {
+        Playground::setup("evaluate_file_newline_arg", |dirs, sandbox| {
+            sandbox.with_files(&[FileWithContent(
+                "test.nu",
+                r#"def main [...args: string] {
+  let token3 = $args | get 2
+
+  if $token3 starts-with '"' or $token3 ends-with '"' {
+    "error"
+  } else {
+    "ok"
+  }
+}"#,
+            )]);
+
+            test()
+                .cwd(dirs.test())
+                .add_nu_to_path()
+                .run(r#"nu test.nu a b "c\nd"; 'ok'"#)
+                .expect_value_eq("ok")
+        })
+    }
+
+    #[test]
+    fn evaluate_file_quoted_space_arg_is_passed_without_extra_quotes() -> Result {
+        Playground::setup("evaluate_file_quoted_space_arg", |dirs, sandbox| {
+            sandbox.with_files(&[FileWithContent(
+                "test.nu",
+                r#"def main [...args: string] {
+  let token3 = $args | get 1
+
+  if $token3 starts-with '"' or $token3 ends-with '"' {
+    "error"
+  } else {
+    "ok"
+  }
+}"#,
+            )]);
+
+            test()
+                .cwd(dirs.test())
+                .add_nu_to_path()
+                .run(r#"nu test.nu arg1 "arg 2"; 'ok'"#)
+                .expect_value_eq("ok")
+        })
+    }
 }

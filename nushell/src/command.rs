@@ -1,3 +1,4 @@
+use crate::test_bins;
 use lexopt::prelude::*;
 use nu_experimental as experimental_options;
 use nu_parser::escape_for_script_arg;
@@ -5,12 +6,18 @@ use nu_protocol::{
     LabeledError, ShellError, Span, Spanned, Value, config::TableMode, did_you_mean,
 };
 use nu_utils::stdout_write_all_and_flush;
-use std::{ffi::OsString, fmt, path::Path};
+use std::{
+    ffi::OsString,
+    fmt::{self, Write},
+    path::Path,
+};
 
 const HELP_SECTION_COLOR: &str = "\x1b[32m";
 const HELP_FLAG_COLOR: &str = "\x1b[36m";
 const HELP_TYPE_COLOR: &str = "\x1b[94m";
 const HELP_DESC_COLOR: &str = "\x1b[2;39m";
+#[allow(dead_code)]
+const HELP_SUBCMD_COLOR: &str = "\x1b[96m"; // bright cyan, lighter than flags
 const DEFAULT_COLOR: &str = "\x1b[39m";
 const RESET_COLOR: &str = "\x1b[0m";
 const TABLE_MODE_VALUES: &[&str] = &[
@@ -18,6 +25,7 @@ const TABLE_MODE_VALUES: &[&str] = &[
     "thin",
     "light",
     "compact",
+    "frameless",
     "with_love",
     "compact_double",
     "default",
@@ -264,17 +272,25 @@ const CLI_FLAGS: &[CliFlag] = &[
         "log-target",
         None,
         ValueHint::String,
-        "set the target for the log to output. stdout, stderr(default), mixed or file",
+        "set the target for the log to output. stdout, stderr(default), mixed or file (requires --log-file)",
         CliCategory::Logging,
         "nu --log-target stdout",
+    ),
+    CliFlag::value(
+        "log-file",
+        None,
+        ValueHint::Path,
+        "specify a custom log file path (requires --log-target file and --log-level <level>)",
+        CliCategory::Logging,
+        "nu --log-target file --log-file ~/.local/share/nushell/nu.log --log-level info",
     ),
     CliFlag::value(
         "log-include",
         None,
         ValueHint::ListString,
-        "set the Rust module prefixes to include in the log output. default: [nu]",
+        "set the Rust module prefixes to include from the log output",
         CliCategory::Logging,
-        "nu --log-include warn",
+        "nu --log-include info",
     ),
     CliFlag::value(
         "log-exclude",
@@ -295,7 +311,7 @@ const CLI_FLAGS: &[CliFlag] = &[
         "testbin",
         None,
         ValueHint::String,
-        "run internal test binary",
+        "run an internal test binary (see available bins below)",
         CliCategory::Startup,
         "nu --testbin cococo",
     ),
@@ -318,25 +334,25 @@ const CLI_FLAGS: &[CliFlag] = &[
         "ide-goto-def",
         None,
         ValueHint::Int,
-        "go to the definition of the item at the given position",
+        "go to the definition of the item at the given cursor position and file",
         CliCategory::Ide,
-        "nu --ide-goto-def 0",
+        "nu --ide-goto-def 0 script.nu",
     ),
     CliFlag::value(
         "ide-hover",
         None,
         ValueHint::Int,
-        "give information about the item at the given position",
+        "give information about the item at the given cursor position and file",
         CliCategory::Ide,
-        "nu --ide-hover 0",
+        "nu --ide-hover 0 script.nu",
     ),
     CliFlag::value(
         "ide-complete",
         None,
         ValueHint::Int,
-        "list completions for the item at the given position",
+        "list completions for the item at the given cursor position and file",
         CliCategory::Ide,
-        "nu --ide-complete 0",
+        "nu --ide-complete 4 script.nu",
     ),
     CliFlag::value(
         "ide-check",
@@ -344,14 +360,14 @@ const CLI_FLAGS: &[CliFlag] = &[
         ValueHint::Int,
         "run a diagnostic check on the given source and limit number of errors returned to provided number",
         CliCategory::Ide,
-        "nu --ide-check 0",
+        "nu --ide-check 100 script.nu",
     ),
     CliFlag::switch(
         "ide-ast",
         None,
         "generate the ast on the given source",
         CliCategory::Ide,
-        "nu --ide-ast -c \"print 1\"",
+        "nu --ide-ast script.nu",
     ),
     #[cfg(feature = "plugin")]
     CliFlag::value(
@@ -418,6 +434,7 @@ struct CliValues {
     env_file: Option<Spanned<String>>,
     log_level: Option<Spanned<String>>,
     log_target: Option<Spanned<String>>,
+    log_file: Option<Spanned<String>>,
     log_include: Option<Vec<Spanned<String>>>,
     log_exclude: Option<Vec<Spanned<String>>>,
     execute: Option<Spanned<String>>,
@@ -546,6 +563,7 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
                 let value = parse_string_value(&mut parser, "table-mode")?;
                 let normalized = value.trim().to_ascii_lowercase();
                 match normalized.parse::<TableMode>() {
+                    // No source span — CLI argument parsing happens before engine setup
                     Ok(_) => cli.table_mode = Some(Value::string(value, Span::unknown())),
                     Err(valid) => {
                         let suggestion = did_you_mean(TABLE_MODE_VALUES, &normalized)
@@ -569,6 +587,7 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
                     "error style",
                 )?;
                 // Store original case value for error-style
+                // No source span — CLI argument parsing happens before engine setup
                 cli.error_style = Some(Value::string(normalized, Span::unknown()));
             }
             Long("no-newline") => cli.no_newline = Some(spanned_true()),
@@ -600,6 +619,10 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
                     "log target",
                 )?;
                 cli.log_target = Some(spanned_value(value));
+            }
+            Long("log-file") => {
+                let value = parse_string_value(&mut parser, "log-file")?;
+                cli.log_file = Some(spanned_value(value));
             }
             Long("log-include") => {
                 let values = parse_list_values(&mut parser, "log-include")?;
@@ -745,6 +768,7 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
             env_file: cli.env_file,
             log_level: cli.log_level,
             log_target: cli.log_target,
+            log_file: cli.log_file,
             log_include: cli.log_include,
             log_exclude: cli.log_exclude,
             execute: cli.execute,
@@ -772,6 +796,7 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
 }
 
 // Helper to build a spanned boolean-like "true" value.
+// No source span — these originate from CLI argument parsing, before the engine exists.
 fn spanned_true() -> Spanned<String> {
     Spanned {
         item: "true".to_string(),
@@ -780,6 +805,7 @@ fn spanned_true() -> Spanned<String> {
 }
 
 // Wrap a string value in a Spanned wrapper with unknown span.
+// No source span — these originate from CLI argument parsing, before the engine exists.
 fn spanned_value(value: String) -> Spanned<String> {
     Spanned {
         item: value,
@@ -859,6 +885,7 @@ fn parse_port_value(parser: &mut lexopt::Parser, name: &str) -> Result<u16, CliE
 // Helper to parse IDE integer options and wrap in Value::int.
 fn parse_ide_int_option(parser: &mut lexopt::Parser, name: &str) -> Result<Value, CliError> {
     let value = parse_int_value(parser, name)?;
+    // No source span — CLI argument parsing happens before the engine exists
     Ok(Value::int(value, Span::unknown()))
 }
 
@@ -881,7 +908,21 @@ fn parse_list_values(parser: &mut lexopt::Parser, name: &str) -> Result<Vec<Stri
 
 // Parse experimental options, allowing bracketed and comma-delimited forms.
 fn parse_experimental_options(parser: &mut lexopt::Parser) -> Result<Vec<String>, CliError> {
-    let values = parse_list_values(parser, "experimental-options")?;
+    let first = parse_string_value(parser, "experimental-options")?;
+    let mut values = vec![first.clone()];
+
+    let starts_bracket_list = first.trim_start().starts_with('[');
+    let ends_bracket_list = first.trim_end().ends_with(']');
+    if starts_bracket_list && !ends_bracket_list {
+        loop {
+            let next = parse_string_value(parser, "experimental-options")?;
+            let done = next.trim_end().ends_with(']');
+            values.push(next);
+            if done {
+                break;
+            }
+        }
+    }
     let mut parsed = Vec::new();
     for value in values {
         let trimmed = value.trim();
@@ -1244,35 +1285,57 @@ fn cli_help_text() -> String {
         if flags.clone().next().is_none() {
             continue;
         }
-        output.push_str(&format!(
+        write!(
+            output,
             "\n{HELP_SECTION_COLOR}{}:{RESET_COLOR}\n",
             category_name(category)
-        ));
+        )
+        .expect("writing to a String is infallible");
         for flag in flags {
             output.push_str("  ");
             if let Some(short) = flag.short {
-                output.push_str(&format!("{HELP_FLAG_COLOR}-{short}{RESET_COLOR}"));
+                write!(output, "{HELP_FLAG_COLOR}-{short}{RESET_COLOR}")
+                    .expect("writing to a String is infallible");
                 if !flag.long.is_empty() {
-                    output.push_str(&format!("{DEFAULT_COLOR},{RESET_COLOR} "));
+                    write!(output, "{DEFAULT_COLOR},{RESET_COLOR} ")
+                        .expect("writing to a String is infallible");
                 }
             }
             if !flag.long.is_empty() {
-                output.push_str(&format!("{HELP_FLAG_COLOR}--{}{RESET_COLOR}", flag.long));
+                write!(output, "{HELP_FLAG_COLOR}--{}{RESET_COLOR}", flag.long)
+                    .expect("writing to a String is infallible");
             }
             if flag.value != ValueHint::None {
-                output.push_str(&format!(
+                write!(
+                    output,
                     " <{HELP_TYPE_COLOR}{}{RESET_COLOR}>",
                     value_hint(flag.value)
-                ));
+                )
+                .expect("writing to a String is infallible");
             }
-            output.push_str(&format!(
+            write!(
+                output,
                 "\n      {HELP_DESC_COLOR}{}{RESET_COLOR}\n",
                 flag.description
-            ));
-            output.push_str(&format!(
-                "      {HELP_DESC_COLOR}Example: {RESET_COLOR}{}\n",
+            )
+            .expect("writing to a String is infallible");
+            writeln!(
+                output,
+                "      {HELP_DESC_COLOR}Example: {RESET_COLOR}{}",
                 flag.example
-            ));
+            )
+            .expect("writing to a String is infallible");
+
+            // For the --testbin option we augment the static description with a dynamically generated list of the available binaries
+            // and their individual help strings
+            if flag.long == "testbin" {
+                writeln!(
+                    output,
+                    "      {HELP_DESC_COLOR}Available test bins:{RESET_COLOR}"
+                )
+                .expect("writing to a String is infallible");
+                output.push_str(&test_bins::help_list());
+            }
         }
     }
     output
@@ -1327,6 +1390,7 @@ pub(crate) struct NushellCliArgs {
     pub(crate) env_file: Option<Spanned<String>>,
     pub(crate) log_level: Option<Spanned<String>>,
     pub(crate) log_target: Option<Spanned<String>>,
+    pub(crate) log_file: Option<Spanned<String>>,
     pub(crate) log_include: Option<Vec<Spanned<String>>>,
     pub(crate) log_exclude: Option<Vec<Spanned<String>>>,
     pub(crate) execute: Option<Spanned<String>>,
@@ -1347,4 +1411,157 @@ pub(crate) struct NushellCliArgs {
     pub(crate) mcp_transport: Option<Spanned<String>>,
     #[cfg(feature = "mcp")]
     pub(crate) mcp_port: Option<u16>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_bins;
+    use std::ffi::OsString;
+
+    #[test]
+    fn cli_help_includes_testbin_list() {
+        let help = cli_help_text();
+        // the description for the testbin flag should be present
+        assert!(help.contains("--testbin"));
+
+        // there should be an entry for at least one known bin
+        assert!(help.contains("echo_env"));
+
+        // ensure the dynamic list from test_bins::help_list is embedded
+        let list = test_bins::help_list();
+        assert!(help.contains(list.trim()));
+
+        // colored subcommand names should use the new bright-cyan code
+        assert!(help.contains(HELP_SUBCMD_COLOR));
+    }
+
+    #[test]
+    fn test_log_file_parsing() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--log-target"),
+            OsString::from("file"),
+            OsString::from("--log-file"),
+            OsString::from("/tmp/test.log"),
+            OsString::from("--log-level"),
+            OsString::from("info"),
+        ];
+
+        let result = parse_cli_args(args);
+        assert!(result.is_ok());
+
+        let parsed = result.unwrap();
+        assert_eq!(parsed.nu.log_target.as_ref().unwrap().item, "file");
+        assert_eq!(parsed.nu.log_file.as_ref().unwrap().item, "/tmp/test.log");
+        assert_eq!(parsed.nu.log_level.as_ref().unwrap().item, "info");
+    }
+
+    #[test]
+    fn test_log_target_validation() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--log-target"),
+            OsString::from("invalid"),
+        ];
+
+        let result = parse_cli_args(args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn experimental_options_with_script_file_does_not_consume_script_name() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--experimental-options"),
+            OsString::from("[example=true]"),
+            OsString::from("script.nu"),
+        ];
+
+        let parsed = parse_cli_args(args).expect("should parse args");
+        assert_eq!(parsed.script_name, "script.nu");
+        assert_eq!(
+            parsed
+                .nu
+                .experimental_options
+                .expect("experimental options")
+                .iter()
+                .map(|v| v.item.clone())
+                .collect::<Vec<_>>(),
+            vec!["example=true".to_string()]
+        );
+    }
+
+    #[test]
+    fn experimental_options_with_separator_and_script_file_still_works() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--experimental-options"),
+            OsString::from("[example=true]"),
+            OsString::from("--"),
+            OsString::from("script.nu"),
+        ];
+
+        let parsed = parse_cli_args(args).expect("should parse args");
+        assert_eq!(parsed.script_name, "script.nu");
+    }
+
+    #[test]
+    fn experimental_options_repeated_flags_accumulate_values() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--experimental-options"),
+            OsString::from("example=true"),
+            OsString::from("--experimental-options"),
+            OsString::from("pipefail=false"),
+            OsString::from("script.nu"),
+        ];
+
+        let parsed = parse_cli_args(args).expect("should parse args");
+        assert_eq!(parsed.script_name, "script.nu");
+        assert_eq!(
+            parsed
+                .nu
+                .experimental_options
+                .expect("experimental options")
+                .iter()
+                .map(|v| v.item.clone())
+                .collect::<Vec<_>>(),
+            vec!["example=true".to_string(), "pipefail=false".to_string()]
+        );
+    }
+
+    #[test]
+    fn experimental_options_accept_multiple_formats_and_boolean_variants() {
+        let args = vec![
+            OsString::from("nu"),
+            OsString::from("--experimental-options"),
+            OsString::from("[example, pipefail=true, native-clip=false]"),
+            OsString::from("--experimental-options"),
+            OsString::from("reorder-cell-paths"),
+            OsString::from("--experimental-options"),
+            OsString::from("[enforce-runtime-annotations=false, cell-path-types=true]"),
+            OsString::from("script.nu"),
+        ];
+
+        let parsed = parse_cli_args(args).expect("should parse args");
+        assert_eq!(parsed.script_name, "script.nu");
+        assert_eq!(
+            parsed
+                .nu
+                .experimental_options
+                .expect("experimental options")
+                .iter()
+                .map(|v| v.item.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                "example".to_string(),
+                "pipefail=true".to_string(),
+                "native-clip=false".to_string(),
+                "reorder-cell-paths".to_string(),
+                "enforce-runtime-annotations=false".to_string(),
+                "cell-path-types=true".to_string(),
+            ]
+        );
+    }
 }

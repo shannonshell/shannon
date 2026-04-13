@@ -223,7 +223,7 @@ mod test {
                 uuid: Uuid::new_v4(),
                 value: PolarsPluginObject::NuPolarsTestData(Uuid::new_v4(), "object_0".into()),
                 created: Local::now().into(),
-                span: Span::unknown(),
+                span: Span::test_data(),
                 reference_count: 1,
             },
         );
@@ -235,7 +235,7 @@ mod test {
                 uuid: Uuid::new_v4(),
                 value: PolarsPluginObject::NuPolarsTestData(Uuid::new_v4(), "object_1".into()),
                 created: Local::now().into(),
-                span: Span::unknown(),
+                span: Span::test_data(),
                 reference_count: 1,
             },
         );

@@ -61,7 +61,7 @@ impl Command for UniqBy {
         engine_state: &EngineState,
         stack: &mut Stack,
         call: &Call,
-        input: PipelineData,
+        mut input: PipelineData,
     ) -> Result<PipelineData, ShellError> {
         let columns: Vec<String> = call.rest(engine_state, stack, 0)?;
 
@@ -72,7 +72,7 @@ impl Command for UniqBy {
             });
         }
 
-        let metadata = input.metadata();
+        let metadata = input.take_metadata();
 
         let vec: Vec<_> = input.into_iter().collect();
         match validate(&vec, &columns, call.head) {
@@ -170,9 +170,15 @@ fn item_mapper_by_col(cols: Vec<String>) -> impl Fn(crate::ItemMapperState) -> c
     Box::new(move |ms: crate::ItemMapperState| -> crate::ValueCounter {
         let item_column_values = get_data_by_columns(&columns, &ms.item);
 
-        let col_vals = Value::list(item_column_values, Span::unknown());
+        let col_vals = Value::list(item_column_values, ms.head);
 
-        crate::ValueCounter::new_vals_to_compare(ms.item, ms.flag_ignore_case, col_vals, ms.index)
+        crate::ValueCounter::new_vals_to_compare(
+            ms.item,
+            ms.flag_ignore_case,
+            col_vals,
+            ms.index,
+            ms.head,
+        )
     })
 }
 

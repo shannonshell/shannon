@@ -170,7 +170,7 @@ mod test {
     #[test]
     fn test_process_with_valid_parameters() {
         let table_name = Some("test_table".to_string());
-        let span = Span::unknown();
+        let span = Span::test_data();
         let db = Box::new(SQLiteDatabase::new(
             std::path::Path::new(MEMORY_DB),
             Signals::empty(),
@@ -189,7 +189,7 @@ mod test {
     #[test]
     fn test_process_with_missing_table_name() {
         let table_name = None;
-        let span = Span::unknown();
+        let span = Span::test_data();
         let db = Box::new(SQLiteDatabase::new(
             std::path::Path::new(MEMORY_DB),
             Signals::empty(),
@@ -214,7 +214,7 @@ mod test {
     #[test]
     fn test_process_with_missing_columns() {
         let table_name = Some("test_table".to_string());
-        let span = Span::unknown();
+        let span = Span::test_data();
         let db = Box::new(SQLiteDatabase::new(
             std::path::Path::new(MEMORY_DB),
             Signals::empty(),
@@ -234,7 +234,7 @@ mod test {
     #[test]
     fn test_process_with_unsupported_column_data_type() {
         let table_name = Some("test_table".to_string());
-        let span = Span::unknown();
+        let span = Span::test_data();
         let db = Box::new(SQLiteDatabase::new(
             std::path::Path::new(MEMORY_DB),
             Signals::empty(),
