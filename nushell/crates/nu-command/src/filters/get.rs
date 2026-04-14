@@ -18,9 +18,9 @@ impl Command for Get {
     }
 
     fn extra_description(&self) -> &str {
-        r#"This is equivalent to using the cell path access syntax: `$env.OS` is the same as `$env | get OS`.
+        "This is equivalent to using the cell path access syntax: `$env.OS` is the same as `$env | get OS`.
 
-If multiple cell paths are given, this will produce a list of values."#
+If multiple cell paths are given, this will produce a list of values."
     }
 
     fn signature(&self) -> nu_protocol::Signature {
@@ -322,9 +322,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Get)
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Get)
     }
 }

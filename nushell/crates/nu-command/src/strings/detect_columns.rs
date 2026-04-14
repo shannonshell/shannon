@@ -76,7 +76,7 @@ impl Command for DetectColumns {
         vec![
             Example {
                 description: "use --guess if you find default algorithm not working",
-                example: r"
+                example: "
 'Filesystem     1K-blocks      Used Available Use% Mounted on
 none             8150224         4   8150220   1% /mnt/c' | detect columns --guess",
                 result: Some(Value::test_list(vec![Value::test_record(record! {
@@ -1020,8 +1020,8 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        crate::test_examples(DetectColumns)
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(DetectColumns)
     }
 
     /// Ensure that splitting a line using a header offset that falls inside a

@@ -3,12 +3,14 @@
 //! This enables you to assign `const`-constants and execute parse-time code dependent on this.
 //! e.g. `source $my_const`
 use crate::{
-    BlockId, Config, HistoryFileFormat, PipelineData, Record, ShellError, Span, Value, VarId,
+    BlockId, Config, HistoryFileFormat, HistoryPath, PipelineData, Record, ShellError, Span, Value,
+    VarId,
     ast::{Assignment, Block, Call, Expr, Expression, ExternalArgument},
     debugger::{DebugContext, WithoutDebug},
     engine::{EngineState, StateWorkingSet},
     eval_base::Eval,
     record,
+    shell_error::generic::GenericError,
 };
 use nu_system::os_info::{get_kernel_version, get_os_arch, get_os_family, get_os_name};
 use std::{
@@ -85,21 +87,33 @@ pub(crate) fn create_nu_constant(engine_state: &EngineState, span: Span) -> Valu
 
     record.push(
         "history-path",
-        config_path.clone().map_or_else(
-            |e| e,
-            |mut path| {
-                match engine_state.config.history.file_format {
-                    HistoryFileFormat::Sqlite => {
-                        path.push("history.sqlite3");
-                    }
-                    HistoryFileFormat::Plaintext => {
-                        path.push("history.txt");
-                    }
-                }
-                let canon_hist_path = canonicalize_path(engine_state, &path);
+        match &engine_state.config.history.path {
+            HistoryPath::Disabled => Value::string("", span),
+            HistoryPath::Custom(custom_path) => {
+                let effective_path = if custom_path.is_dir() {
+                    custom_path.join(engine_state.config.history.file_format.default_file_name())
+                } else {
+                    custom_path.clone()
+                };
+                let canon_hist_path = canonicalize_path(engine_state, &effective_path);
                 Value::string(canon_hist_path.to_string_lossy(), span)
-            },
-        ),
+            }
+            HistoryPath::Default => config_path.clone().map_or_else(
+                |e| e,
+                |mut path| {
+                    match engine_state.config.history.file_format {
+                        HistoryFileFormat::Sqlite => {
+                            path.push("history.sqlite3");
+                        }
+                        HistoryFileFormat::Plaintext => {
+                            path.push("history.txt");
+                        }
+                    }
+                    let canon_hist_path = canonicalize_path(engine_state, &path);
+                    Value::string(canon_hist_path.to_string_lossy(), span)
+                },
+            ),
+        },
     );
 
     record.push(
@@ -142,13 +156,11 @@ pub(crate) fn create_nu_constant(engine_state: &EngineState, span: Span) -> Valu
             Value::string(canon_home_path.to_string_lossy(), span)
         } else {
             Value::error(
-                ShellError::GenericError {
-                    error: "setting $nu.home-dir failed".into(),
-                    msg: "Could not get home directory".into(),
-                    span: Some(span),
-                    help: None,
-                    inner: vec![],
-                },
+                ShellError::Generic(GenericError::new(
+                    "setting $nu.home-dir failed",
+                    "Could not get home directory",
+                    span,
+                )),
                 span,
             )
         },
@@ -162,13 +174,11 @@ pub(crate) fn create_nu_constant(engine_state: &EngineState, span: Span) -> Valu
             Value::string(canon_data_path.to_string_lossy(), span)
         } else {
             Value::error(
-                ShellError::GenericError {
-                    error: "setting $nu.data-dir failed".into(),
-                    msg: "Could not get data path".into(),
-                    span: Some(span),
-                    help: None,
-                    inner: vec![],
-                },
+                ShellError::Generic(GenericError::new(
+                    "setting $nu.data-dir failed",
+                    "Could not get data path",
+                    span,
+                )),
                 span,
             )
         },
@@ -182,13 +192,11 @@ pub(crate) fn create_nu_constant(engine_state: &EngineState, span: Span) -> Valu
             Value::string(canon_cache_path.to_string_lossy(), span)
         } else {
             Value::error(
-                ShellError::GenericError {
-                    error: "setting $nu.cache-dir failed".into(),
-                    msg: "Could not get cache path".into(),
-                    span: Some(span),
-                    help: None,
-                    inner: vec![],
-                },
+                ShellError::Generic(GenericError::new(
+                    "setting $nu.cache-dir failed",
+                    "Could not get cache path",
+                    span,
+                )),
                 span,
             )
         },
@@ -259,13 +267,11 @@ pub(crate) fn create_nu_constant(engine_state: &EngineState, span: Span) -> Valu
             Value::string(current_exe.to_string_lossy(), span)
         } else {
             Value::error(
-                ShellError::GenericError {
-                    error: "setting $nu.current-exe failed".into(),
-                    msg: "Could not get current executable path".into(),
-                    span: Some(span),
-                    help: None,
-                    inner: vec![],
-                },
+                ShellError::Generic(GenericError::new(
+                    "setting $nu.current-exe failed",
+                    "Could not get current executable path",
+                    span,
+                )),
                 span,
             )
         },

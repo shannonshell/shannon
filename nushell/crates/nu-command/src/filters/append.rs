@@ -25,10 +25,10 @@ impl Command for Append {
     }
 
     fn extra_description(&self) -> &str {
-        r#"Be aware that this command 'unwraps' lists passed to it. So, if you pass a variable to it,
+        "Be aware that this command 'unwraps' lists passed to it. So, if you pass a variable to it,
 and you want the variable's contents to be appended without being unwrapped, it's wise to
 pre-emptively wrap the variable in a list, like so: `append [$val]`. This way, `append` will
-only unwrap the outer list, and leave the variable's contents untouched."#
+only unwrap the outer list, and leave the variable's contents untouched."
     }
 
     fn search_terms(&self) -> Vec<&str> {
@@ -125,9 +125,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Append {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Append)
     }
 }

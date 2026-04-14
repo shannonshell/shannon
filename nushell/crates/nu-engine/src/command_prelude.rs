@@ -11,4 +11,5 @@ pub use nu_protocol::{
     engine::{Call, Command, EngineState, Stack, StateWorkingSet},
     record,
     shell_error::{io::*, job::*},
+    test_record,
 };

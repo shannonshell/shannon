@@ -1,9 +1,9 @@
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, path::PathBuf, sync::Arc};
 
 use log::debug;
 use nu_plugin::EvaluatedCall;
-use nu_protocol::ShellError;
-use polars::prelude::{ParquetWriteOptions, ParquetWriter, SinkOptions};
+use nu_protocol::{ShellError, shell_error::generic::GenericError};
+use polars::prelude::{FileWriteFormat, ParquetWriteOptions, ParquetWriter, UnifiedSinkArgs};
 
 use crate::{
     command::core::resource::Resource,
@@ -22,11 +22,13 @@ pub(crate) fn command_lazy(
     debug!("Writing parquet file {file_path}");
 
     lazy.to_polars()
-        .sink_parquet(
+        .sink(
             resource.clone().into(),
-            ParquetWriteOptions::default(),
-            resource.cloud_options,
-            SinkOptions::default(),
+            FileWriteFormat::Parquet(Arc::new(ParquetWriteOptions::default())),
+            UnifiedSinkArgs {
+                cloud_options: resource.cloud_options.map(Arc::new),
+                ..Default::default()
+            },
         )
         .and_then(|l| l.collect())
         .map_err(|e| polars_file_save_error(e, file_span))
@@ -37,23 +39,23 @@ pub(crate) fn command_lazy(
 
 pub(crate) fn command_eager(df: &NuDataFrame, resource: Resource) -> Result<(), ShellError> {
     let file_span = resource.span;
-    let file_path: PathBuf = resource.try_into()?;
-    let file = File::create(file_path).map_err(|e| ShellError::GenericError {
-        error: "Error with file name".into(),
-        msg: e.to_string(),
-        span: Some(file_span),
-        help: None,
-        inner: vec![],
+    let file_path: PathBuf = resource.as_path_buf();
+    let file = File::create(file_path).map_err(|e| {
+        ShellError::Generic(GenericError::new(
+            "Error with file name",
+            e.to_string(),
+            file_span,
+        ))
     })?;
     let mut polars_df = df.to_polars();
     ParquetWriter::new(file)
         .finish(&mut polars_df)
-        .map_err(|e| ShellError::GenericError {
-            error: "Error saving file".into(),
-            msg: e.to_string(),
-            span: Some(file_span),
-            help: None,
-            inner: vec![],
+        .map_err(|e| {
+            ShellError::Generic(GenericError::new(
+                "Error saving file",
+                e.to_string(),
+                file_span,
+            ))
         })?;
     Ok(())
 }

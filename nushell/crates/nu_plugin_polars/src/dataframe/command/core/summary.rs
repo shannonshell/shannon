@@ -3,6 +3,7 @@ use crate::{PolarsPlugin, values::CustomValueSupport};
 use crate::values::{Column, NuDataFrame, PolarsPluginType};
 
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
+use nu_protocol::shell_error::generic::GenericError;
 use nu_protocol::{
     Category, Example, LabeledError, PipelineData, ShellError, Signature, Span, SyntaxShape, Value,
 };
@@ -142,23 +143,19 @@ fn command(
                         if (&0.0..=&1.0).contains(&val) {
                             Ok(*val)
                         } else {
-                            Err(ShellError::GenericError {
-                                error: "Incorrect value for quantile".into(),
-                                msg: "value should be between 0 and 1".into(),
-                                span: Some(span),
-                                help: None,
-                                inner: vec![],
-                            })
+                            Err(ShellError::Generic(GenericError::new(
+                                "Incorrect value for quantile",
+                                "value should be between 0 and 1",
+                                span,
+                            )))
                         }
                     }
                     Value::Error { error, .. } => Err(*error.clone()),
-                    _ => Err(ShellError::GenericError {
-                        error: "Incorrect value for quantile".into(),
-                        msg: "value should be a float".into(),
-                        span: Some(span),
-                        help: None,
-                        inner: vec![],
-                    }),
+                    _ => Err(ShellError::Generic(GenericError::new(
+                        "Incorrect value for quantile",
+                        "value should be a float",
+                        span,
+                    ))),
                 }
             })
             .collect::<Result<Vec<f64>, ShellError>>()
@@ -193,7 +190,7 @@ fn command(
 
     let tail = df
         .as_ref()
-        .iter()
+        .materialized_column_iter()
         .filter(|col| !matches!(col.dtype(), &DataType::Object("object")))
         .map(|col| {
             let count = col.len() as f64;
@@ -234,12 +231,12 @@ fn command(
         .map(PolarsColumn::from)
         .collect::<Vec<PolarsColumn>>();
 
-    let polars_df = DataFrame::new(res).map_err(|e| ShellError::GenericError {
-        error: "Dataframe Error".into(),
-        msg: e.to_string(),
-        span: Some(call.head),
-        help: None,
-        inner: vec![],
+    let polars_df = DataFrame::new_infer_height(res).map_err(|e| {
+        ShellError::Generic(GenericError::new(
+            "Dataframe Error",
+            e.to_string(),
+            call.head,
+        ))
     })?;
 
     let df = NuDataFrame::new(df.from_lazy, polars_df);

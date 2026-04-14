@@ -81,7 +81,7 @@ impl Command for UpdateCells {
                 })])),
             },
             Example {
-                example: r#"{a: 1, b: 2, c: 3} | update cells { $in + 10 }"#,
+                example: "{a: 1, b: 2, c: 3} | update cells { $in + 10 }",
                 description: "Update each value in a record.",
                 result: Some(Value::test_record(record! {
                     "a" => Value::test_int(11),
@@ -197,9 +197,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(UpdateCells {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(UpdateCells)
     }
 }

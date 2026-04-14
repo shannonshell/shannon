@@ -134,9 +134,7 @@ fn values(
     head: Span,
     input: PipelineData,
 ) -> Result<PipelineData, ShellError> {
-    let input = match input.try_into_stream(engine_state) {
-        Ok(input) | Err(input) => input,
-    };
+    let input = input.into_stream_or_original(engine_state);
     let signals = engine_state.signals().clone();
     match input {
         PipelineData::Empty => Ok(PipelineData::empty()),
@@ -196,9 +194,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Values {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Values)
     }
 }

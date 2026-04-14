@@ -1,6 +1,7 @@
 mod custom_value;
 
 use crate::values::{NuSelector, NuSelectorCustomValue};
+use nu_protocol::shell_error::generic::GenericError;
 use nu_protocol::{ShellError, Span, Value, record};
 use polars::{
     chunked_array::cast::CastOptions,
@@ -225,6 +226,8 @@ pub fn expr_to_value(expr: &Expr, span: Span) -> Result<Value, ShellError> {
                 | AggExpr::AggGroups(expr)
                 | AggExpr::Std(expr, _)
                 | AggExpr::Item { input: expr, .. }
+                | AggExpr::FirstNonNull(expr)
+                | AggExpr::LastNonNull(expr)
                 | AggExpr::Var(expr, _) => expr_to_value(expr.as_ref(), span),
                 AggExpr::Quantile {
                     expr,
@@ -290,11 +293,14 @@ pub fn expr_to_value(expr: &Expr, span: Span) -> Result<Value, ShellError> {
         Expr::Gather {
             expr,
             idx,
-            returns_scalar: _,
+            returns_scalar,
+            null_on_oob,
         } => Ok(Value::record(
             record! {
                 "expr" => expr_to_value(expr.as_ref(), span)?,
                 "idx" => expr_to_value(idx.as_ref(), span)?,
+                "null_on_oob" => Value::bool(*null_on_oob, span),
+                "returns_scalar" => Value::bool(*returns_scalar, span)
             },
             span,
         )),
@@ -374,11 +380,11 @@ pub fn expr_to_value(expr: &Expr, span: Span) -> Result<Value, ShellError> {
                 span,
             ))
         }
-        Expr::Window {
+        Expr::Over {
             function,
             partition_by,
             order_by,
-            options,
+            mapping,
         } => {
             let partition_by: Result<Vec<Value>, ShellError> = partition_by
                 .iter()
@@ -406,7 +412,7 @@ pub fn expr_to_value(expr: &Expr, span: Span) -> Result<Value, ShellError> {
                             Value::nothing(span)
                         }
                     },
-                    "options" => Value::string(format!("{options:?}"), span),
+                    "mapping" => Value::string(format!("{mapping:?}"), span),
                 },
                 span,
             ))
@@ -453,6 +459,49 @@ pub fn expr_to_value(expr: &Expr, span: Span) -> Result<Value, ShellError> {
             },
             span,
         )),
+        Expr::Rolling {
+            function,
+            index_column,
+            period,
+            offset,
+            closed_window,
+        } => Ok(Value::record(
+            record! {
+                "function" => expr_to_value(function, span)?,
+                "index_column" => expr_to_value(index_column, span)?,
+                "period" => Value::string(format!("{period}"), span),
+                "offset" => Value::string(format!("{offset}"), span),
+                "closed_window" => Value::string(format!("{closed_window:?}"), span),
+            },
+            span,
+        )),
+        Expr::StructEval { expr, evaluation } => {
+            let fields: Vec<Value> = evaluation
+                .iter()
+                .map(|expr| expr_to_value(expr, span))
+                .collect::<Result<Vec<Value>, ShellError>>()?;
+
+            Ok(Value::record(
+                record! {
+                    "expr" => expr_to_value(expr.as_ref(), span)?,
+                    "evaluation" => Value::list(fields, span),
+                },
+                span,
+            ))
+        }
+        Expr::Display { inputs, fmt_str } => {
+            let inputs = inputs
+                .iter()
+                .map(|e| expr_to_value(e, span))
+                .collect::<Result<Vec<Value>, ShellError>>()?;
+            Ok(Value::record(
+                record! {
+                    "inputs" => Value::list(inputs, span),
+                    "fmt_str" => Value::string(fmt_str.to_string(), span),
+                },
+                span,
+            ))
+        }
     }
 }
 
@@ -468,13 +517,10 @@ impl Cacheable for NuExpression {
     fn from_cache_value(cv: PolarsPluginObject) -> Result<Self, ShellError> {
         match cv {
             PolarsPluginObject::NuExpression(df) => Ok(df),
-            _ => Err(ShellError::GenericError {
-                error: "Cache value is not an expression".into(),
-                msg: "".into(),
-                span: None,
-                help: None,
-                inner: vec![],
-            }),
+            _ => Err(ShellError::Generic(GenericError::new_internal(
+                "Cache value is not an expression",
+                "",
+            ))),
         }
     }
 }
@@ -517,12 +563,12 @@ impl CustomValueSupport for NuExpression {
             Value::Date { val, .. } => val
                 .to_owned()
                 .timestamp_nanos_opt()
-                .ok_or_else(|| ShellError::GenericError {
-                    error: "Integer overflow".into(),
-                    msg: "Provided datetime in nanoseconds is too large for i64".into(),
-                    span: Some(value.span()),
-                    help: None,
-                    inner: vec![],
+                .ok_or_else(|| {
+                    ShellError::Generic(GenericError::new(
+                        "Integer overflow",
+                        "Provided datetime in nanoseconds is too large for i64",
+                        value.span(),
+                    ))
                 })
                 .map(|nanos| -> NuExpression {
                     nanos

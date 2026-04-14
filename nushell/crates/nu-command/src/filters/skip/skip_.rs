@@ -27,7 +27,7 @@ impl Command for Skip {
     }
 
     fn extra_description(&self) -> &str {
-        r#"To skip specific numbered rows, try `drop nth`. To skip specific named columns, try `reject`."#
+        "To skip specific numbered rows, try `drop nth`. To skip specific named columns, try `reject`."
     }
 
     fn search_terms(&self) -> Vec<&str> {
@@ -140,9 +140,7 @@ mod tests {
     use crate::Skip;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Skip {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Skip)
     }
 }

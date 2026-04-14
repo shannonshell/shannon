@@ -1,5 +1,6 @@
 pub use super::uniq;
 use nu_engine::{column::nonexistent_column, command_prelude::*};
+use nu_protocol::shell_error::generic::GenericError;
 
 #[derive(Clone)]
 pub struct UniqBy;
@@ -135,13 +136,11 @@ fn validate(vec: &[Value], columns: &[String], span: Span) -> Result<(), ShellEr
         let val_span = v.span();
         if let Value::Record { val: record, .. } = &v {
             if columns.is_empty() {
-                return Err(ShellError::GenericError {
-                    error: "expected name".into(),
-                    msg: "requires a column name to filter table data".into(),
-                    span: Some(span),
-                    help: None,
-                    inner: vec![],
-                });
+                return Err(ShellError::Generic(GenericError::new(
+                    "expected name",
+                    "requires a column name to filter table data",
+                    span,
+                )));
             }
 
             if let Some(nonexistent) = nonexistent_column(columns, record.columns()) {
@@ -187,9 +186,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(UniqBy {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(UniqBy)
     }
 }

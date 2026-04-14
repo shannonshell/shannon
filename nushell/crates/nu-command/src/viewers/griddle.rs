@@ -3,6 +3,7 @@ use lscolors::Style;
 use nu_color_config::lookup_ansi_color_style;
 use nu_engine::{command_prelude::*, env_to_string};
 use nu_protocol::Config;
+use nu_protocol::shell_error::generic::GenericError;
 use nu_term_grid::grid::{Alignment, Cell, Direction, Filling, Grid, GridOptions};
 use nu_utils::{get_ls_colors, terminal_size};
 use std::path::Path;
@@ -47,12 +48,12 @@ impl Command for Griddle {
     }
 
     fn extra_description(&self) -> &str {
-        r#"grid was built to give a concise gridded layout for ls. however,
+        "grid was built to give a concise gridded layout for ls. however,
 it determines what to put in the grid by looking for a column named
 'name'. this works great for tables and records but for lists we
 need to do something different. such as with '[one two three] | grid'
 it creates a fake column called 'name' for these values so that it
-prints out the list properly."#
+prints out the list properly."
     }
 
     fn run(
@@ -259,13 +260,14 @@ fn create_grid_output(
     if let Some(grid_display) = grid.fit_into_width(cols as usize) {
         Ok(Value::string(grid_display.to_string(), call.head).into_pipeline_data())
     } else {
-        Err(ShellError::GenericError {
-            error: format!("Couldn't fit grid into {cols} columns"),
-            msg: "too few columns to fit the grid into".into(),
-            span: Some(call.head),
-            help: Some("try rerunning with a different --width".into()),
-            inner: Vec::new(),
-        })
+        Err(ShellError::Generic(
+            GenericError::new(
+                format!("Couldn't fit grid into {cols} columns"),
+                "too few columns to fit the grid into",
+                call.head,
+            )
+            .with_help("try rerunning with a different --width"),
+        ))
     }
 }
 
@@ -349,9 +351,8 @@ fn convert_to_list(
 #[cfg(test)]
 mod test {
     #[test]
-    fn test_examples() {
+    fn test_examples() -> nu_test_support::Result {
         use super::Griddle;
-        use crate::test_examples;
-        test_examples(Griddle {})
+        nu_test_support::test().examples(Griddle)
     }
 }

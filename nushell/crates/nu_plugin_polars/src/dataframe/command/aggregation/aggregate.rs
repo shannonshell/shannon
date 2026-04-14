@@ -7,6 +7,7 @@ use crate::{
 use nu_plugin::{EngineInterface, EvaluatedCall, PluginCommand};
 use nu_protocol::{
     Category, Example, LabeledError, PipelineData, ShellError, Signature, Span, SyntaxShape, Value,
+    shell_error::generic::GenericError,
 };
 use polars::{datatypes::DataType, prelude::Expr};
 
@@ -146,13 +147,17 @@ impl PluginCommand for LazyAggregate {
                 let dtype = group_by.schema.schema.get(name.as_str());
 
                 if let Some(DataType::Object(..)) = dtype {
-                    return Err(ShellError::GenericError {
-                            error: "Object type column not supported for aggregation".into(),
-                            msg: format!("Column '{name}' is type Object"),
-                            span: Some(call.head),
-                            help: Some("Aggregations cannot be performed on Object type columns. Use dtype command to check column types".into()),
-                            inner: vec![],
-                        }).map_err(|e| e.into());
+                    return Err(ShellError::Generic(
+                        GenericError::new(
+                            "Object type column not supported for aggregation",
+                            format!("Column '{name}' is type Object"),
+                            call.head,
+                        )
+                        .with_help(
+                            "Aggregations cannot be performed on Object type columns. Use dtype command to check column types",
+                        ),
+                    ))
+                    .map_err(|e| e.into());
                 }
             }
         }
@@ -183,6 +188,8 @@ fn get_col_name(expr: &Expr) -> Option<String> {
             | polars::prelude::AggExpr::Std(e, _)
             | polars::prelude::AggExpr::Var(e, _)
             | polars::prelude::AggExpr::Item { input: e, .. }
+            | polars::prelude::AggExpr::FirstNonNull(e)
+            | polars::prelude::AggExpr::LastNonNull(e)
             | polars::prelude::AggExpr::Quantile { expr: e, .. } => get_col_name(e.as_ref()),
         },
         Expr::Filter { input: expr, .. }
@@ -198,7 +205,7 @@ fn get_col_name(expr: &Expr) -> Option<String> {
         | Expr::Function { .. }
         | Expr::Literal(_)
         | Expr::BinaryExpr { .. }
-        | Expr::Window { .. }
+        | Expr::Over { .. }
         | Expr::RenameAlias { .. }
         | Expr::Len
         | Expr::SubPlan(_, _)
@@ -207,6 +214,9 @@ fn get_col_name(expr: &Expr) -> Option<String> {
         | Expr::Alias(_, _)
         | Expr::DataTypeFunction(_)
         | Expr::Element
+        | Expr::Rolling { .. }
+        | Expr::StructEval { .. }
+        | Expr::Display { .. }
         | Expr::Eval { .. } => None,
     }
 }

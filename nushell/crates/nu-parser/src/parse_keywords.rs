@@ -23,6 +23,7 @@ use nu_protocol::{
     engine::{DEFAULT_OVERLAY_NAME, StateWorkingSet},
     eval_const::eval_constant,
     parser_path::ParserPath,
+    shell_error::generic::GenericError,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -57,20 +58,6 @@ pub const ALIASABLE_PARSER_KEYWORDS: &[&[u8]] = &[
     b"overlay new",
     b"overlay use",
 ];
-
-pub const RESERVED_VARIABLE_NAMES: [&str; 4] = ["in", "nu", "env", "it"];
-
-pub fn ensure_not_reserved_variable_name(working_set: &mut StateWorkingSet, lvalue: &Expression) {
-    if lvalue.as_var().is_none() {
-        return;
-    }
-
-    let var_name = String::from_utf8_lossy(working_set.get_span_contents(lvalue.span))
-        .trim_start_matches('$')
-        .to_string();
-
-    verify_not_reserved_variable_name(working_set, &var_name, lvalue.span);
-}
 
 /// These parser keywords cannot be aliased (either not possible, or support not yet added)
 pub const UNALIASABLE_PARSER_KEYWORDS: &[&[u8]] = &[
@@ -350,7 +337,7 @@ pub fn parse_for(working_set: &mut StateWorkingSet, lite_command: &LiteCommand) 
                 {
                     let block = working_set.get_block_mut(*block_id);
 
-                    block.signature = Box::new(sig);
+                    *block.signature = sig;
                 }
             }
 
@@ -392,13 +379,6 @@ pub fn parse_for(working_set: &mut StateWorkingSet, lite_command: &LiteCommand) 
     }
 
     Expression::new(working_set, Expr::Call(call), call_span, Type::Nothing)
-}
-
-/// If `name` is a keyword, emit an error.
-fn verify_not_reserved_variable_name(working_set: &mut StateWorkingSet, name: &str, span: Span) {
-    if RESERVED_VARIABLE_NAMES.contains(&name) {
-        working_set.error(ParseError::NameIsBuiltinVar(name.to_string(), span))
-    }
 }
 
 // This is meant for parsing attribute blocks without an accompanying `def` or `extern`. It's
@@ -664,7 +644,7 @@ fn parse_def_inner(
                         // 2.  `def` calls in scripts/runnable code don't *run* any code either,
                         //     they are handled completely by the parser.
                         compile_block_with_id(working_set, *block_id);
-                        working_set.get_block_mut(*block_id).signature = Box::new(sig.clone());
+                        *working_set.get_block_mut(*block_id).signature = sig.clone();
                     }
                     _ => working_set.error(ParseError::Expected(
                         "definition body closure { ... }",
@@ -726,19 +706,6 @@ fn parse_def_inner(
     let mut result = None;
 
     if let (Some(mut signature), Some(block_id)) = (sig.as_signature(), block.as_block()) {
-        for arg_name in &signature.required_positional {
-            verify_not_reserved_variable_name(working_set, &arg_name.name, sig.span);
-        }
-        for arg_name in &signature.optional_positional {
-            verify_not_reserved_variable_name(working_set, &arg_name.name, sig.span);
-        }
-        if let Some(arg_name) = &signature.rest_positional {
-            verify_not_reserved_variable_name(working_set, &arg_name.name, sig.span);
-        }
-        for flag_name in &signature.get_names() {
-            verify_not_reserved_variable_name(working_set, flag_name, sig.span);
-        }
-
         if has_wrapped {
             if let Some(rest) = &signature.rest_positional {
                 if let Some(var_id) = rest.var_id {
@@ -1009,13 +976,14 @@ fn handle_special_attributes(
             "example" => match CustomExample::from_value(value) {
                 Ok(example) => examples.push(example),
                 Err(_) => {
-                    let e = ShellError::GenericError {
-                        error: "nu::shell::invalid_example".into(),
-                        msg: "Value couldn't be converted to an example".into(),
-                        span: Some(val_span),
-                        help: Some("Is `attr example` shadowed?".into()),
-                        inner: vec![],
-                    };
+                    let e = ShellError::Generic(
+                        GenericError::new(
+                            "nu::shell::invalid_example",
+                            "Value couldn't be converted to an example",
+                            val_span,
+                        )
+                        .with_help("Is `attr example` shadowed?"),
+                    );
                     working_set.error(e.wrap(working_set, val_span));
                 }
             },
@@ -1024,13 +992,14 @@ fn handle_special_attributes(
                     search_terms.append(&mut terms);
                 }
                 Err(_) => {
-                    let e = ShellError::GenericError {
-                        error: "nu::shell::invalid_search_terms".into(),
-                        msg: "Value couldn't be converted to search-terms".into(),
-                        span: Some(val_span),
-                        help: Some("Is `attr search-terms` shadowed?".into()),
-                        inner: vec![],
-                    };
+                    let e = ShellError::Generic(
+                        GenericError::new(
+                            "nu::shell::invalid_search_terms",
+                            "Value couldn't be converted to search-terms",
+                            val_span,
+                        )
+                        .with_help("Is `attr search-terms` shadowed?"),
+                    );
                     working_set.error(e.wrap(working_set, val_span));
                 }
             },
@@ -1039,13 +1008,14 @@ fn handle_special_attributes(
                     category.push_str(&term);
                 }
                 Err(_) => {
-                    let e = ShellError::GenericError {
-                        error: "nu::shell::invalid_category".into(),
-                        msg: "Value couldn't be converted to category".into(),
-                        span: Some(val_span),
-                        help: Some("Is `attr category` shadowed?".into()),
-                        inner: vec![],
-                    };
+                    let e = ShellError::Generic(
+                        GenericError::new(
+                            "nu::shell::invalid_category",
+                            "Value couldn't be converted to category",
+                            val_span,
+                        )
+                        .with_help("Is `attr category` shadowed?"),
+                    );
                     working_set.error(e.wrap(working_set, val_span));
                 }
             },
@@ -1060,13 +1030,14 @@ fn handle_special_attributes(
                     }
                 }
                 Err(_) => {
-                    let e = ShellError::GenericError {
-                        error: "nu::shell::invalid_completer".into(),
-                        msg: "Value couldn't be converted to a completer".into(),
-                        span: Some(val_span),
-                        help: Some("Is `attr complete` shadowed?".into()),
-                        inner: vec![],
-                    };
+                    let e = ShellError::Generic(
+                        GenericError::new(
+                            "nu::shell::invalid_completer",
+                            "Value couldn't be converted to a completer",
+                            val_span,
+                        )
+                        .with_help("Is `attr complete` shadowed?"),
+                    );
                     working_set.error(e.wrap(working_set, val_span));
                 }
             },
@@ -1075,13 +1046,14 @@ fn handle_special_attributes(
                     signature.complete = Some(CommandWideCompleter::External);
                 }
                 _ => {
-                    let e = ShellError::GenericError {
-                        error: "nu::shell::invalid_completer".into(),
-                        msg: "This attribute shouldn't return anything".into(),
-                        span: Some(val_span),
-                        help: Some("Is `attr complete` shadowed?".into()),
-                        inner: vec![],
-                    };
+                    let e = ShellError::Generic(
+                        GenericError::new(
+                            "nu::shell::invalid_completer",
+                            "This attribute shouldn't return anything",
+                            val_span,
+                        )
+                        .with_help("Is `attr complete` shadowed?"),
+                    );
                     working_set.error(e.wrap(working_set, val_span));
                 }
             },
@@ -1256,16 +1228,12 @@ pub fn parse_alias(
                 && first_bytes != b"match"
                 && is_math_expression_like(working_set, replacement_spans[0])
             {
-                // TODO: Maybe we need to implement a Display trait for Expression?
                 let starting_error_count = working_set.parse_errors.len();
                 let expr = parse_expression(working_set, replacement_spans);
                 working_set.parse_errors.truncate(starting_error_count);
 
-                let msg = format!("{:?}", expr.expr);
-                let msg_parts: Vec<&str> = msg.split('(').collect();
-
                 working_set.error(ParseError::CantAliasExpression(
-                    msg_parts[0].to_string(),
+                    expr.expr.description().to_string(),
                     replacement_spans[0],
                 ));
                 return alias_pipeline;
@@ -3288,8 +3256,6 @@ pub fn parse_let(working_set: &mut StateWorkingSet, spans: &[Span]) -> Pipeline 
                         working_set.error(ParseError::ExtraTokens(spans[idx + 2]));
                     }
 
-                    ensure_not_reserved_variable_name(working_set, &lvalue);
-
                     let var_id = lvalue.as_var();
                     let rhs_type = rvalue.ty.clone();
 
@@ -3403,8 +3369,6 @@ pub fn parse_const(working_set: &mut StateWorkingSet, spans: &[Span]) -> (Pipeli
                     if idx + 1 < span.0 - 1 {
                         working_set.error(ParseError::ExtraTokens(spans[idx + 2]));
                     }
-
-                    ensure_not_reserved_variable_name(working_set, &lvalue);
 
                     let var_id = lvalue.as_var();
                     let rhs_type = rvalue.ty.clone();
@@ -3566,8 +3530,6 @@ pub fn parse_mut(working_set: &mut StateWorkingSet, spans: &[Span]) -> Pipeline 
                     if idx + 1 < span.0 - 1 {
                         working_set.error(ParseError::ExtraTokens(spans[idx + 2]));
                     }
-
-                    ensure_not_reserved_variable_name(working_set, &lvalue);
 
                     let var_id = lvalue.as_var();
                     let rhs_type = rvalue.ty.clone();

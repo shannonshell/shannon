@@ -3,7 +3,7 @@ use crate::database::SQLiteQueryBuilder;
 use nu_engine::command_prelude::*;
 use nu_protocol::{
     DeprecationEntry, DeprecationType, PipelineIterator, ReportMode, ast::PathMember,
-    casing::Casing,
+    casing::Casing, shell_error::generic::GenericError,
 };
 use std::collections::BTreeSet;
 
@@ -57,9 +57,9 @@ impl Command for Select {
     }
 
     fn extra_description(&self) -> &str {
-        r#"This differs from `get` in that, rather than accessing the given value in the data structure,
+        "This differs from `get` in that, rather than accessing the given value in the data structure,
 it removes all non-selected values from the structure. Hence, using `select` on a table will
-produce a table, a list will produce a list, and a record will produce a record."#
+produce a table, a list will produce a list, and a record will produce a record."
     }
 
     fn search_terms(&self) -> Vec<&str> {
@@ -207,7 +207,7 @@ produce a table, a list will produce a list, and a record will produce a record.
             },
             Example {
                 description: "Select multiple columns by spreading a list.",
-                example: r#"let cols = [name type]; [[name type size]; [Cargo.toml toml 1kb] [Cargo.lock toml 2kb]] | select ...$cols"#,
+                example: "let cols = [name type]; [[name type size]; [Cargo.toml toml 1kb] [Cargo.lock toml 2kb]] | select ...$cols",
                 result: Some(Value::test_list(vec![
                     Value::test_record(record! {
                         "name" => Value::test_string("Cargo.toml"),
@@ -238,13 +238,11 @@ fn select(
         match members.first() {
             Some(PathMember::Int { val, span, .. }) => {
                 if members.len() > 1 {
-                    return Err(ShellError::GenericError {
-                        error: "Select only allows row numbers for rows".into(),
-                        msg: "extra after row number".into(),
-                        span: Some(*span),
-                        help: None,
-                        inner: vec![],
-                    });
+                    return Err(ShellError::Generic(GenericError::new(
+                        "Select only allows row numbers for rows",
+                        "extra after row number",
+                        *span,
+                    )));
                 }
                 unique_rows.insert(*val);
             }
@@ -280,29 +278,19 @@ fn select(
     if let PipelineData::Value(Value::Custom { val, .. }, ..) = &input
         && let Some(table) = val.as_any().downcast_ref::<SQLiteQueryBuilder>()
     {
-        // Check if all columns are simple string paths
-        let mut select_columns = Vec::new();
-        let mut all_simple = true;
-        for col in &columns {
-            if col.members.len() == 1 {
-                if let PathMember::String { val, .. } = &col.members[0] {
-                    select_columns.push(val.clone());
-                } else {
-                    all_simple = false;
-                    break;
-                }
-            } else {
-                all_simple = false;
-                break;
-            }
-        }
-        if all_simple {
-            let select_str = if select_columns.is_empty() {
-                "*".to_string()
-            } else {
-                select_columns.join(", ")
-            };
-            let new_table = table.clone().with_select(select_str);
+        // Push down only simple single-segment string paths; everything else
+        // falls back to the generic in-memory selection path below.
+        let select_columns: Option<Vec<String>> = columns
+            .iter()
+            .map(|column| match column.members.as_slice() {
+                [PathMember::String { val, .. }] => Some(val.clone()),
+                _ => None,
+            })
+            .collect();
+
+        if let Some(select_columns) = select_columns.filter(|selected| !selected.is_empty())
+            && let Some(new_table) = table.project_output_columns(&select_columns)
+        {
             return Ok(Value::custom(Box::new(new_table), call_span).into_pipeline_data());
         }
     }
@@ -409,9 +397,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Select)
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Select)
     }
 }

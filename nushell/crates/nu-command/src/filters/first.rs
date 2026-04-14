@@ -35,6 +35,10 @@ impl Command for First {
             .category(Category::Filters)
     }
 
+    fn search_terms(&self) -> Vec<&str> {
+        vec!["head"]
+    }
+
     fn description(&self) -> &str {
         "Return only the first several rows of the input. Counterpart of `last`. Opposite of `skip`."
     }
@@ -321,9 +325,7 @@ fn first_helper(
 mod test {
     use super::*;
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(First {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(First)
     }
 }

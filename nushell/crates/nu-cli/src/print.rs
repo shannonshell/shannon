@@ -105,12 +105,12 @@ In protocol modes (`--lsp`, `--mcp`), `print` always writes to stderr to keep st
             },
             Example {
                 description: "Print the sum of 2 and 3",
-                example: r#"print (2 + 3)"#,
+                example: "print (2 + 3)",
                 result: None,
             },
             Example {
                 description: "Print 'ABC' from binary data",
-                example: r#"0x[41 42 43] | print --raw"#,
+                example: "0x[41 42 43] | print --raw",
                 result: None,
             },
         ]

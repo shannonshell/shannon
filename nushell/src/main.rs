@@ -46,16 +46,29 @@ fn current_exe_directory() -> PathBuf {
 
 /// Get the current working directory from the environment.
 fn current_dir_from_environment() -> PathBuf {
-    if let Ok(cwd) = std::env::current_dir() {
-        return cwd;
+    let cwd = std::env::current_dir();
+    let pwd = std::env::var("PWD");
+    match (cwd, pwd) {
+        // If current_dir and PWD are the same then use PWD
+        // so the path isn't unnecessarily canonicalized on Unix systems.
+        (Ok(cwd), Ok(pwd)) => {
+            if matches!(same_file::is_same_file(&cwd, &pwd), Ok(true)) {
+                pwd.into()
+            } else {
+                cwd
+            }
+        }
+        // Otherwise prefer current_dir in case it has diverged from PWD
+        (Ok(cwd), _) => cwd,
+        (_, Ok(pwd)) => pwd.into(),
+        _ => {
+            if let Some(home) = nu_path::home_dir() {
+                home.into_std_path_buf()
+            } else {
+                current_exe_directory()
+            }
+        }
     }
-    if let Ok(cwd) = std::env::var("PWD") {
-        return cwd.into();
-    }
-    if let Some(home) = nu_path::home_dir() {
-        return home.into_std_path_buf();
-    }
-    current_exe_directory()
 }
 
 fn main() -> Result<()> {
@@ -222,11 +235,35 @@ fn main() -> Result<()> {
         .get(&engine_state);
 
     // Set up logger
-    if let Some(level) = parsed_nu_cli_args
+    let level_opt = parsed_nu_cli_args
         .log_level
         .as_ref()
-        .map(|level| level.item.clone())
-    {
+        .map(|level| level.item.clone());
+    let target_opt = parsed_nu_cli_args
+        .log_target
+        .as_ref()
+        .map(|target| target.item.clone());
+    let file_opt = parsed_nu_cli_args.log_file.as_ref().map(|f| f.item.clone());
+
+    // Preliminary validation of combinations that should fail regardless of
+    // whether a log level is provided.
+    if file_opt.is_some() && target_opt.as_deref() != Some("file") {
+        eprintln!("ERROR: --log-file requires --log-target file");
+        std::process::exit(1);
+    }
+
+    if target_opt.as_deref() == Some("file") && file_opt.is_none() {
+        eprintln!("ERROR: --log-target file requires --log-file");
+        std::process::exit(1);
+    }
+
+    // Enforce that when logging to a file with a custom path, the user must also specify a log level.
+    if target_opt.as_deref() == Some("file") && file_opt.is_some() && level_opt.is_none() {
+        eprintln!("ERROR: --log-target file with --log-file requires --log-level");
+        std::process::exit(1);
+    }
+
+    if let Some(level) = level_opt {
         let level = if Level::from_str(&level).is_ok() {
             level
         } else {
@@ -235,11 +272,7 @@ fn main() -> Result<()> {
             );
             "info".to_string()
         };
-        let target = parsed_nu_cli_args
-            .log_target
-            .as_ref()
-            .map(|target| target.item.clone())
-            .unwrap_or_else(|| "stderr".to_string());
+        let target = target_opt.unwrap_or_else(|| "stderr".to_string());
 
         let make_filters = |filters: &Option<Vec<Spanned<String>>>| {
             filters.as_ref().map(|filters| {
@@ -254,7 +287,8 @@ fn main() -> Result<()> {
             exclude: make_filters(&parsed_nu_cli_args.log_exclude),
         };
 
-        logger(|builder| configure(&level, &target, filters, builder))?;
+        // logger now expects the closure to return a `Result` so that we can surface configuration errors such as missing `--log-file` when the target is `file`.
+        logger(|builder| configure(&level, &target, file_opt.as_deref(), filters, builder))?;
         // info!("start logging {}:{}:{}", file!(), line!(), column!());
         perf!("start logging", start_time, use_color);
     }
@@ -356,7 +390,7 @@ fn main() -> Result<()> {
                 .to_string_lossy()
                 .to_string(),
         ];
-        let all_lib_dirs: Vec<String> = default_paths.into_iter().chain(user_lib_dirs).collect();
+        let all_lib_dirs: Vec<String> = user_lib_dirs.into_iter().chain(default_paths).collect();
 
         // Convert to Value list for setting env vars and constants
         // No source span — these are startup-computed library directory paths
@@ -379,7 +413,7 @@ fn main() -> Result<()> {
             b"$NU_LIB_DIRS".into(),
             Span::unknown(),
             Type::List(Box::new(Type::String)),
-            true, // is_const
+            false, // is_mutable
         );
         working_set
             .set_variable_const_val(var_id, Value::list(all_lib_dir_values, Span::unknown()));
@@ -479,7 +513,6 @@ fn main() -> Result<()> {
                     nu_protocol::shell_error::io::IoError::new_internal_with_path(
                         err,
                         "Could not resolve plugin path",
-                        nu_protocol::location!(),
                         PathBuf::from(&plugin_filename.item),
                     )
                 })

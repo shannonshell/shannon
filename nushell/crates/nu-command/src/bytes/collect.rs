@@ -11,7 +11,11 @@ impl Command for BytesCollect {
 
     fn signature(&self) -> Signature {
         Signature::build("bytes collect")
-            .input_output_types(vec![(Type::List(Box::new(Type::Binary)), Type::Binary)])
+            .input_output_types(vec![
+                (Type::List(Box::new(Type::Binary)), Type::Binary),
+                (Type::table(), Type::Binary),
+            ])
+            .allow_variants_without_examples(true)
             .optional(
                 "separator",
                 SyntaxShape::Binary,
@@ -93,9 +97,7 @@ impl Command for BytesCollect {
 mod tests {
     use super::*;
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(BytesCollect {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(BytesCollect)
     }
 }

@@ -1,9 +1,9 @@
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, path::PathBuf, sync::Arc};
 
 use log::debug;
 use nu_plugin::EvaluatedCall;
-use nu_protocol::{ShellError, Spanned};
-use polars::prelude::{CsvWriter, SerWriter, SinkOptions};
+use nu_protocol::{ShellError, Spanned, shell_error::generic::GenericError};
+use polars::prelude::{CsvWriter, SerWriter, UnifiedSinkArgs};
 use polars_io::csv::write::{CsvWriterOptions, SerializeOptions};
 
 use crate::{
@@ -30,19 +30,21 @@ pub(crate) fn command_lazy(
 
     let options = CsvWriterOptions {
         include_header: !no_header,
-        serialize_options: SerializeOptions {
+        serialize_options: Arc::new(SerializeOptions {
             separator,
             ..SerializeOptions::default()
-        },
+        }),
         ..CsvWriterOptions::default()
     };
 
     lazy.to_polars()
-        .sink_csv(
+        .sink(
             resource.clone().into(),
-            options,
-            resource.cloud_options,
-            SinkOptions::default(),
+            polars::prelude::FileWriteFormat::Csv(options),
+            UnifiedSinkArgs {
+                cloud_options: resource.cloud_options.map(Arc::new),
+                ..Default::default()
+            },
         )
         .and_then(|l| l.collect())
         .map_err(|e| polars_file_save_error(e, file_span))
@@ -57,16 +59,16 @@ pub(crate) fn command_eager(
     resource: Resource,
 ) -> Result<(), ShellError> {
     let file_span = resource.span;
-    let file_path: PathBuf = resource.try_into()?;
+    let file_path: PathBuf = resource.as_path_buf();
     let delimiter: Option<Spanned<String>> = call.get_flag("csv-delimiter")?;
     let no_header: bool = call.has_flag("csv-no-header")?;
 
-    let mut file = File::create(file_path).map_err(|e| ShellError::GenericError {
-        error: format!("Error with file name: {e}"),
-        msg: "".into(),
-        span: Some(file_span),
-        help: None,
-        inner: vec![],
+    let mut file = File::create(file_path).map_err(|e| {
+        ShellError::Generic(GenericError::new(
+            format!("Error with file name: {e}"),
+            "",
+            file_span,
+        ))
     })?;
 
     let writer = CsvWriter::new(&mut file);
@@ -81,13 +83,11 @@ pub(crate) fn command_eager(
         None => writer,
         Some(d) => {
             if d.item.len() != 1 {
-                return Err(ShellError::GenericError {
-                    error: "Incorrect delimiter".into(),
-                    msg: "Delimiter has to be one char".into(),
-                    span: Some(d.span),
-                    help: None,
-                    inner: vec![],
-                });
+                return Err(ShellError::Generic(GenericError::new(
+                    "Incorrect delimiter",
+                    "Delimiter has to be one char",
+                    d.span,
+                )));
             } else {
                 let delimiter = match d.item.chars().next() {
                     Some(d) => d as u8,
@@ -99,15 +99,13 @@ pub(crate) fn command_eager(
         }
     };
 
-    writer
-        .finish(&mut df.to_polars())
-        .map_err(|e| ShellError::GenericError {
-            error: format!("Error writing to file: {e}"),
-            msg: e.to_string(),
-            span: Some(file_span),
-            help: None,
-            inner: vec![],
-        })?;
+    writer.finish(&mut df.to_polars()).map_err(|e| {
+        ShellError::Generic(GenericError::new(
+            format!("Error writing to file: {e}"),
+            e.to_string(),
+            file_span,
+        ))
+    })?;
     Ok(())
 }
 

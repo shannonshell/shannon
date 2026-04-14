@@ -45,9 +45,7 @@ impl Command for Take {
     ) -> Result<PipelineData, ShellError> {
         let head = call.head;
         let rows_desired: usize = call.req(engine_state, stack, 0)?;
-        let input = match input.try_into_stream(engine_state) {
-            Ok(input) | Err(input) => input,
-        };
+        let input = input.into_stream_or_original(engine_state);
 
         match input {
             PipelineData::Value(val, metadata) => {
@@ -166,9 +164,7 @@ impl Command for Take {
 mod test {
     use super::*;
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Take {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Take)
     }
 }

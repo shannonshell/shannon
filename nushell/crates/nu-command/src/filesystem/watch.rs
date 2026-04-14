@@ -8,7 +8,7 @@ use notify_debouncer_full::{
 };
 use nu_engine::{ClosureEval, command_prelude::*};
 use nu_protocol::{
-    DeprecationEntry, DeprecationType, ReportMode, Signals, engine::Closure, report_shell_error,
+    Signals, engine::Closure, report_shell_error, shell_error::generic::GenericError,
     shell_error::io::IoError,
 };
 
@@ -43,16 +43,6 @@ impl Command for Watch {
         vec!["watcher", "reload", "filesystem"]
     }
 
-    fn deprecation_info(&self) -> Vec<DeprecationEntry> {
-        vec![DeprecationEntry {
-            ty: DeprecationType::Flag("debounce-ms".into()),
-            report_mode: ReportMode::FirstUse,
-            since: Some("0.107.0".into()),
-            expected_removal: Some("0.109.0".into()),
-            help: Some("`--debounce-ms` will be removed in favour of  `--debounce`".into()),
-        }]
-    }
-
     fn signature(&self) -> nu_protocol::Signature {
         Signature::build("watch")
             .input_output_types(vec![
@@ -73,16 +63,10 @@ impl Command for Watch {
                 "Some Nu code to run whenever a file changes. The closure will be passed `operation`, `path`, and `new_path` (for renames only) arguments in that order.",
             )
             .named(
-                "debounce-ms",
-                SyntaxShape::Int,
-                "Debounce changes for this many milliseconds (default: 100). Adjust if you find that single writes are reported as multiple events (deprecated).",
-                Some('d'),
-            )
-            .named(
                 "debounce",
                 SyntaxShape::Duration,
                 "Debounce changes for this duration (default: 100ms). Adjust if you find that single writes are reported as multiple events.",
-                None,
+                Some('d'),
             )
             .named(
                 "glob",
@@ -127,10 +111,9 @@ impl Command for Watch {
         let closure: Option<Closure> = call.opt(engine_state, stack, 1)?;
         let verbose = call.has_flag(engine_state, stack, "verbose")?;
         let quiet = call.has_flag(engine_state, stack, "quiet")?;
-        let debounce_duration: Duration = resolve_duration_arguments(
-            call.get_flag(engine_state, stack, "debounce-ms")?,
-            call.get_flag(engine_state, stack, "debounce")?,
-        )?;
+        let debounce_duration: Duration = call
+            .get_flag(engine_state, stack, "debounce")?
+            .unwrap_or(DEFAULT_WATCH_DEBOUNCE_DURATION);
 
         let glob_flag: Option<Spanned<String>> = call.get_flag(engine_state, stack, "glob")?;
         let glob_pattern = glob_flag
@@ -164,23 +147,20 @@ impl Command for Watch {
 
         let (tx, rx) = channel();
 
-        let mut debouncer =
-            new_debouncer(debounce_duration, None, tx).map_err(|err| ShellError::GenericError {
-                error: "Failed to create watcher".to_string(),
-                msg: err.to_string(),
-                span: Some(call.head),
-                help: None,
-                inner: vec![],
-            })?;
+        let mut debouncer = new_debouncer(debounce_duration, None, tx).map_err(|err| {
+            ShellError::Generic(GenericError::new(
+                "Failed to create watcher",
+                err.to_string(),
+                call.head,
+            ))
+        })?;
 
         if let Err(err) = debouncer.watcher().watch(&path, recursive_mode) {
-            return Err(ShellError::GenericError {
-                error: "Failed to create watcher".to_string(),
-                msg: err.to_string(),
-                span: Some(call.head),
-                help: None,
-                inner: vec![],
-            });
+            return Err(ShellError::Generic(GenericError::new(
+                "Failed to create watcher",
+                err.to_string(),
+                call.head,
+            )));
         }
         // need to cache to make sure that rename event works.
         debouncer.cache().add_root(&path, recursive_mode);
@@ -251,7 +231,7 @@ impl Command for Watch {
         vec![
             Example {
                 description: "Run `cargo test` whenever a Rust file changes.",
-                example: r#"watch . --glob=**/*.rs {|| cargo test }"#,
+                example: "watch . --glob=**/*.rs {|| cargo test }",
                 result: None,
             },
             Example {
@@ -276,33 +256,10 @@ impl Command for Watch {
             },
             Example {
                 description: "Note: if you are looking to run a command every N units of time, this can be accomplished with a loop and sleep.",
-                example: r#"loop { command; sleep duration }"#,
+                example: "loop { command; sleep duration }",
                 result: None,
             },
         ]
-    }
-}
-
-fn resolve_duration_arguments(
-    debounce_duration_flag_ms: Option<Spanned<i64>>,
-    debounce_duration_flag: Option<Spanned<Duration>>,
-) -> Result<Duration, ShellError> {
-    match (debounce_duration_flag, debounce_duration_flag_ms) {
-        (None, None) => Ok(DEFAULT_WATCH_DEBOUNCE_DURATION),
-        (Some(l), Some(r)) => Err(ShellError::IncompatibleParameters {
-            left_message: "Here".to_string(),
-            left_span: l.span,
-            right_message: "and here".to_string(),
-            right_span: r.span,
-        }),
-        (None, Some(val)) => match u64::try_from(val.item) {
-            Ok(v) => Ok(Duration::from_millis(v)),
-            Err(_) => Err(ShellError::TypeMismatch {
-                err_message: "Debounce duration is invalid".to_string(),
-                span: val.span,
-            }),
-        },
-        (Some(v), None) => Ok(v.item),
     }
 }
 
@@ -400,25 +357,19 @@ impl Iterator for WatchIterator {
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => {
                     self.rx = None;
-                    return Some(Err(ShellError::GenericError {
-                        error: "Disconnected".to_string(),
-                        msg: "Unexpected disconnect from file watcher".into(),
-                        span: None,
-                        help: None,
-                        inner: vec![],
-                    }));
+                    return Some(Err(ShellError::Generic(GenericError::new_internal(
+                        "Disconnected",
+                        "Unexpected disconnect from file watcher",
+                    ))));
                 }
             };
 
             let Ok(events) = x else {
                 self.rx = None;
-                return Some(Err(ShellError::GenericError {
-                    error: "Receiving events failed".to_string(),
-                    msg: "Unexpected errors when receiving events".into(),
-                    span: None,
-                    help: None,
-                    inner: vec![],
-                }));
+                return Some(Err(ShellError::Generic(GenericError::new_internal(
+                    "Receiving events failed",
+                    "Unexpected errors when receiving events",
+                ))));
             };
 
             let watch_events = events

@@ -11,7 +11,7 @@ use crate::{
     },
     eval_const::create_nu_constant,
     report_error::ReportLog,
-    shell_error::io::IoError,
+    shell_error::{generic::GenericError, io::IoError},
 };
 use fancy_regex::Regex;
 use lru::LruCache;
@@ -361,9 +361,8 @@ impl EngineState {
         }
 
         let cwd = self.cwd(Some(stack))?;
-        std::env::set_current_dir(cwd).map_err(|err| {
-            IoError::new_internal(err, "Could not set current dir", crate::location!())
-        })?;
+        std::env::set_current_dir(cwd)
+            .map_err(|err| IoError::new_internal(err, "Could not set current dir"))?;
 
         if let Some(config) = stack.config.take() {
             // If config was updated in the stack, replace it.
@@ -528,16 +527,12 @@ impl EngineState {
         // Updating the signatures plugin file with the added signatures
         use std::fs::File;
 
-        let plugin_path = self
-            .plugin_path
-            .as_ref()
-            .ok_or_else(|| ShellError::GenericError {
-                error: "Plugin file path not set".into(),
-                msg: "".into(),
-                span: None,
-                help: Some("you may be running nu with --no-config-file".into()),
-                inner: vec![],
-            })?;
+        let plugin_path = self.plugin_path.as_ref().ok_or_else(|| {
+            ShellError::Generic(
+                GenericError::new_internal("Plugin file path not set", "")
+                    .with_help("you may be running nu with --no-config-file"),
+            )
+        })?;
 
         // Read the current contents of the plugin file if it exists
         let mut contents = match File::open(plugin_path.as_path()) {
@@ -549,7 +544,6 @@ impl EngineState {
                     Err(ShellError::Io(IoError::new_internal_with_path(
                         err,
                         "Failed to open plugin file",
-                        crate::location!(),
                         PathBuf::from(plugin_path),
                     )))
                 }
@@ -566,7 +560,6 @@ impl EngineState {
             IoError::new_internal_with_path(
                 err,
                 "Failed to write plugin file",
-                crate::location!(),
                 PathBuf::from(plugin_path),
             )
         })?;
@@ -820,7 +813,7 @@ impl EngineState {
 
     /// Returns the configuration settings for command history or `None` if history is disabled
     pub fn history_config(&self) -> Option<HistoryConfig> {
-        self.history_enabled.then(|| self.config.history)
+        self.history_enabled.then(|| self.config.history.clone())
     }
 
     pub fn get_var(&self, var_id: VarId) -> &Variable {
@@ -986,13 +979,13 @@ impl EngineState {
     pub fn cwd(&self, stack: Option<&Stack>) -> Result<AbsolutePathBuf, ShellError> {
         // Helper function to create a simple generic error.
         fn error(msg: &str, cwd: impl AsRef<nu_path::Path>) -> ShellError {
-            ShellError::GenericError {
-                error: msg.into(),
-                msg: format!("$env.PWD = {}", cwd.as_ref().display()),
-                span: None,
-                help: Some("Use `cd` to reset $env.PWD into a good state".into()),
-                inner: vec![],
-            }
+            ShellError::Generic(
+                GenericError::new_internal(
+                    msg.to_string(),
+                    format!("$env.PWD = {}", cwd.as_ref().display()),
+                )
+                .with_help("Use `cd` to reset $env.PWD into a good state"),
+            )
         }
 
         // Retrieve $env.PWD from the stack or the engine state.

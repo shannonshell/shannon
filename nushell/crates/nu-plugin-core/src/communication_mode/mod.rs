@@ -93,7 +93,6 @@ impl CommunicationMode {
                                 "Could not interpret local socket name {:?}",
                                 name.to_string_lossy()
                             ),
-                            nu_protocol::location!(),
                         )
                     })?;
                 Ok(PreparedServerCommunication::LocalSocket { listener })
@@ -123,7 +122,6 @@ impl CommunicationMode {
                                     "Could not interpret local socket name {:?}",
                                     name.to_string_lossy()
                                 ),
-                                nu_protocol::location!(),
                             ))
                         })
                 };
@@ -193,7 +191,6 @@ impl PreparedServerCommunication {
                         IoError::new_internal(
                             err,
                             "Could not set non-blocking mode accept for listener",
-                            nu_protocol::location!(),
                         )
                     })?;
                 let mut get_socket = || {
@@ -207,7 +204,6 @@ impl PreparedServerCommunication {
                                     IoError::new_internal(
                                         err,
                                         "Could not disable non-blocking mode for listener",
-                                        nu_protocol::location!(),
                                     )
                                 })?;
                                 result = Some(stream);
@@ -220,7 +216,6 @@ impl PreparedServerCommunication {
                                     return Err(ShellError::Io(IoError::new_internal(
                                         err,
                                         "Accepting new data from listener failed",
-                                        nu_protocol::location!(),
                                     )));
                                 }
                             }

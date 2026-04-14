@@ -2,7 +2,7 @@ use crate::{
     ShellError, Span,
     byte_stream::convert_file,
     engine::{EngineState, FrozenJob, Job},
-    shell_error::io::IoError,
+    shell_error::{generic::GenericError, io::IoError},
 };
 use nu_system::{ExitStatus, ForegroundChild, ForegroundWaitStatus};
 
@@ -150,13 +150,11 @@ impl ExitStatusFuture {
                         None,
                         "failed to get exit code",
                     ))),
-                    Err(err @ RecvError) => Err(ShellError::GenericError {
-                        error: err.to_string(),
-                        msg: "failed to get exit code".into(),
-                        span: span.into(),
-                        help: None,
-                        inner: vec![],
-                    }),
+                    Err(err @ RecvError) => Err(ShellError::Generic(GenericError::new(
+                        err.to_string(),
+                        "failed to get exit code",
+                        span,
+                    ))),
                 };
 
                 *self = ExitStatusFuture::Finished(code.clone().map_err(Box::new));
@@ -173,20 +171,16 @@ impl ExitStatusFuture {
             ExitStatusFuture::Running(receiver) => {
                 let code = match receiver.try_recv() {
                     Ok(Ok(status)) => Ok(Some(status)),
-                    Ok(Err(err)) => Err(ShellError::GenericError {
-                        error: err.to_string(),
-                        msg: "failed to get exit code".to_string(),
-                        span: span.into(),
-                        help: None,
-                        inner: vec![],
-                    }),
-                    Err(TryRecvError::Disconnected) => Err(ShellError::GenericError {
-                        error: "receiver disconnected".to_string(),
-                        msg: "failed to get exit code".into(),
-                        span: span.into(),
-                        help: None,
-                        inner: vec![],
-                    }),
+                    Ok(Err(err)) => Err(ShellError::Generic(GenericError::new(
+                        err.to_string(),
+                        "failed to get exit code",
+                        span,
+                    ))),
+                    Err(TryRecvError::Disconnected) => Err(ShellError::Generic(GenericError::new(
+                        "receiver disconnected",
+                        "failed to get exit code",
+                        span,
+                    ))),
                     Err(TryRecvError::Empty) => Ok(None),
                 };
 
@@ -252,11 +246,11 @@ impl PostWaitCallback {
     /// If `child_pid` is provided, the returned callback will also remove
     /// it from the pid list of the current running job.
     ///
-    /// The given `tag` argument will be used as the tag for the newly created job table entry.
+    /// The given `description` argument will be used as the description for the newly created job table entry.
     pub fn for_job_control(
         engine_state: &EngineState,
         child_pid: Option<u32>,
-        tag: Option<String>,
+        description: Option<String>,
     ) -> Self {
         let this_job = engine_state.current_thread_job().cloned();
         let jobs = engine_state.jobs.clone();
@@ -270,7 +264,10 @@ impl PostWaitCallback {
             if let ForegroundWaitStatus::Frozen(unfreeze) = status {
                 let mut jobs = jobs.lock().expect("jobs lock is poisoned!");
 
-                let job_id = jobs.add_job(Job::Frozen(FrozenJob { unfreeze, tag }));
+                let job_id = jobs.add_job(Job::Frozen(FrozenJob {
+                    unfreeze,
+                    description,
+                }));
 
                 if is_interactive {
                     println!("\nJob {} is frozen", job_id.get());
@@ -384,13 +381,11 @@ impl ChildProcess {
     pub fn into_bytes(self) -> Result<Vec<u8>, ShellError> {
         if self.stderr.is_some() {
             debug_assert!(false, "stderr should not exist");
-            return Err(ShellError::GenericError {
-                error: "internal error".into(),
-                msg: "stderr should not exist".into(),
-                span: self.span.into(),
-                help: None,
-                inner: vec![],
-            });
+            return Err(ShellError::Generic(GenericError::new(
+                "internal error",
+                "stderr should not exist",
+                self.span,
+            )));
         }
 
         let bytes = if let Some(stdout) = self.stdout {
@@ -436,13 +431,11 @@ impl ChildProcess {
                     .join()
                     .map_err(|e| match e.downcast::<io::Error>() {
                         Ok(io) => from_io_error(*io).into(),
-                        Err(err) => ShellError::GenericError {
-                            error: "Unknown error".into(),
-                            msg: format!("{err:?}"),
-                            span: Some(self.span),
-                            help: None,
-                            inner: Vec::new(),
-                        },
+                        Err(err) => ShellError::Generic(GenericError::new(
+                            "Unknown error",
+                            format!("{err:?}"),
+                            self.span,
+                        )),
                     })?
                     .map_err(&from_io_error)?;
             }
@@ -488,13 +481,11 @@ impl ChildProcess {
                 .map(|handle| {
                     handle.join().map_err(|e| match e.downcast::<io::Error>() {
                         Ok(io) => from_io_error(*io).into(),
-                        Err(err) => ShellError::GenericError {
-                            error: "Unknown error".into(),
-                            msg: format!("{err:?}"),
-                            span: Some(self.span),
-                            help: None,
-                            inner: Vec::new(),
-                        },
+                        Err(err) => ShellError::Generic(GenericError::new(
+                            "Unknown error",
+                            format!("{err:?}"),
+                            self.span,
+                        )),
                     })
                 })
                 .transpose()?

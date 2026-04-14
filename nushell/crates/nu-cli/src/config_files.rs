@@ -2,6 +2,8 @@ use crate::util::eval_source;
 #[cfg(feature = "plugin")]
 use nu_path::absolute_with;
 #[cfg(feature = "plugin")]
+use nu_protocol::shell_error::generic::GenericError;
+#[cfg(feature = "plugin")]
 use nu_protocol::{ParseError, PluginRegistryFile, Spanned, engine::StateWorkingSet};
 use nu_protocol::{
     PipelineData,
@@ -32,16 +34,18 @@ pub fn read_plugin_file(engine_state: &mut EngineState, plugin_file: Option<Span
         .and_then(|p| Path::new(&p.item).extension())
         .is_some_and(|ext| ext == "nu")
     {
+        let error = "Wrong plugin file format";
+        let msg = ".nu plugin files are no longer supported";
         report_shell_error(
             None,
             engine_state,
-            &ShellError::GenericError {
-                error: "Wrong plugin file format".into(),
-                msg: ".nu plugin files are no longer supported".into(),
-                span,
-                help: Some("please recreate this file in the new .msgpackz format".into()),
-                inner: vec![],
-            },
+            &ShellError::Generic(
+                match span {
+                    Some(span) => GenericError::new(error, msg, span),
+                    None => GenericError::new_internal(error, msg),
+                }
+                .with_help("please recreate this file in the new .msgpackz format"),
+            ),
         );
         return;
     }
@@ -86,7 +90,6 @@ pub fn read_plugin_file(engine_state: &mut EngineState, plugin_file: Option<Span
                         &ShellError::Io(IoError::new_internal_with_path(
                             err,
                             "Could not open plugin registry file",
-                            nu_protocol::location!(),
                             plugin_path,
                         )),
                     );
@@ -109,23 +112,23 @@ pub fn read_plugin_file(engine_state: &mut EngineState, plugin_file: Option<Span
             Ok(contents) => contents,
             Err(err) => {
                 log::warn!("Failed to read plugin registry file: {err:?}");
+                let error = format!(
+                    "Error while reading plugin registry file: {}",
+                    plugin_path.display()
+                );
+                let msg = "plugin path defined here";
                 report_shell_error(
                     None,
                     engine_state,
-                    &ShellError::GenericError {
-                        error: format!(
-                            "Error while reading plugin registry file: {}",
-                            plugin_path.display()
+                    &ShellError::Generic(
+                        match span {
+                            Some(span) => GenericError::new(error, msg, span),
+                            None => GenericError::new_internal(error, msg),
+                        }
+                        .with_help(
+                            "you might try deleting the file and registering all of your plugins again",
                         ),
-                        msg: "plugin path defined here".into(),
-                        span,
-                        help: Some(
-                            "you might try deleting the file and registering all of your \
-                                plugins again"
-                                .into(),
-                        ),
-                        inner: vec![],
-                    },
+                    ),
                 );
                 return;
             }
@@ -143,7 +146,27 @@ pub fn read_plugin_file(engine_state: &mut EngineState, plugin_file: Option<Span
 
         let mut working_set = StateWorkingSet::new(engine_state);
 
-        nu_plugin_engine::load_plugin_file(&mut working_set, &contents, span);
+        let plugin_load_errors =
+            nu_plugin_engine::load_plugin_file(&mut working_set, &contents, span);
+
+        if plugin_load_errors > 0 {
+            let error = format!(
+                "Failed to load {plugin_load_errors} plugin entr{} from {}",
+                if plugin_load_errors == 1 { "y" } else { "ies" },
+                plugin_path.display(),
+            );
+            let msg = "plugins with incompatible or invalid registry data were skipped";
+            let help = "run `plugin list` and re-add outdated plugins with `plugin add`";
+            let generic_error = match span {
+                Some(span) => GenericError::new(error, msg, span),
+                None => GenericError::new_internal(error, msg),
+            };
+            report_shell_error(
+                None,
+                engine_state,
+                &ShellError::Generic(generic_error.with_help(help)),
+            );
+        }
 
         if let Err(err) = engine_state.merge_delta(working_set.render()) {
             report_shell_error(None, engine_state, &err);
@@ -273,13 +296,10 @@ pub fn migrate_old_plugin_file(engine_state: &EngineState) -> bool {
             report_shell_error(
                 None,
                 engine_state,
-                &ShellError::GenericError {
-                    error: "Can't read old plugin file to migrate".into(),
-                    msg: "".into(),
-                    span: None,
-                    help: Some(err.to_string()),
-                    inner: vec![],
-                },
+                &ShellError::Generic(
+                    GenericError::new_internal("Can't read old plugin file to migrate", "")
+                        .with_help(err.to_string()),
+                ),
             );
             return false;
         }
@@ -341,7 +361,6 @@ pub fn migrate_old_plugin_file(engine_state: &EngineState) -> bool {
             IoError::new_internal_with_path(
                 err,
                 "Could not create new plugin file",
-                nu_protocol::location!(),
                 new_plugin_file_path.clone(),
             )
         })
@@ -351,13 +370,11 @@ pub fn migrate_old_plugin_file(engine_state: &EngineState) -> bool {
         report_shell_error(
             None,
             &engine_state,
-            &ShellError::GenericError {
-                error: "Failed to save migrated plugin file".into(),
-                msg: "".into(),
-                span: None,
-                help: Some("ensure `$nu.plugin-path` is writable".into()),
-                inner: vec![err],
-            },
+            &ShellError::Generic(
+                GenericError::new_internal("Failed to save migrated plugin file", "")
+                    .with_help("ensure `$nu.plugin-path` is writable")
+                    .with_inner([err]),
+            ),
         );
         return false;
     }

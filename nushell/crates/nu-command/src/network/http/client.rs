@@ -21,6 +21,7 @@ use nu_path::expand_path_with;
 use nu_protocol::{
     ByteStream, LabeledError, PipelineMetadata, Signals,
     shell_error::{
+        generic::GenericError,
         io::IoError,
         network::{DnsError, DnsErrorKind, NetworkError},
     },
@@ -28,7 +29,7 @@ use nu_protocol::{
 use serde_json::Value as JsonValue;
 use std::{
     collections::HashMap,
-    io::{self, Cursor},
+    io::{self, Cursor, Read},
     path::{Path, PathBuf},
     str::FromStr,
     sync::mpsc::{self, RecvTimeoutError},
@@ -38,7 +39,7 @@ use std::{
 use ureq::{
     Agent, Body, Error, RequestBuilder, ResponseExt, SendBody,
     typestate::{WithBody, WithoutBody},
-    unversioned::transport::Connector,
+    unversioned::transport::{ConnectProxyConnector, Connector, SocksConnector},
 };
 use url::Url;
 
@@ -149,13 +150,17 @@ pub fn http_client_pool(
     // are secure. Users must explicitly use `http pool --insecure` to disable.
     config_builder = config_builder.tls_config(tls_config(false)?);
 
+    // Like the DefaultConnector, we chain a SocksConnector, then a ConnextProxyConnector, then
+    // some tcp connector and finally some tls connector.
+    let connector = ().chain(SocksConnector::default()).chain(ConnectProxyConnector::default());
+
     let on_connect = engine_state.signal_handlers.as_ref().map(make_on_connect);
-    let tcp_connector = InterruptibleTcpConnector::new(on_connect);
+    let connector = connector.chain(InterruptibleTcpConnector::new(on_connect));
 
     #[cfg(feature = "rustls-tls")]
-    let connector = tcp_connector.chain(RustlsConnector::default());
+    let connector = connector.chain(RustlsConnector::default());
     #[cfg(feature = "native-tls")]
-    let connector = tcp_connector.chain(NativeTlsConnector::default());
+    let connector = connector.chain(NativeTlsConnector::default());
 
     let resolver = DnsLookupResolver;
     let agent = ureq::Agent::with_parts(config_builder.build(), connector, resolver);
@@ -224,13 +229,17 @@ pub fn http_client(
         return Ok(ureq::Agent::with_parts(config, connector, resolver));
     }
 
+    // Like the DefaultConnector, we chain a SocksConnector, then a ConnextProxyConnector, then
+    // some tcp connector and finally some tls connector.
+    let connector = ().chain(SocksConnector::default()).chain(ConnectProxyConnector::default());
+
     let on_connect = engine_state.signal_handlers.as_ref().map(make_on_connect);
-    let tcp_connector = InterruptibleTcpConnector::new(on_connect);
+    let connector = connector.chain(InterruptibleTcpConnector::new(on_connect));
 
     #[cfg(feature = "rustls-tls")]
-    let connector = tcp_connector.chain(RustlsConnector::default());
+    let connector = connector.chain(RustlsConnector::default());
     #[cfg(feature = "native-tls")]
-    let connector = tcp_connector.chain(NativeTlsConnector::default());
+    let connector = connector.chain(NativeTlsConnector::default());
 
     let resolver = DnsLookupResolver;
     Ok(ureq::Agent::with_parts(config, connector, resolver))
@@ -316,6 +325,22 @@ pub fn response_to_buffer(
     let byte_stream = ByteStream::read(reader, span, engine_state.signals().clone(), response_type);
 
     PipelineData::byte_stream(byte_stream.with_known_size(buffer_size), Some(metadata))
+}
+
+/// Read and discard the response body so the HTTP exchange completes (timeouts, keep-alive).
+/// Used when only response headers are shown but the server may still send a body.
+pub(crate) fn discard_response_body(response: Response, span: Span) -> Result<(), ShellError> {
+    let mut reader = UreqTimeoutExtractorReader {
+        r: response.into_body().into_reader(),
+    };
+    let mut buf = [0u8; 8192];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => return Ok(()),
+            Ok(_) => {}
+            Err(e) => return Err(ShellError::Io(IoError::new(e, span, None))),
+        }
+    }
 }
 
 fn extract_response_metadata(response: &Response, span: Span) -> PipelineMetadata {
@@ -734,13 +759,9 @@ fn send_cancellable_request_bytes(
             let ret = byte_stream
                 .reader()
                 .ok_or_else(|| {
-                    ShellErrorOrRequestError::ShellError(ShellError::GenericError {
-                        error: "Could not read byte stream".to_string(),
-                        msg: "".into(),
-                        span: None,
-                        help: None,
-                        inner: vec![],
-                    })
+                    ShellErrorOrRequestError::ShellError(ShellError::Generic(
+                        GenericError::new_internal("Could not read byte stream", ""),
+                    ))
                 })
                 .and_then(|reader| {
                     request
