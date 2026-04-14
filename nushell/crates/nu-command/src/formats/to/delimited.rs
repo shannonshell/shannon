@@ -2,7 +2,7 @@ use csv::WriterBuilder;
 use nu_cmd_base::formats::to::delimited::merge_descriptors;
 use nu_protocol::{
     ByteStream, ByteStreamType, Config, PipelineData, ShellError, Signals, Span, Spanned, Value,
-    shell_error::io::IoError,
+    shell_error::generic::GenericError, shell_error::io::IoError,
 };
 use std::{iter, sync::Arc};
 
@@ -10,13 +10,11 @@ fn make_csv_error(error: csv::Error, format_name: &str, head: Span) -> ShellErro
     if let csv::ErrorKind::Io(error) = error.kind() {
         IoError::new(error, head, None).into()
     } else {
-        ShellError::GenericError {
-            error: format!("Failed to generate {format_name} data"),
-            msg: error.to_string(),
-            span: Some(head),
-            help: None,
-            inner: vec![],
-        }
+        ShellError::Generic(GenericError::new(
+            format!("Failed to generate {format_name} data"),
+            error.to_string(),
+            head,
+        ))
     }
 }
 
@@ -93,7 +91,7 @@ pub fn to_delimited_data(
     let span = input.span().unwrap_or(head);
     let metadata = Some(
         input
-            .metadata()
+            .take_metadata()
             .unwrap_or_default()
             .with_content_type(content_type),
     );
@@ -132,7 +130,7 @@ pub fn to_delimited_data(
                 Value::Record { val, .. } => val.columns().cloned().collect(),
                 _ => return Err(make_unsupported_input_error(value.get_type(), head, span)),
             };
-            input = PipelineData::value(value, metadata.clone());
+            input = PipelineData::value(value, None);
             columns
         }
     };

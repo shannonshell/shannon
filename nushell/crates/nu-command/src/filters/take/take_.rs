@@ -45,14 +45,10 @@ impl Command for Take {
     ) -> Result<PipelineData, ShellError> {
         let head = call.head;
         let rows_desired: usize = call.req(engine_state, stack, 0)?;
-        let input = match input.try_into_stream(engine_state) {
-            Ok(input) | Err(input) => input,
-        };
-
-        let metadata = input.metadata().map(|m| m.with_content_type(None));
+        let input = input.into_stream_or_original(engine_state);
 
         match input {
-            PipelineData::Value(val, _) => {
+            PipelineData::Value(val, metadata) => {
                 let span = val.span();
                 match val {
                     Value::List { vals, .. } => Ok(vals
@@ -65,7 +61,11 @@ impl Command for Take {
                         )),
                     Value::Binary { val, .. } => {
                         let slice: Vec<u8> = val.into_iter().take(rows_desired).collect();
-                        Ok(PipelineData::value(Value::binary(slice, span), metadata))
+                        Ok(PipelineData::value(
+                            Value::binary(slice, span),
+                            // first 5 bytes of an image/png stream are not image/png themselves
+                            metadata.map(|m| m.with_content_type(None)),
+                        ))
                     }
                     Value::Range { val, .. } => Ok(val
                         .into_range_iter(span, Signals::empty())
@@ -164,9 +164,7 @@ impl Command for Take {
 mod test {
     use super::*;
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Take {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Take)
     }
 }

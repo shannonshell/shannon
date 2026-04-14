@@ -2,7 +2,10 @@ use crossterm::{
     QueueableCommand, event::Event, event::KeyCode, event::KeyEvent, execute, terminal,
 };
 use nu_engine::command_prelude::*;
-use nu_protocol::{Config, shell_error::io::IoError};
+use nu_protocol::{
+    Config,
+    shell_error::{generic::GenericError, io::IoError},
+};
 use std::io::{Write, stdout};
 
 #[derive(Clone)]
@@ -32,28 +35,19 @@ impl Command for KeybindingsListen {
         &self,
         engine_state: &EngineState,
         stack: &mut Stack,
-        _call: &Call,
+        call: &Call,
         _input: PipelineData,
     ) -> Result<PipelineData, ShellError> {
         println!("Type any key combination to see key details. Press ESC to abort.");
 
-        match print_events(&stack.get_config(engine_state)) {
+        match print_events(&stack.get_config(engine_state), call.head) {
             Ok(v) => Ok(v.into_pipeline_data()),
             Err(e) => {
-                terminal::disable_raw_mode().map_err(|err| {
-                    IoError::new_internal(
-                        err,
-                        "Could not disable raw mode",
-                        nu_protocol::location!(),
-                    )
-                })?;
-                Err(ShellError::GenericError {
-                    error: "Error with input".into(),
-                    msg: "".into(),
-                    span: None,
-                    help: Some(e.to_string()),
-                    inner: vec![],
-                })
+                terminal::disable_raw_mode()
+                    .map_err(|err| IoError::new_internal(err, "Could not disable raw mode"))?;
+                Err(ShellError::Generic(
+                    GenericError::new_internal("Error with input", "").with_help(e.to_string()),
+                ))
             }
         }
     }
@@ -67,13 +61,12 @@ impl Command for KeybindingsListen {
     }
 }
 
-pub fn print_events(config: &Config) -> Result<Value, ShellError> {
-    stdout().flush().map_err(|err| {
-        IoError::new_internal(err, "Could not flush stdout", nu_protocol::location!())
-    })?;
-    terminal::enable_raw_mode().map_err(|err| {
-        IoError::new_internal(err, "Could not enable raw mode", nu_protocol::location!())
-    })?;
+pub fn print_events(config: &Config, span: Span) -> Result<Value, ShellError> {
+    stdout()
+        .flush()
+        .map_err(|err| IoError::new_internal(err, "Could not flush stdout"))?;
+    terminal::enable_raw_mode()
+        .map_err(|err| IoError::new_internal(err, "Could not enable raw mode"))?;
 
     if config.use_kitty_protocol {
         if let Ok(false) = crossterm::terminal::supports_keyboard_enhancement() {
@@ -103,9 +96,8 @@ pub fn print_events(config: &Config) -> Result<Value, ShellError> {
     let mut stdout = std::io::BufWriter::new(std::io::stderr());
 
     loop {
-        let event = crossterm::event::read().map_err(|err| {
-            IoError::new_internal(err, "Could not read event", nu_protocol::location!())
-        })?;
+        let event = crossterm::event::read()
+            .map_err(|err| IoError::new_internal(err, "Could not read event"))?;
         if event == Event::Key(KeyCode::Esc.into()) {
             break;
         }
@@ -113,7 +105,7 @@ pub fn print_events(config: &Config) -> Result<Value, ShellError> {
         // stdout.queue(crossterm::style::Print("\r\n"))?;
 
         // Get a record
-        let v = print_events_helper(event)?;
+        let v = print_events_helper(event, span)?;
         // Print out the record
         let o = match v {
             Value::Record { val, .. } => val
@@ -124,21 +116,15 @@ pub fn print_events(config: &Config) -> Result<Value, ShellError> {
 
             _ => "".to_string(),
         };
-        stdout.queue(crossterm::style::Print(o)).map_err(|err| {
-            IoError::new_internal(
-                err,
-                "Could not print output record",
-                nu_protocol::location!(),
-            )
-        })?;
+        stdout
+            .queue(crossterm::style::Print(o))
+            .map_err(|err| IoError::new_internal(err, "Could not print output record"))?;
         stdout
             .queue(crossterm::style::Print("\r\n"))
-            .map_err(|err| {
-                IoError::new_internal(err, "Could not print linebreak", nu_protocol::location!())
-            })?;
-        stdout.flush().map_err(|err| {
-            IoError::new_internal(err, "Could not flush", nu_protocol::location!())
-        })?;
+            .map_err(|err| IoError::new_internal(err, "Could not print linebreak"))?;
+        stdout
+            .flush()
+            .map_err(|err| IoError::new_internal(err, "Could not flush"))?;
     }
 
     if config.use_kitty_protocol {
@@ -148,11 +134,10 @@ pub fn print_events(config: &Config) -> Result<Value, ShellError> {
         );
     }
 
-    terminal::disable_raw_mode().map_err(|err| {
-        IoError::new_internal(err, "Could not disable raw mode", nu_protocol::location!())
-    })?;
+    terminal::disable_raw_mode()
+        .map_err(|err| IoError::new_internal(err, "Could not disable raw mode"))?;
 
-    Ok(Value::nothing(Span::unknown()))
+    Ok(Value::nothing(span))
 }
 
 // this fn is totally ripped off from crossterm's examples
@@ -160,7 +145,7 @@ pub fn print_events(config: &Config) -> Result<Value, ShellError> {
 // even seeing the events. if you press a key and no events
 // are printed, it's a good chance your terminal is eating
 // those events.
-fn print_events_helper(event: Event) -> Result<Value, ShellError> {
+fn print_events_helper(event: Event, span: Span) -> Result<Value, ShellError> {
     if let Event::Key(KeyEvent {
         code,
         modifiers,
@@ -171,28 +156,28 @@ fn print_events_helper(event: Event) -> Result<Value, ShellError> {
         match code {
             KeyCode::Char(c) => {
                 let record = record! {
-                    "char" => Value::string(format!("{c}"), Span::unknown()),
-                    "code" => Value::string(format!("{:#08x}", u32::from(c)), Span::unknown()),
-                    "modifier" => Value::string(format!("{modifiers:?}"), Span::unknown()),
-                    "flags" => Value::string(format!("{modifiers:#08b}"), Span::unknown()),
-                    "kind" => Value::string(format!("{kind:?}"), Span::unknown()),
-                    "state" => Value::string(format!("{state:?}"), Span::unknown()),
+                    "char" => Value::string(format!("{c}"), span),
+                    "code" => Value::string(format!("{:#08x}", u32::from(c)), span),
+                    "modifier" => Value::string(format!("{modifiers:?}"), span),
+                    "flags" => Value::string(format!("{modifiers:#08b}"), span),
+                    "kind" => Value::string(format!("{kind:?}"), span),
+                    "state" => Value::string(format!("{state:?}"), span),
                 };
-                Ok(Value::record(record, Span::unknown()))
+                Ok(Value::record(record, span))
             }
             _ => {
                 let record = record! {
-                    "code" => Value::string(format!("{code:?}"), Span::unknown()),
-                    "modifier" => Value::string(format!("{modifiers:?}"), Span::unknown()),
-                    "flags" => Value::string(format!("{modifiers:#08b}"), Span::unknown()),
-                    "kind" => Value::string(format!("{kind:?}"), Span::unknown()),
-                    "state" => Value::string(format!("{state:?}"), Span::unknown()),
+                    "code" => Value::string(format!("{code:?}"), span),
+                    "modifier" => Value::string(format!("{modifiers:?}"), span),
+                    "flags" => Value::string(format!("{modifiers:#08b}"), span),
+                    "kind" => Value::string(format!("{kind:?}"), span),
+                    "state" => Value::string(format!("{state:?}"), span),
                 };
-                Ok(Value::record(record, Span::unknown()))
+                Ok(Value::record(record, span))
             }
         }
     } else {
-        let record = record! { "event" => Value::string(format!("{event:?}"), Span::unknown()) };
-        Ok(Value::record(record, Span::unknown()))
+        let record = record! { "event" => Value::string(format!("{event:?}"), span) };
+        Ok(Value::record(record, span))
     }
 }

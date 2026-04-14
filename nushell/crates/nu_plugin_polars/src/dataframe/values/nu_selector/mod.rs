@@ -1,14 +1,15 @@
 mod custom_value;
 
+use nu_protocol::shell_error::generic::GenericError;
 use nu_protocol::{ShellError, Span, Value};
-use polars::prelude::{Expr, Selector};
+use polars::prelude::{Expr, PlSmallStr, Selector};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
 pub use self::custom_value::NuSelectorCustomValue;
 
 use super::{CustomValueSupport, NuExpression, PolarsPluginObject, PolarsPluginType};
-use crate::Cacheable;
+use crate::{Cacheable, PolarsPlugin, values::NuExpressionCustomValue};
 
 #[derive(Default, Clone, Debug)]
 pub struct NuSelector {
@@ -83,13 +84,10 @@ impl Cacheable for NuSelector {
     fn from_cache_value(cv: PolarsPluginObject) -> Result<Self, ShellError> {
         match cv {
             PolarsPluginObject::NuSelector(selector) => Ok(selector),
-            _ => Err(ShellError::GenericError {
-                error: "Cache value is not a selector".into(),
-                msg: "".into(),
-                span: None,
-                help: None,
-                inner: vec![],
-            }),
+            _ => Err(ShellError::Generic(GenericError::new_internal(
+                "Cache value is not a selector",
+                "",
+            ))),
         }
     }
 }
@@ -110,5 +108,54 @@ impl CustomValueSupport for NuSelector {
 
     fn base_value(self, span: Span) -> Result<Value, ShellError> {
         self.to_value(span)
+    }
+
+    fn try_from_value(plugin: &PolarsPlugin, value: &Value) -> Result<Self, ShellError> {
+        match value {
+            Value::String { val, .. } => {
+                let selector = Selector::ByName {
+                    names: [val.into()].into(),
+                    strict: true,
+                };
+                Ok(NuSelector::new(Some(selector)))
+            }
+            Value::List { vals, .. } => {
+                let columns: Vec<PlSmallStr> = vals
+                    .iter()
+                    .map(|v| v.as_str().map(PlSmallStr::from_str))
+                    .collect::<Result<Vec<PlSmallStr>, ShellError>>()?;
+                let selector = Selector::ByName {
+                    names: columns.into(),
+                    strict: true,
+                };
+                Ok(NuSelector::new(Some(selector)))
+            }
+            Value::Custom {
+                val, internal_span, ..
+            } => {
+                if let Some(cv) = val.as_any().downcast_ref::<Self::CV>() {
+                    Self::try_from_custom_value(plugin, cv)
+                } else if let Some(cv) = val.as_any().downcast_ref::<NuExpressionCustomValue>() {
+                    let expr = NuExpression::try_from_custom_value(plugin, cv)?;
+                    let selector = expr.into_polars().try_into_selector().map_err(|e| {
+                        ShellError::Generic(GenericError::new(e.to_string(), "", *internal_span))
+                    })?;
+                    Ok(NuSelector::new(Some(selector)))
+                } else {
+                    Err(ShellError::CantConvert {
+                        to_type: Self::get_type_static().to_string(),
+                        from_type: value.get_type().to_string(),
+                        span: value.span(),
+                        help: None,
+                    })
+                }
+            }
+            _ => Err(ShellError::CantConvert {
+                to_type: Self::get_type_static().to_string(),
+                from_type: value.get_type().to_string(),
+                span: value.span(),
+                help: None,
+            }),
+        }
     }
 }

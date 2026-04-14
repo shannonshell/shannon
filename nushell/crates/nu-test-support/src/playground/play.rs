@@ -70,7 +70,7 @@ impl Playground<'_> {
         self
     }
 
-    pub fn setup(topic: &str, block: impl FnOnce(Dirs, &mut Playground)) {
+    pub fn setup<R>(topic: &str, block: impl FnOnce(Dirs, &mut Playground) -> R) -> R {
         let temp = tempdir().expect("Could not create a tempdir");
 
         let root = AbsolutePathBuf::try_from(temp.path())
@@ -106,7 +106,7 @@ impl Playground<'_> {
             dirs: &dirs,
         };
 
-        block(dirs.clone(), &mut playground);
+        block(dirs.clone(), &mut playground)
     }
 
     pub fn with_config(&mut self, source_file: AbsolutePathBuf) -> &mut Self {
@@ -179,8 +179,6 @@ impl Playground<'_> {
     }
 
     pub fn with_files(&mut self, files: &[Stub]) -> &mut Self {
-        let endl = fs::line_ending();
-
         files
             .iter()
             .map(|f| {
@@ -196,7 +194,7 @@ impl Playground<'_> {
                             .skip(1)
                             .map(|line| line.trim())
                             .collect::<Vec<&str>>()
-                            .join(&endl),
+                            .join(nu_utils::consts::LINE_SEPARATOR_STR),
                     ),
                     Stub::FileWithPermission(name, is_write_able) => {
                         permission_set = true;

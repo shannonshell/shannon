@@ -520,10 +520,9 @@ mod test {
     use nu_protocol::Type::Error;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(IntoInt {})
+    #[env(NU_TEST_LOCALE_OVERRIDE = "en_US.utf8")]
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(IntoInt)
     }
 
     #[test]

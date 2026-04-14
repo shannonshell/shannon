@@ -34,11 +34,34 @@
 //!
 //! Users can view enabled options using either `version` or `debug experimental-options`.
 //!
-//! To enable or disable options, use either the `NU_EXPERIMENTAL_OPTIONS` environment variable
-//! (see [`ENV`]), or pass them via CLI using `--experimental-options`, e.g.:
+//! To enable or disable options, use either the [`NU_EXPERIMENTAL_OPTIONS`](ENV) environment
+//! variable, or pass them via CLI using `--experimental-options`.
+//!
+//! ## Environment variable
+//!
+//! Set [`ENV`] before launching `nu` (comma-separated list of options):
 //!
 //! ```sh
-//! nu --experimental-options=[example]
+//! NU_EXPERIMENTAL_OPTIONS=example=true,pipefail=false nu
+//! ```
+//!
+//! ## Command line (`--experimental-options`)
+//!
+//! Each `--experimental-options` flag takes **one** shell argument. That argument can be a
+//! single option, a comma-separated list, or a bracketed list (with optional spaces). You can
+//! repeat the flag to add more options.
+//!
+//! ```sh
+//! nu --experimental-options example=true
+//! nu --experimental-options '[example=true, pipefail=false]'
+//! nu --experimental-options example=true --experimental-options pipefail=false
+//! ```
+//!
+//! To run a script with experimental options, pass the script path **after** the option value
+//! (the script is not part of the option list):
+//!
+//! ```sh
+//! nu --experimental-options '[example=true]' script.nu
 //! ```
 //!
 //! # For Embedders
@@ -51,7 +74,7 @@
 //! You can also call [`ExperimentalOption::set`] manually, but be careful with that.
 
 use crate::util::AtomicMaybe;
-use std::{fmt::Debug, sync::atomic::Ordering};
+use std::{any::TypeId, fmt::Debug, hash::Hash, sync::atomic::Ordering};
 
 mod options;
 mod parse;
@@ -196,6 +219,26 @@ impl PartialEq for ExperimentalOption {
 }
 
 impl Eq for ExperimentalOption {}
+
+impl PartialOrd for ExperimentalOption {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExperimentalOption {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.identifier().cmp(other.identifier())
+    }
+}
+
+impl Hash for ExperimentalOption {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // this should ensure that we don't have prefixes
+        TypeId::of::<Self>().hash(state);
+        self.identifier().hash(state);
+    }
+}
 
 /// Sets the state of all experimental option that aren't deprecated.
 ///

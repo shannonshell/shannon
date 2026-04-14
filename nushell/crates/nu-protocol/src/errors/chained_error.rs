@@ -10,7 +10,7 @@ use thiserror::Error;
 ///
 /// If it's constructed nestedly using [`ChainedError::new_chained`], it will treat all underlying errors as related.
 ///
-/// For a usage example, please check [`ShellError::into_chainned`].
+/// For a usage example, please check [`ShellError::into_chained`].
 #[derive(Debug, Clone, PartialEq, Error)]
 pub struct ChainedError {
     first: bool,
@@ -43,6 +43,12 @@ impl ChainedError {
             sources: vec![ShellError::ChainedError(sources)],
             span,
         }
+    }
+
+    // Abstraction to read the sources from outside of this crate without exposing the actual
+    // implementation.
+    pub fn sources_iter(self) -> impl Iterator<Item = ShellError> {
+        self.sources.into_iter()
     }
 }
 

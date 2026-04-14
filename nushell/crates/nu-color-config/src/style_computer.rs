@@ -127,6 +127,11 @@ impl<'a> StyleComputer<'a> {
             ("string".to_string(), ComputableStyle::Static(Color::Default.normal())),
             ("nothing".to_string(), ComputableStyle::Static(Color::Default.normal())),
             ("binary".to_string(), ComputableStyle::Static(Color::Default.normal())),
+            ("binary_null_char".to_string(), ComputableStyle::Static(Color::Fixed(242).normal())),
+            ("binary_printable".to_string(), ComputableStyle::Static(Color::Cyan.bold())),
+            ("binary_whitespace".to_string(), ComputableStyle::Static(Color::Green.bold())),
+            ("binary_ascii_other".to_string(), ComputableStyle::Static(Color::Purple.bold())),
+            ("binary_non_ascii".to_string(), ComputableStyle::Static(Color::Yellow.bold())),
             ("cell-path".to_string(), ComputableStyle::Static(Color::Default.normal())),
             ("row_index".to_string(), ComputableStyle::Static(Color::Green.bold())),
             ("record".to_string(), ComputableStyle::Static(Color::Default.normal())),
@@ -214,11 +219,11 @@ fn test_computable_style_closure_basic() {
     use nu_test_support::{nu, nu_repl_code, playground::Playground};
     Playground::setup("computable_style_closure_basic", |dirs, _| {
         let inp = [
-            r#"$env.config = {
+            "$env.config = {
                 color_config: {
                     string: {|e| touch ($e + '.obj'); 'red' }
                 }
-            };"#,
+            };",
             "[bell book candle] | table | ignore",
             "ls | get name | to nuon",
         ];
@@ -232,11 +237,11 @@ fn test_computable_style_closure_basic() {
 fn test_computable_style_closure_errors() {
     use nu_test_support::{nu, nu_repl_code};
     let inp = [
-        r#"$env.config = {
+        "$env.config = {
             color_config: {
                 string: {|e| $e + 2 }
             }
-        };"#,
+        };",
         "[bell] | table",
     ];
     let actual_repl = nu!(nu_repl_code(&inp));

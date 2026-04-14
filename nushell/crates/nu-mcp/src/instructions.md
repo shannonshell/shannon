@@ -135,19 +135,50 @@ command o+e>| other_command                     # Redirect stderr to stdout, pip
 command o+e>| ignore                            # Discard both stdout and stderr
 ```
 
-HTTP request examples:
+## HTTP Requests
+
+**Automatic JSON parsing:** HTTP commands (`http get`, `http post`, etc.) automatically parse JSON responses into structured Nushell data based on the `Content-Type` header. Do NOT pipe to `from json` - the data is already parsed.
+
+```nu
+# BAD - redundant, will error because input is already structured
+http get https://api.example.com/data | from json
+
+# GOOD - returns structured data directly
+http get https://api.example.com/data
+
+# GOOD - access fields immediately
+http get https://api.example.com/users | get name
+
+# Use --raw (-r) to disable auto-parsing and get raw string
+http get --raw https://api.example.com/data | from json  # Manual parsing
+```
+
+**Common flags:**
+- `-H {key: value}` or `--headers {key: value}`: Custom headers as a record
+- `-t application/json` or `--content-type application/json`: Set Content-Type for request body. Note: `-t json` does NOT work — the full MIME type is required.
+- `(bytes build)`: Empty body (required for POST/PUT when you have no data to send)
+
+**Pipeline content-type:** Commands like `to json` set content-type metadata that `http` commands use automatically:
+```nu
+# Pipeline approach - content-type is set automatically by `to json`
+{foo: "bar", baz: 123} | to json | http post https://api.example.com/endpoint
+```
+
 ```nu
 # GET request
 http get https://api.example.com/data
 
+# GET with auth header
+http get -H {Authorization: "Bearer token"} https://api.example.com/data
+
 # POST with JSON body
-http post --content-type application/json https://api.example.com/endpoint {foo: "bar", baz: 123}
+http post -t application/json https://api.example.com/endpoint {foo: "bar", baz: 123}
 
-# POST with custom headers and empty body
-http post https://api.example.com/sync -H {X-API-Key: "secret"} (bytes build)
+# POST with headers but empty body (bytes build creates empty body)
+http post -H {X-API-Key: "secret"} https://api.example.com/sync (bytes build)
 
-# POST with headers and JSON body
-http post --content-type application/json https://api.example.com/data -H {Authorization: "Bearer token"} {key: "value"}
+# POST with both headers and JSON body
+http post -t application/json -H {Authorization: "Bearer token"} https://api.example.com/data {key: "value"}
 ```
 
 **Parallel iteration:** Prefer `par-each` over `each` for better performance. `par-each` runs closures in parallel across multiple threads.
@@ -228,6 +259,31 @@ job spawn { let my_id = job id; ... }
 - `job recv` - Receive data from mailbox (blocks until message arrives)
 - `job id` - Get current job's ID
 - `job tag <id> <tag>` - Add/change a job's description tag
+
+**Auto-promoted jobs:**
+
+Evaluations that run longer than 10 seconds (or when the client cancels) are automatically promoted to background jobs. The evaluation continues running and the **full** (non-truncated) output is delivered to the main thread's mailbox when complete. The timeout is configurable via `$env.NU_MCP_PROMOTE_AFTER` (e.g., `30sec`, `5sec`).
+
+```nu
+# After promotion, the server returns an error like:
+# "Operation promoted to background job (id: 1). Use `job list` to see it and `job recv` to get the result."
+
+# Check if the promoted job is still running
+job list
+
+# Retrieve the result (blocks until available) — always full output, never truncated
+job recv
+
+# Or with a timeout
+job recv --timeout 60sec
+
+# Change the auto-promote threshold
+$env.NU_MCP_PROMOTE_AFTER = 30sec
+```
+
+Promoted jobs appear in `job list` with a description like `mcp: <command>`. They share the jobs table with manually spawned jobs, so `job kill <id>` works to cancel them.
+
+**Important:** Promoted jobs deliver output directly through the mailbox, bypassing `$history`. The `$history` variable is only populated for non-promoted evaluations.
 
 **Common gotchas:**
 - There is no `job ls`. Use `job list`.

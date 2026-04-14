@@ -2,10 +2,11 @@
 authors = ["The Nushell Project Developers"]
 description = "Nushell's parser"
 repository = "https://github.com/nushell/nushell/tree/main/crates/nu-parser"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 license = "MIT"
 name = "nu-parser"
-version = "0.111.0"
+version = "0.112.2"
 exclude = ["/fuzz"]
 
 [lib]
@@ -15,11 +16,12 @@ bench = false
 workspace = true
 
 [dependencies]
-nu-engine = { path = "../nu-engine", version = "0.111.0", default-features = false }
-nu-path = { path = "../nu-path", version = "0.111.0" }
-nu-plugin-engine = { path = "../nu-plugin-engine", optional = true, version = "0.111.0" }
-nu-protocol = { path = "../nu-protocol", version = "0.111.0", default-features = false }
-nu-utils = { path = "../nu-utils", version = "0.111.0", default-features = false }
+nu-engine = { path = "../nu-engine", version = "0.112.2", default-features = false }
+nu-path = { path = "../nu-path", version = "0.112.2" }
+nu-plugin-engine = { path = "../nu-plugin-engine", optional = true, version = "0.112.2" }
+nu-protocol = { path = "../nu-protocol", version = "0.112.2", default-features = false }
+nu-utils = { path = "../nu-utils", version = "0.112.2", default-features = false }
+nu-experimental = { path = "../nu-experimental", version = "0.112.2" }
 
 bytesize = { workspace = true }
 chrono = { default-features = false, features = ['std'], workspace = true }

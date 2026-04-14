@@ -3,31 +3,36 @@
 //! are referenced in the engine state. Plugins can be stopped by the user if desired, but not
 //! removed.
 
+// tests in here are marked as serial to improve stability while testing
+
 use nu_test_support::{nu, nu_with_plugins};
 
 #[test]
+#[serial]
 fn plugin_list_shows_installed_plugins() {
     let out = nu_with_plugins!(
         cwd: ".",
         plugins: [("nu_plugin_inc"), ("nu_plugin_custom_values")],
-        r#"(plugin list).name | str join ','"#
+        "(plugin list).name | str join ','"
     );
     assert_eq!("custom_values,inc", out.out);
     assert!(out.status.success());
 }
 
 #[test]
+#[serial]
 fn plugin_list_shows_installed_plugin_version() {
     let out = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_inc"),
-        r#"(plugin list).version.0"#
+        "(plugin list).version.0"
     );
     assert_eq!(env!("CARGO_PKG_VERSION"), out.out);
     assert!(out.status.success());
 }
 
 #[test]
+#[serial]
 fn plugin_keeps_running_after_calling_it() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -48,6 +53,7 @@ fn plugin_keeps_running_after_calling_it() {
 }
 
 #[test]
+#[serial]
 fn plugin_process_exits_after_stop() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -85,17 +91,19 @@ fn plugin_process_exits_after_stop() {
 }
 
 #[test]
+#[serial]
 fn plugin_stop_can_find_by_filename() {
     let result = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_inc"),
-        r#"plugin stop (plugin list | where name == inc).0.filename"#
+        "plugin stop (plugin list | where name == inc).0.filename"
     );
     assert!(result.status.success());
     assert!(result.err.is_empty());
 }
 
 #[test]
+#[serial]
 fn plugin_process_exits_when_nushell_exits() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -119,6 +127,7 @@ fn plugin_process_exits_when_nushell_exits() {
 }
 
 #[test]
+#[serial]
 fn plugin_commands_run_without_error() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -138,6 +147,7 @@ fn plugin_commands_run_without_error() {
 }
 
 #[test]
+#[serial]
 fn plugin_commands_run_multiple_times_without_error() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -159,6 +169,7 @@ fn plugin_commands_run_multiple_times_without_error() {
 }
 
 #[test]
+#[serial]
 fn multiple_plugin_commands_run_with_the_same_plugin_pid() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -179,6 +190,7 @@ fn multiple_plugin_commands_run_with_the_same_plugin_pid() {
 }
 
 #[test]
+#[serial]
 fn plugin_pid_changes_after_stop_then_run_again() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -200,15 +212,16 @@ fn plugin_pid_changes_after_stop_then_run_again() {
 }
 
 #[test]
+#[serial]
 fn custom_values_can_still_be_passed_to_plugin_after_stop() {
     let out = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_custom_values"),
-        r#"
+        "
             let cv = custom-value generate
             plugin stop custom_values
             $cv | custom-value update
-        "#
+        "
     );
     assert!(!out.out.is_empty());
     assert!(out.err.is_empty());
@@ -216,16 +229,17 @@ fn custom_values_can_still_be_passed_to_plugin_after_stop() {
 }
 
 #[test]
+#[serial]
 fn custom_values_can_still_be_collapsed_after_stop() {
     // print causes a collapse (ToBaseValue) call.
     let out = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_custom_values"),
-        r#"
+        "
             let cv = custom-value generate
             plugin stop custom_values
             $cv | print
-        "#
+        "
     );
     assert!(!out.out.is_empty());
     assert!(out.err.is_empty());
@@ -233,6 +247,7 @@ fn custom_values_can_still_be_collapsed_after_stop() {
 }
 
 #[test]
+#[serial]
 fn plugin_gc_can_be_configured_to_stop_plugins_immediately() {
     // I know the test is to stop "immediately", but if we actually check immediately it could
     // lead to a race condition. Using 100ms sleep just because with contention we don't really
@@ -269,6 +284,7 @@ fn plugin_gc_can_be_configured_to_stop_plugins_immediately() {
 }
 
 #[test]
+#[serial]
 fn plugin_gc_can_be_configured_to_stop_plugins_after_delay() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -326,6 +342,7 @@ fn plugin_gc_can_be_configured_to_stop_plugins_after_delay() {
 }
 
 #[test]
+#[serial]
 fn plugin_gc_can_be_configured_as_disabled() {
     let out = nu_with_plugins!(
         cwd: ".",
@@ -358,32 +375,34 @@ fn plugin_gc_can_be_configured_as_disabled() {
 }
 
 #[test]
+#[serial]
 fn plugin_gc_can_be_disabled_by_plugin() {
     let out = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_example"),
-        r#"
+        "
             example disable-gc
             $env.config.plugin_gc = { default: { stop_after: 0sec } }
             example one 1 foo | ignore # ensure we've run the plugin with the new config
             sleep 100ms
             (plugin list | where name == example).0.status == running
-        "#
+        "
     );
     assert!(out.status.success());
     assert_eq!("true", out.out);
 }
 
 #[test]
+#[serial]
 fn plugin_gc_does_not_stop_plugin_while_stream_output_is_active() {
     let out = nu_with_plugins!(
         cwd: ".",
         plugin: ("nu_plugin_example"),
-        r#"
+        "
             $env.config.plugin_gc = { default: { stop_after: 10ms } }
             # This would exceed the configured time
             example seq 1 500 | each { |n| sleep 1ms; $n } | length | print
-        "#
+        "
     );
     assert!(out.status.success());
     assert_eq!("500", out.out);

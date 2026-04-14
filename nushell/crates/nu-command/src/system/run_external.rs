@@ -34,8 +34,8 @@ impl Command for External {
     }
 
     fn extra_description(&self) -> &str {
-        r#"All externals are run with this command, whether you call it directly with `run-external external` or use `external` or `^external`.
-If you create a custom command with this name, that will be used instead."#
+        "All externals are run with this command, whether you call it directly with `run-external external` or use `external` or `^external`.
+If you create a custom command with this name, that will be used instead."
     }
 
     fn signature(&self) -> nu_protocol::Signature {
@@ -290,7 +290,7 @@ If you create a custom command with this name, that will be used instead."#
 
         let mut child = child.map_err(|err| {
             let context = format!("Could not spawn foreground child: {err}");
-            IoError::new_internal(err, context, nu_protocol::location!())
+            IoError::new_internal(err, context)
         })?;
 
         if let Some(thread_job) = engine_state.current_thread_job()
@@ -300,7 +300,6 @@ If you create a custom command with this name, that will be used instead."#
                 ShellError::Io(IoError::new_internal(
                     err,
                     "Could not spawn external stdin worker",
-                    nu_protocol::location!(),
                 ))
             })?;
         }
@@ -497,13 +496,9 @@ fn write_pipeline_data(
     if let PipelineData::ByteStream(stream, ..) = data {
         stream.write_to(writer)?;
     } else if let PipelineData::Value(Value::Binary { val, .. }, ..) = data {
-        writer.write_all(&val).map_err(|err| {
-            IoError::new_internal(
-                err,
-                "Could not write pipeline data",
-                nu_protocol::location!(),
-            )
-        })?;
+        writer
+            .write_all(&val)
+            .map_err(|err| IoError::new_internal(err, "Could not write pipeline data"))?;
     } else {
         stack.start_collect_value();
 
@@ -517,13 +512,9 @@ fn write_pipeline_data(
         // Write the output.
         for value in output {
             let bytes = value.coerce_into_binary()?;
-            writer.write_all(&bytes).map_err(|err| {
-                IoError::new_internal(
-                    err,
-                    "Could not write pipeline data",
-                    nu_protocol::location!(),
-                )
-            })?;
+            writer
+                .write_all(&bytes)
+                .map_err(|err| IoError::new_internal(err, "Could not write pipeline data"))?;
         }
     }
     Ok(())
@@ -752,30 +743,31 @@ mod test {
 
             let cwd = dirs.test().as_std_path();
 
-            let actual = expand_glob("*.txt", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob("*.txt", cwd, Span::test_data(), Signals::empty()).unwrap();
             let expected = &["a.txt", "b.txt"];
             assert_eq!(actual, expected);
 
-            let actual = expand_glob("./*.txt", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob("./*.txt", cwd, Span::test_data(), Signals::empty()).unwrap();
             assert_eq!(actual, expected);
 
-            let actual = expand_glob("'*.txt'", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob("'*.txt'", cwd, Span::test_data(), Signals::empty()).unwrap();
             let expected = &["'*.txt'"];
             assert_eq!(actual, expected);
 
-            let actual = expand_glob(".", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob(".", cwd, Span::test_data(), Signals::empty()).unwrap();
             let expected = &["."];
             assert_eq!(actual, expected);
 
-            let actual = expand_glob("./a.txt", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob("./a.txt", cwd, Span::test_data(), Signals::empty()).unwrap();
             let expected = &["./a.txt"];
             assert_eq!(actual, expected);
 
-            let actual = expand_glob("[*.txt", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual = expand_glob("[*.txt", cwd, Span::test_data(), Signals::empty()).unwrap();
             let expected = &["[*.txt"];
             assert_eq!(actual, expected);
 
-            let actual = expand_glob("~/foo.txt", cwd, Span::unknown(), Signals::empty()).unwrap();
+            let actual =
+                expand_glob("~/foo.txt", cwd, Span::test_data(), Signals::empty()).unwrap();
             let home = dirs::home_dir().expect("failed to get home dir");
             let expected: Vec<OsString> = vec![home.join("foo.txt").into()];
             assert_eq!(actual, expected);
@@ -801,12 +793,12 @@ mod test {
         assert_eq!(buf, b"");
 
         let mut buf = vec![];
-        let input = PipelineData::value(Value::string("foo", Span::unknown()), None);
+        let input = PipelineData::value(Value::string("foo", Span::test_data()), None);
         write_pipeline_data(engine_state.clone(), stack.clone(), input, &mut buf).unwrap();
         assert_eq!(buf, b"foo");
 
         let mut buf = vec![];
-        let input = PipelineData::value(Value::binary(b"foo", Span::unknown()), None);
+        let input = PipelineData::value(Value::binary(b"foo", Span::test_data()), None);
         write_pipeline_data(engine_state.clone(), stack.clone(), input, &mut buf).unwrap();
         assert_eq!(buf, b"foo");
 
@@ -814,7 +806,7 @@ mod test {
         let input = PipelineData::byte_stream(
             ByteStream::read(
                 b"foo".as_slice(),
-                Span::unknown(),
+                Span::test_data(),
                 Signals::empty(),
                 ByteStreamType::Unknown,
             ),

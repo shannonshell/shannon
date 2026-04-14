@@ -31,10 +31,10 @@ impl Command for JobSpawn {
             .category(Category::Experimental)
             .input_output_types(vec![(Type::Nothing, Type::Int)])
             .named(
-                "tag",
+                "description",
                 SyntaxShape::String,
-                "An optional description tag for this job.",
-                Some('t'),
+                "An optional description for this job.",
+                Some('d'),
             )
             .required(
                 "closure",
@@ -58,7 +58,7 @@ impl Command for JobSpawn {
 
         let closure: Closure = call.req(engine_state, stack, 0)?;
 
-        let tag: Option<String> = call.get_flag(engine_state, stack, "tag")?;
+        let description: Option<String> = call.get_flag(engine_state, stack, "description")?;
         let job_stack = stack.clone();
 
         let mut job_state = engine_state.clone();
@@ -79,7 +79,7 @@ impl Command for JobSpawn {
         let (send, recv) = mpsc::channel();
 
         let id = {
-            let thread_job = ThreadJob::new(job_signals, tag, send);
+            let thread_job = ThreadJob::new(job_signals, description, send);
 
             let id = jobs.add_job(Job::Thread(thread_job.clone()));
 
@@ -139,10 +139,10 @@ impl Command for JobSpawn {
     }
 
     fn extra_description(&self) -> &str {
-        r#"Executes the provided closure in a background thread
+        "Executes the provided closure in a background thread
 and registers this task in the background job table, which can be retrieved with `job list`.
 
 This command returns the job id of the newly created job.
-            "#
+            "
     }
 }

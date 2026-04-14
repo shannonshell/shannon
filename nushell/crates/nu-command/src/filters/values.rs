@@ -134,14 +134,11 @@ fn values(
     head: Span,
     input: PipelineData,
 ) -> Result<PipelineData, ShellError> {
-    let input = match input.try_into_stream(engine_state) {
-        Ok(input) | Err(input) => input,
-    };
+    let input = input.into_stream_or_original(engine_state);
     let signals = engine_state.signals().clone();
-    let metadata = input.metadata();
     match input {
         PipelineData::Empty => Ok(PipelineData::empty()),
-        PipelineData::Value(v, ..) => {
+        PipelineData::Value(v, metadata) => {
             let span = v.span();
             match v {
                 Value::List { vals, .. } => match get_values(&vals, head, span) {
@@ -174,7 +171,7 @@ fn values(
                 }),
             }
         }
-        PipelineData::ListStream(stream, ..) => {
+        PipelineData::ListStream(stream, metadata) => {
             let vals: Vec<_> = stream.into_iter().collect();
             match get_values(&vals, head, head) {
                 Ok(cols) => Ok(cols
@@ -197,9 +194,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Values {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Values)
     }
 }

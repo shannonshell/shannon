@@ -1,3 +1,4 @@
+#![allow(unused_assignments)]
 use crate::{RegId, Span};
 use miette::Diagnostic;
 use serde::{Deserialize, Serialize};
@@ -166,7 +167,7 @@ pub enum CompileError {
     #[diagnostic(
         code(nu::compile::automatic_env_var_set_manually),
         help(
-            r#"The environment variable '{envvar_name}' is set automatically by Nushell and cannot be set manually."#
+            "The environment variable '{envvar_name}' is set automatically by Nushell and cannot be set manually."
         )
     )]
     AutomaticEnvVarSetManually {

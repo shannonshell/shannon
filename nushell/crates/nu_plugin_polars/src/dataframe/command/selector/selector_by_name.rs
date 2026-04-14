@@ -26,6 +26,11 @@ impl PluginCommand for SelectorByName {
 
     fn signature(&self) -> Signature {
         Signature::build(self.name())
+            .switch(
+                "strict",
+                "If set, the selector will error if any specified column names do not exist.",
+                None,
+            )
             .rest(
                 "column names",
                 SyntaxShape::String,
@@ -65,6 +70,7 @@ impl PluginCommand for SelectorByName {
                             ),
                         ],
                         None,
+                        Span::test_data(),
                     )
                     .expect("simple df for test should not fail")
                     .into_value(Span::test_data()),
@@ -82,10 +88,11 @@ impl PluginCommand for SelectorByName {
         plugin: &Self::Plugin,
         engine: &EngineInterface,
         call: &EvaluatedCall,
-        input: PipelineData,
+        mut input: PipelineData,
     ) -> Result<PipelineData, LabeledError> {
-        let metadata = input.metadata();
+        let metadata = input.take_metadata();
         let names: Vec<String> = call.rest(0)?;
+        let strict: bool = call.has_flag("strict")?;
 
         if names.is_empty() {
             return Err(LabeledError::new("Missing column names")
@@ -94,7 +101,7 @@ impl PluginCommand for SelectorByName {
 
         let selector = Selector::ByName {
             names: names.into_iter().map(|s| s.into()).collect(),
-            strict: true,
+            strict,
         };
         let nu_selector = NuSelector::from(selector);
 

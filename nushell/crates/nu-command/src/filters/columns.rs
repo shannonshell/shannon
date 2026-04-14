@@ -67,18 +67,15 @@ impl Command for Columns {
         call: &Call,
         input: PipelineData,
     ) -> Result<PipelineData, ShellError> {
-        let input = match input.try_into_stream(engine_state) {
-            Ok(input) | Err(input) => input,
-        };
+        let input = input.into_stream_or_original(engine_state);
         getcol(call.head, input)
     }
 }
 
 fn getcol(head: Span, input: PipelineData) -> Result<PipelineData, ShellError> {
-    let metadata = input.metadata();
     match input {
         PipelineData::Empty => Ok(PipelineData::empty()),
-        PipelineData::Value(v, ..) => {
+        PipelineData::Value(v, metadata) => {
             let span = v.span();
             let cols = match v {
                 Value::List {
@@ -117,7 +114,7 @@ fn getcol(head: Span, input: PipelineData) -> Result<PipelineData, ShellError> {
                 .into_pipeline_data()
                 .set_metadata(metadata))
         }
-        PipelineData::ListStream(stream, ..) => {
+        PipelineData::ListStream(stream, metadata) => {
             let values = stream.into_iter().collect::<Vec<_>>();
             let cols = get_columns(&values)
                 .into_iter()
@@ -142,9 +139,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_examples() {
-        use crate::test_examples;
-
-        test_examples(Columns {})
+    fn test_examples() -> nu_test_support::Result {
+        nu_test_support::test().examples(Columns)
     }
 }

@@ -80,8 +80,8 @@ impl Command for JobUnfreeze {
     }
 
     fn extra_description(&self) -> &str {
-        r#"When a running process is frozen (with the SIGTSTP signal or with the Ctrl-Z key on unix),
-a background job gets registered for this process, which can then be resumed using this command."#
+        "When a running process is frozen (with the SIGTSTP signal or with the Ctrl-Z key on unix),
+a background job gets registered for this process, which can then be resumed using this command."
     }
 }
 
@@ -95,7 +95,7 @@ fn unfreeze_job(
         Job::Thread(ThreadJob { .. }) => Err(JobError::CannotUnfreeze { span, id: old_id }.into()),
         Job::Frozen(FrozenJob {
             unfreeze: handle,
-            tag,
+            description,
         }) => {
             let pid = handle.pid();
 
@@ -106,7 +106,6 @@ fn unfreeze_job(
                     ShellError::Io(IoError::new_internal(
                         err,
                         "job was interrupted; could not kill foreground process",
-                        nu_protocol::location!(),
                     ))
                 })?;
             }
@@ -129,7 +128,7 @@ fn unfreeze_job(
                         old_id,
                         Job::Frozen(FrozenJob {
                             unfreeze: handle,
-                            tag,
+                            description,
                         }),
                     )
                     .expect("job was supposed to be removed");
@@ -145,7 +144,6 @@ fn unfreeze_job(
                 Err(err) => Err(ShellError::Io(IoError::new_internal(
                     err,
                     "Failed to unfreeze foreground process",
-                    nu_protocol::location!(),
                 ))),
             }
         }
