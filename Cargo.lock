@@ -4396,7 +4396,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cli"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "chrono",
  "crossterm",
@@ -4432,7 +4432,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-lsp"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "crossbeam-channel",
  "fancy-regex",
@@ -4454,7 +4454,7 @@ dependencies = [
 
 [[package]]
 name = "shannonshell"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "chrono",
  "crossterm",
