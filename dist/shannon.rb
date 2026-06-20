@@ -1,8 +1,8 @@
 class Shannon < Formula
   desc "Poly-shell built on nushell with seamless bash compatibility"
   homepage "https://github.com/shannonshell/shannon"
-  url "https://github.com/shannonshell/shannon/releases/download/v0.5.6/shannon-0.5.6.tar.gz"
-  sha256 "8d649109f001d1013115e5376c4a9c399d7b3338c7bb7137c7b6d8d54b160d27"
+  url "https://github.com/shannonshell/shannon/releases/download/v0.5.7/shannon-0.5.7.tar.gz"
+  sha256 "9ee34faa76b8a60530f7360d172b1094f02a93e022a7d29decf635d90f9b995c"
   license "MIT"
 
   depends_on "rust" => :build
@@ -14,7 +14,7 @@ class Shannon < Formula
 
   test do
     version_output = shell_output("#{bin}/shannon --version")
-    assert_match "0.5.6", version_output
+    assert_match "0.5.7", version_output
     assert_match "nushell 0.113.1", version_output
 
     assert_equal "3", shell_output("#{bin}/shannon -c '1 + 2'").strip
