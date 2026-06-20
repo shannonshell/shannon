@@ -112,4 +112,4 @@ The formula verification bar should include:
 - [Experiment 1: Formula, tap, and bottle deployment](01-formula-tap-and-bottle.md)
   — **Fail**
 - [Experiment 2: Publish through shannonshell tap](02-publish-through-shannonshell-tap.md)
-  — **Designed**
+  — **Pass**

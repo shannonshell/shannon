@@ -165,3 +165,93 @@ The follow-up review approved the design with no required findings remaining. It
 left one optional implementation note: when running
 `brew info --json=v2 shannon`, record the exact tap/source metadata proving the
 installed formula came from `shannonshell/shannon`.
+
+## Result
+
+**Result:** Pass.
+
+Shannon was published through the organization-owned Homebrew path:
+
+- `shannonshell/shannon` main was pushed to commit
+  `e60b663aba9d68456ebaba5aa2c1912b2edd54a2`.
+- Tag `v0.5.7` was pushed to `shannonshell/shannon`; the annotated tag resolves
+  to `e60b663aba9d68456ebaba5aa2c1912b2edd54a2`.
+- GitHub Release `v0.5.7` exists on `shannonshell/shannon` with
+  `shannon-0.5.7.tar.gz`.
+- The release asset digest is
+  `sha256:9ee34faa76b8a60530f7360d172b1094f02a93e022a7d29decf635d90f9b995c`,
+  matching `dist/shannon.rb`.
+- Public tap `shannonshell/homebrew-shannon` exists with formula
+  `Formula/shannon.rb`.
+- Tap release `shannon-0.5.7` exists with bottle asset
+  `shannon-0.5.7.arm64_tahoe.bottle.tar.gz`.
+- The bottle digest is
+  `sha256:55961cc18def8b261e7613785c6a150c95878a4fb852b3724af9b30c221eccf1`.
+
+The accidental personal-account artifacts were cleaned up:
+
+- `gh repo view ryanxcharles/homebrew-shannon` reports not found.
+- `gh release view v0.5.6 --repo ryanxcharles/shannon` reports not found.
+- `git ls-remote origin refs/tags/v0.5.6` reports no tag.
+- `git tag --list v0.5.6` reports no local tag.
+- `brew tap` lists `shannonshell/shannon`, not `ryanxcharles/shannon`.
+
+Verification:
+
+- `cargo test` passed.
+- `scripts/make-source-tarball.sh HEAD /tmp/shannon-release-0.5.7-head` produced
+  sha256 `9ee34faa76b8a60530f7360d172b1094f02a93e022a7d29decf635d90f9b995c`.
+- The source tarball contains `Cargo.toml`, `Cargo.lock`, `nushell/`,
+  `reedline/`, and `src/main.rs`.
+- Local source-build proof passed through a temporary `shannonshell/shannon` tap
+  using the staged tarball.
+- `brew style shannonshell/shannon/shannon` passed.
+- `brew audit --new --strict shannonshell/shannon/shannon` passed.
+- Public source install passed with
+  `brew install --build-from-source shannonshell/shannon/shannon`.
+- Bottle build passed with
+  `brew install --build-bottle shannonshell/shannon/shannon` and
+  `brew bottle --json --no-rebuild`.
+- Public bottle install passed with `brew install shannonshell/shannon/shannon`;
+  Homebrew reported `built_as_bottle: true` and `poured_from_bottle: true`.
+- `brew info --json=v2 shannon` reported:
+  - `full_name = shannonshell/shannon/shannon`
+  - `tap = shannonshell/shannon`
+  - `versions.stable = 0.5.7`
+  - `urls.stable.url = https://github.com/shannonshell/shannon/releases/download/v0.5.7/shannon-0.5.7.tar.gz`
+  - `bottle.stable.root_url = https://github.com/shannonshell/homebrew-shannon/releases/download/shannon-0.5.7`
+  - `installed[0].built_as_bottle = true`
+  - `installed[0].poured_from_bottle = true`
+- `brew test shannon` passed.
+- `shannon --version` printed `0.5.7 (nushell 0.113.1)`.
+- `shannon -c '1 + 2'` printed `3`.
+- `strings /opt/homebrew/bin/shannon | rg -F '/Users/astrohacker/dev/shannon'`
+  produced no output.
+
+## Conclusion
+
+The corrected Homebrew deployment is live under the Shannon organization. Users
+can install Shannon with:
+
+```bash
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
+brew install shannon
+```
+
+The package installs Shannon `0.5.7`, embeds Nushell `0.113.1`, and has both a
+verified source-build path and a working `arm64_tahoe` bottle. The failed
+personal-account Homebrew artifacts from Experiment 1 were removed.
+
+## Completion Review
+
+**Result:** Approved.
+
+Codex reviewed the completed experiment result and found no required fixes for
+the result commit. The review accepted the `shannonshell` release, tap, source
+install, bottle install, and `ryanxcharles` cleanup evidence as sufficient and
+internally consistent.
+
+The only optional note was procedural: do not close Issue 42 until after this
+experiment result is committed, then add the issue-level conclusion, update the
+issue frontmatter to closed, and rebuild `issues/README.md`.
