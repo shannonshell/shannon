@@ -230,3 +230,148 @@ updated for all required findings and now also states the design-review and
 plan-commit gate before implementation.
 
 The follow-up review approved the design with no required findings remaining.
+
+## Result
+
+**Result:** Pass.
+
+Shannon `1.0.0` was published through the organization-owned release and
+Homebrew paths.
+
+Implementation and release:
+
+- Shannon-owned crate versions were bumped from `0.5.7` to `1.0.0`.
+- `dist/shannon.rb` now points at
+  `https://github.com/shannonshell/shannon/releases/download/v1.0.0/shannon-1.0.0.tar.gz`.
+- The formula source sha256 is
+  `94fae37468806eb764d9416350e4dbc641598fdaa57e69306084f0b62b1da5c0`.
+- Implementation commit `0dafdc5951c7f204dd96ca1dbba91c30dbb27249` was pushed to
+  `shannonshell/shannon`.
+- Annotated tag `v1.0.0` resolves to `0dafdc5951c7f204dd96ca1dbba91c30dbb27249`.
+- GitHub Release `v1.0.0` exists on `shannonshell/shannon` with
+  `shannon-1.0.0.tar.gz`.
+- The release asset digest is
+  `sha256:94fae37468806eb764d9416350e4dbc641598fdaa57e69306084f0b62b1da5c0`.
+- Release notes identify Shannon `1.0.0` as the first stable release, state that
+  the embedded Nushell version is `0.113.1`, and include the supported Homebrew
+  install commands.
+
+Homebrew publication:
+
+- `shannonshell/homebrew-shannon` formula commit
+  `a0b85d3c496d8b7d7fdfba9e47027f7cdf079ed4` updated the source formula to
+  `1.0.0`.
+- `brew audit --new --strict shannonshell/shannon/shannon` passed.
+- Public source install passed with
+  `brew install --build-from-source shannonshell/shannon/shannon`.
+- Source-install metadata reported:
+  - `full_name = shannonshell/shannon/shannon`
+  - `tap = shannonshell/shannon`
+  - `versions.stable = 1.0.0`
+  - source URL =
+    `https://github.com/shannonshell/shannon/releases/download/v1.0.0/shannon-1.0.0.tar.gz`
+  - `built_as_bottle = false`
+  - `poured_from_bottle = false`
+- Bottle-mode build passed with
+  `brew install --build-bottle shannonshell/shannon/shannon`.
+- `brew bottle --json --no-rebuild` failed twice with a Homebrew gzip
+  `buffer error`; rerunning with the supported `--skip-relocation` option
+  succeeded and still produced an `any_skip_relocation` bottle.
+- `shannonshell/homebrew-shannon` formula commit
+  `d928cee0c9dcbc7655389369be066ad80746c388` added the `1.0.0` bottle block.
+- Tap release `shannon-1.0.0` exists with
+  `shannon-1.0.0.arm64_tahoe.bottle.tar.gz`.
+- The bottle asset digest is
+  `sha256:7386cd77e3c282ed5f7c784568ab833e276f89ced0b186608a70a3bff85af215`.
+- Final cold install passed with:
+
+  ```bash
+  brew uninstall --force shannon || true
+  brew untap ryanxcharles/shannon || true
+  brew untap shannonshell/shannon || true
+  brew tap shannonshell/shannon
+  brew trust shannonshell/shannon
+  brew install shannon
+  ```
+
+- Final bottle-install metadata reported:
+  - `full_name = shannonshell/shannon/shannon`
+  - `tap = shannonshell/shannon`
+  - `versions.stable = 1.0.0`
+  - `versions.bottle = true`
+  - source URL =
+    `https://github.com/shannonshell/shannon/releases/download/v1.0.0/shannon-1.0.0.tar.gz`
+  - bottle root URL =
+    `https://github.com/shannonshell/homebrew-shannon/releases/download/shannon-1.0.0`
+  - bottle URL =
+    `https://github.com/shannonshell/homebrew-shannon/releases/download/shannon-1.0.0/shannon-1.0.0.arm64_tahoe.bottle.tar.gz`
+  - `built_as_bottle = true`
+  - `poured_from_bottle = true`
+
+Verification:
+
+- `cargo build` passed with the known upstream `nu-command` unfulfilled lint
+  expectation warning.
+- `cargo test` passed: 10 library tests, 13 binary tests, empty integration
+  harness, and empty doctest set.
+- `./target/debug/shannon --version` printed `1.0.0 (nushell 0.113.1)`.
+- `./target/debug/shannon -c '1 + 2'` printed `3`.
+- PTY-backed `expect` smoke with `--no-config-file --no-history` passed:
+  - `MODE_START:nu`
+  - `NU_OK_RELEASE`
+  - `BASH_OK_RELEASE:bash`
+  - `MODE_BACK:nu`
+  - `ENV_BACK:from_bash_1_0_0`
+  - `PWD_BACK:/tmp`
+  - `NU_BACK:nu:from_bash_1_0_0:/tmp`
+- `scripts/make-source-tarball.sh HEAD /tmp/shannon-release-1.0.0-head` produced
+  sha256 `94fae37468806eb764d9416350e4dbc641598fdaa57e69306084f0b62b1da5c0`.
+- The source tarball contains `Cargo.toml`, `Cargo.lock`, `nushell/`,
+  `reedline/`, and `src/main.rs`, and excludes `dist/shannon.rb`.
+- Local Homebrew pre-publication source-build proof passed with a temporary
+  `file://` formula URL to the staged `shannon-1.0.0.tar.gz`.
+- `brew style shannonshell/shannon/shannon` passed.
+- `brew test shannon` passed for both source and bottle installs.
+- Installed `shannon --version` printed `1.0.0 (nushell 0.113.1)`.
+- Installed `shannon -c '1 + 2'` printed `3`.
+- `strings /opt/homebrew/bin/shannon | rg -F '/Users/astrohacker/dev/shannon'`
+  produced no output.
+
+Personal-fork checks:
+
+- `brew tap` lists `shannonshell/shannon`, not `ryanxcharles/shannon`.
+- `gh release view v1.0.0 --repo ryanxcharles/shannon` reports not found.
+- `git ls-remote origin refs/tags/v1.0.0` reports no tag.
+- `gh repo view ryanxcharles/homebrew-shannon` reports not found.
+
+## Conclusion
+
+Shannon `1.0.0` is released as the first stable release. The release is
+published under `shannonshell/shannon`, the Homebrew formula and bottle are
+published under `shannonshell/homebrew-shannon`, and the supported install path
+is:
+
+```bash
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
+brew install shannon
+```
+
+The stable behavior bar passed for Nushell mode, non-interactive execution, mode
+switching, Bash mode execution, Bash-to-Nushell environment propagation, and
+Bash-to-Nushell cwd propagation. The public source-install and bottle-install
+paths both passed from the organization-owned tap.
+
+## Completion Review
+
+**Result:** Approved.
+
+Codex reviewed the completed experiment result and found no required fixes
+before the result commit. The review accepted the release evidence under
+`shannonshell/shannon`, the public Homebrew source and bottle install evidence,
+the PTY mode-switch/env/cwd smoke, the release-note checks, and the
+personal-fork cleanup checks as sufficient and internally consistent.
+
+The only optional note was procedural: after this result commit, close Issue 43
+in a separate step by updating the issue frontmatter, adding the issue-level
+conclusion, and regenerating `issues/README.md`.
