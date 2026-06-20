@@ -91,3 +91,8 @@ The verification bar should include:
   platform?
 - Should any pre-1.0.0 Homebrew artifacts be retained, superseded, or annotated
   in release notes?
+
+## Experiments
+
+- [Experiment 1: Publish stable 1.0.0 release](01-release-1-0-0.md) —
+  **Designed**
