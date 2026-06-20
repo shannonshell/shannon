@@ -1,16 +1,16 @@
 # Shannon
 
-A poly-shell built on nushell, with seamless bash compatibility.
-Shift+Tab to switch between nushell and bash.
+A poly-shell built on nushell, with seamless bash compatibility. Shift+Tab to
+switch between nushell and bash.
 
-Named after [Claude Shannon](https://en.wikipedia.org/wiki/Claude_Shannon),
-the father of information theory.
+Named after [Claude Shannon](https://en.wikipedia.org/wiki/Claude_Shannon), the
+father of information theory.
 
 ## The Idea
 
-Nushell is powerful but the world runs on bash. Shannon gives you both —
-press **Shift+Tab** to switch between nushell and bash. Environment variables
-and working directory sync automatically.
+Nushell is powerful but the world runs on bash. Shannon gives you both — press
+**Shift+Tab** to switch between nushell and bash. Environment variables and
+working directory sync automatically.
 
 ```
 [nu] ~/project > ls | where size > 1mb
@@ -54,16 +54,31 @@ Shannon IS nushell — you get all nushell features out of the box:
 
 Shannon uses standard config locations — no custom config directory:
 
-| Config | Location | Purpose |
-|--------|----------|---------|
-| Bash | `~/.bash_profile` / `~/.bashrc` | PATH, env vars, nvm, homebrew, etc. |
-| Nushell | `~/.config/nushell/env.nu` | Nushell env setup |
-| Nushell | `~/.config/nushell/config.nu` | Keybindings, colors, hooks, completions |
+| Config  | Location                        | Purpose                                 |
+| ------- | ------------------------------- | --------------------------------------- |
+| Bash    | `~/.bash_profile` / `~/.bashrc` | PATH, env vars, nvm, homebrew, etc.     |
+| Nushell | `~/.config/nushell/env.nu`      | Nushell env setup                       |
+| Nushell | `~/.config/nushell/config.nu`   | Keybindings, colors, hooks, completions |
 
-No config files are required — shannon works out of the box. If you already
-have nushell and bash configured, shannon uses your existing setup automatically.
+No config files are required — shannon works out of the box. If you already have
+nushell and bash configured, shannon uses your existing setup automatically.
 
 ## Installation
+
+### Homebrew
+
+With [Homebrew](https://brew.sh) on macOS:
+
+```sh
+brew tap ryanxcharles/shannon
+brew trust ryanxcharles/shannon
+brew install shannon
+```
+
+Homebrew builds from Shannon's pinned release tarball, and bottled installs are
+used when available for your macOS version.
+
+### Cargo
 
 Requires the [Rust toolchain](https://rustup.rs).
 
