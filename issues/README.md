@@ -5,6 +5,7 @@
 | #                                                | Title                                          | Opened     |
 | ------------------------------------------------ | ---------------------------------------------- | ---------- |
 | [0040](0040-standard-config-locations/README.md) | Use standard nushell and bash config locations | 2026-04-01 |
+| [0042](0042-homebrew-deployment/README.md)       | Homebrew deployment                            | 2026-06-20 |
 
 ## Closed
 
