@@ -7983,7 +7983,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-cli"
-version = "0.5.7"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "crossterm",
@@ -8024,7 +8024,7 @@ dependencies = [
 
 [[package]]
 name = "shannon-nu-lsp"
-version = "0.5.7"
+version = "1.0.0"
 dependencies = [
  "assert-json-diff",
  "crossbeam-channel",

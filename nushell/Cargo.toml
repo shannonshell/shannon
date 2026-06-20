@@ -87,7 +87,7 @@ members = [
 
 [workspace.dependencies]
 
-nu-cli = { path = "crates/nu-cli", version = "0.5.7", package = "shannon-nu-cli", default-features = false }
+nu-cli = { path = "crates/nu-cli", version = "1.0.0", package = "shannon-nu-cli", default-features = false }
 nu-cmd-base = { path = "crates/nu-cmd-base", version = "0.113.1", default-features = false }
 nu-cmd-extra = { path = "crates/nu-cmd-extra", version = "0.113.1", default-features = false }
 nu-cmd-lang = { path = "crates/nu-cmd-lang", version = "0.113.1", default-features = false }
@@ -101,7 +101,7 @@ nu-explore = { path = "crates/nu-explore", version = "0.113.1", default-features
 nu-glob = { path = "crates/nu-glob", version = "0.113.1", default-features = false }
 nu-heavy-utils = { path = "crates/nu-heavy-utils", version = "0.113.1", default-features = false }
 nu-json = { path = "crates/nu-json", version = "0.113.1", default-features = false }
-nu-lsp = { path = "crates/nu-lsp", version = "0.5.7", package = "shannon-nu-lsp", default-features = false }
+nu-lsp = { path = "crates/nu-lsp", version = "1.0.0", package = "shannon-nu-lsp", default-features = false }
 nu-mcp = { path = "crates/nu-mcp", version = "0.113.1", default-features = false }
 nu-parser = { path = "crates/nu-parser", version = "0.113.1", default-features = false }
 nu-path = { path = "crates/nu-path", version = "0.113.1", default-features = false }
