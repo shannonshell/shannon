@@ -102,11 +102,14 @@ The formula verification bar should include:
 - Should the formula install any shell integration files, completions, or
   Nushell configuration helpers, or only the `shannon` binary for the first
   release?
-- What version should be published first through Homebrew? Experiment 1 uses a
-  new patch release, `0.5.6`, because `v0.5.5` already exists and points at
-  pre-Homebrew, pre-Nushell-0.113.1 code.
+- What version should be published first through Homebrew? Experiment 1 used
+  `0.5.6`, but that attempt failed against the wrong publication target.
+  Experiment 2 uses `0.5.7` so the corrected `shannonshell` release path has an
+  unambiguous artifact line.
 
 ## Experiments
 
 - [Experiment 1: Formula, tap, and bottle deployment](01-formula-tap-and-bottle.md)
   — **Fail**
+- [Experiment 2: Publish through shannonshell tap](02-publish-through-shannonshell-tap.md)
+  — **Designed**
