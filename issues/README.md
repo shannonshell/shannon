@@ -5,12 +5,12 @@
 | #                                                | Title                                          | Opened     |
 | ------------------------------------------------ | ---------------------------------------------- | ---------- |
 | [0040](0040-standard-config-locations/README.md) | Use standard nushell and bash config locations | 2026-04-01 |
-| [0043](0043-release-1-0-0/README.md)             | Release 1.0.0                                  | 2026-06-20 |
 
 ## Closed
 
 | #                                                       | Title                                                                | Opened     | Closed     |
 | ------------------------------------------------------- | -------------------------------------------------------------------- | ---------- | ---------- |
+| [0043](0043-release-1-0-0/README.md)                    | Release 1.0.0                                                        | 2026-06-20 | 2026-06-20 |
 | [0042](0042-homebrew-deployment/README.md)              | Homebrew deployment                                                  | 2026-06-20 | 2026-06-20 |
 | [0041](0041-upgrade-nushell-dependencies/README.md)     | Upgrade nushell dependencies to 0.113.1                              | 2026-06-19 | 2026-06-19 |
 | [0039](0039-minimize-nushell-fork-publishing/README.md) | Minimize nushell fork publishing for crates.io                       | 2026-03-31 | 2026-04-01 |

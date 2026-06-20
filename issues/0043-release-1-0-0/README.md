@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-06-20"
+closed = "2026-06-20"
 +++
 
 # Issue 43: Release 1.0.0
@@ -95,3 +96,32 @@ The verification bar should include:
 ## Experiments
 
 - [Experiment 1: Publish stable 1.0.0 release](01-release-1-0-0.md) — **Pass**
+
+## Conclusion
+
+Shannon `1.0.0` is released as the first stable release.
+
+The release is published under the Shannon organization:
+
+- `shannonshell/shannon` tag `v1.0.0`
+- `shannonshell/shannon` GitHub Release `v1.0.0`
+- source asset `shannon-1.0.0.tar.gz`
+- `shannonshell/homebrew-shannon` formula and `arm64_tahoe` bottle
+
+The supported install path is:
+
+```bash
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
+brew install shannon
+```
+
+Verification covered local build/test, non-interactive Nushell execution, a
+PTY-backed nu/bash mode-switch smoke with env and cwd propagation, deterministic
+source tarball generation, public Homebrew source install, public Homebrew
+bottle install, `brew style`, `brew audit --new --strict`, `brew test`, release
+note checks, path-leak checks, and personal-fork absence checks.
+
+The final installed package reports `1.0.0 (nushell 0.113.1)` and Homebrew
+metadata confirms it installs from `shannonshell/shannon` and pours the bottle
+from `shannonshell/homebrew-shannon`.
