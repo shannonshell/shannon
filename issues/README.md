@@ -5,6 +5,7 @@
 | #                                                | Title                                          | Opened     |
 | ------------------------------------------------ | ---------------------------------------------- | ---------- |
 | [0040](0040-standard-config-locations/README.md) | Use standard nushell and bash config locations | 2026-04-01 |
+| [0043](0043-release-1-0-0/README.md)             | Release 1.0.0                                  | 2026-06-20 |
 
 ## Closed
 
