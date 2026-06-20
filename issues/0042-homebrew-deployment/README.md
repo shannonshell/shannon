@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-06-20"
+closed = "2026-06-20"
 +++
 
 # Issue 42: Homebrew deployment
@@ -113,3 +114,31 @@ The formula verification bar should include:
   — **Fail**
 - [Experiment 2: Publish through shannonshell tap](02-publish-through-shannonshell-tap.md)
   — **Pass**
+
+## Conclusion
+
+Shannon is now installable through Homebrew from the organization-owned tap:
+
+```bash
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
+brew install shannon
+```
+
+The completed deployment publishes Shannon `0.5.7` from `shannonshell/shannon`,
+with source release asset `shannon-0.5.7.tar.gz` and formula SHA
+`9ee34faa76b8a60530f7360d172b1094f02a93e022a7d29decf635d90f9b995c`. The public
+tap `shannonshell/homebrew-shannon` contains the formula and an `arm64_tahoe`
+bottle with SHA
+`55961cc18def8b261e7613785c6a150c95878a4fb852b3724af9b30c221eccf1`.
+
+Verification covered `cargo test`, deterministic source tarball generation,
+local Homebrew source-build proof, public source install, public bottle install,
+`brew style`, `brew audit --new --strict`, `brew test`, runtime version and
+execution smoke tests, and path-leak checks. Homebrew metadata confirmed the
+installed formula came from `shannonshell/shannon` and the final install poured
+from the published bottle.
+
+The accidental `ryanxcharles/homebrew-shannon` tap repository, accidental
+`v0.5.6` release, and accidental `v0.5.6` tag were removed. The local Homebrew
+tap list contains `shannonshell/shannon`, not `ryanxcharles/shannon`.
