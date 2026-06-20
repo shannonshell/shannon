@@ -1,6 +1,7 @@
 +++
-status = "open"
+status = "closed"
 opened = "2026-06-19"
+closed = "2026-06-19"
 +++
 
 # Issue 41: Upgrade nushell dependencies to 0.113.1
@@ -82,3 +83,19 @@ The verification bar should include:
 
 - [Experiment 1: Sync nushell 0.113.1 and align dependency graph](01-sync-nushell-0-113-1.md)
   — **Pass**
+
+## Conclusion
+
+Shannon's embedded Nushell dependency set is upgraded to upstream Nushell
+0.113.1 with Reedline v0.48.0. The root dependency graph, vendored Nushell
+workspace dependencies, lockfiles, and Shannon's version reporting are aligned.
+
+The upgrade preserved Shannon's fork-specific shell behavior: `shannon-nu-cli`
+and `shannon-nu-lsp` remain Shannon-renamed crates, the `ModeDispatcher` hook
+continues dispatching non-nu modes, Bash highlighting remains wired in, the
+mode-switch host command remains available for Shift+Tab, and bash-to-nu env/cwd
+propagation passed PTY verification.
+
+Verification passed with `cargo build`, `cargo test`, version output,
+non-interactive nu smoke tests, and a PTY-backed nu/bash mode smoke test. The
+only observed warning is an upstream `nu-command` unfulfilled lint expectation.
