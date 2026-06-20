@@ -7,6 +7,7 @@ mod completions;
 mod config_files;
 mod eval_cmds;
 mod eval_file;
+mod hints;
 mod menus;
 mod mode_dispatcher;
 mod nu_highlight;
@@ -19,12 +20,14 @@ mod syntax_highlight;
 mod util;
 mod validation;
 
+pub use bash_highlight::BashHighlighter;
 pub use commands::add_cli_context;
 pub use completions::{FileCompletion, NuCompleter, SemanticSuggestion, SuggestionKind};
 pub use config_files::eval_config_contents;
 pub use eval_cmds::{EvaluateCommandsOpts, evaluate_commands};
 pub use eval_file::evaluate_file;
 pub use menus::NuHelpCompleter;
+pub use mode_dispatcher::{ModeDispatcher, ModeResult};
 pub use nu_highlight::NuHighlight;
 pub use print::Print;
 pub use prompt::NushellPrompt;
@@ -32,8 +35,6 @@ pub use prompt_update::update_prompt;
 pub use repl::evaluate_repl;
 pub use syntax_highlight::NuHighlighter;
 pub use util::{eval_source, gather_parent_env_vars};
-pub use bash_highlight::BashHighlighter;
-pub use mode_dispatcher::{ModeDispatcher, ModeResult};
 pub use validation::NuValidator;
 
 #[cfg(feature = "plugin")]
@@ -42,3 +43,10 @@ pub use config_files::add_plugin_file;
 pub use config_files::migrate_old_plugin_file;
 #[cfg(feature = "plugin")]
 pub use config_files::read_plugin_file;
+
+#[cfg(test)]
+#[macro_use]
+extern crate nu_test_support;
+
+#[cfg(test)]
+use nu_test_support::harness::main;

@@ -8,6 +8,12 @@ Avoid commands that produce a large amount of output, and consider piping those 
 If you need to run a long lived command, background it - e.g. `job spawn { uvicorn main:app }` so that
 this tool does not run indefinitely.
 
+Calls that run longer than the promote-after timeout are auto-promoted to a background job; the
+tool then errors with a job id and you must `job recv` to collect the result. The timeout defaults
+to 120s and can be overridden by setting `$env.NU_MCP_PROMOTE_AFTER` (a duration, e.g. `10min`) on
+the persistent stack. Bump it before a known long-running command so it stays synchronous; the
+setting persists across subsequent calls until you change it again.
+
 Command Equivalents to Bash:
 
 | Bash Command | Nushell Command | Description |

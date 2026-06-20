@@ -80,7 +80,10 @@ impl BashProcess {
         let mut preamble = String::new();
 
         // Change directory
-        preamble.push_str(&format!("cd {}\n", shell_escape(&state.cwd.to_string_lossy())));
+        preamble.push_str(&format!(
+            "cd {}\n",
+            shell_escape(&state.cwd.to_string_lossy())
+        ));
 
         // Export env vars
         for (key, value) in &state.env {

@@ -51,7 +51,7 @@ pub fn evaluate_file(
     let file = std::fs::read(&file_path).map_err(|err| {
         let cmdline = format!("nu {path} {}", args.join(" "));
         let mut working_set = StateWorkingSet::new(engine_state);
-        let file_id = working_set.add_file("<commandline>".into(), cmdline.as_bytes());
+        let file_id = working_set.add_file("<commandline>", cmdline.as_bytes());
         let span = working_set
             .get_span_for_file(file_id)
             .subspan(3, path.len() + 3)
@@ -221,50 +221,21 @@ mod tests {
     use nu_test_support::prelude::*;
 
     #[test]
-    fn evaluate_file_arg_with_newline_does_not_split_commands2() -> Result {
-        Playground::setup("evaluate_file_newline_arg", |dirs, sandbox| {
+    fn evaluate_file_arg_with_various_characters_escape_properly() -> Result {
+        Playground::setup("evaluate_file_various_characters", |dirs, sandbox| {
             sandbox.with_files(&[FileWithContent(
                 "test.nu",
-                r#"def main [...args: string] {
-  let token3 = $args | get 2
-
-  if $token3 starts-with '"' or $token3 ends-with '"' {
-    "error"
-  } else {
-    "ok"
-  }
-}"#,
+                "def main [...args: string] { $args | to json }",
             )]);
+
+            let args = r#"a "" b "c\nd" "e f" ] "[" "}" "{" "\"" '"'"#;
+            let expected = ["a", "", "b", "c\nd", "e f", "]", "[", "}", "{", "\"", "\""];
 
             test()
                 .cwd(dirs.test())
                 .add_nu_to_path()
-                .run(r#"nu test.nu a b "c\nd"; 'ok'"#)
-                .expect_value_eq("ok")
-        })
-    }
-
-    #[test]
-    fn evaluate_file_quoted_space_arg_is_passed_without_extra_quotes() -> Result {
-        Playground::setup("evaluate_file_quoted_space_arg", |dirs, sandbox| {
-            sandbox.with_files(&[FileWithContent(
-                "test.nu",
-                r#"def main [...args: string] {
-  let token3 = $args | get 1
-
-  if $token3 starts-with '"' or $token3 ends-with '"' {
-    "error"
-  } else {
-    "ok"
-  }
-}"#,
-            )]);
-
-            test()
-                .cwd(dirs.test())
-                .add_nu_to_path()
-                .run(r#"nu test.nu arg1 "arg 2"; 'ok'"#)
-                .expect_value_eq("ok")
+                .run(format!("nu test.nu {args} | from json"))
+                .expect_value_eq(expected)
         })
     }
 }

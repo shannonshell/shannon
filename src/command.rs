@@ -539,8 +539,9 @@ pub(crate) fn parse_cli_args(args: Vec<OsString>) -> Result<ParsedCli, CliError>
             }
             Short('v') | Long("version") => {
                 let version = env!("CARGO_PKG_VERSION").to_string();
+                let nu_version = env!("NUSHELL_VERSION").to_string();
                 let _ = std::panic::catch_unwind(move || {
-                    stdout_write_all_and_flush(format!("{version}\n"))
+                    stdout_write_all_and_flush(format!("{version} (nushell {nu_version})\n"))
                 });
                 std::process::exit(0);
             }

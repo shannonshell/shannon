@@ -35,6 +35,15 @@ pub enum Signal {
     CtrlC, // Interrupt current editing
     /// Abort with `Ctrl+D` signalling `EOF` or abort of a whole interactive session
     CtrlD, // End terminal session
+
+    /// A custom, uninterpreted payload passed back to the host application.
+    ///
+    /// This signal is triggered by a [`ReedlineEvent::ExecuteHostCommand`].
+    /// The contained string is a "passthrough" value that Reedline does not
+    /// inspect or modify; it is up to the caller to define the protocol
+    /// and execution logic for this payload.
+    HostCommand(String),
+
     /// An external signal requested that `read_line()` return.
     /// Contains the current buffer contents at the time of interruption.
     ExternalBreak(String),
@@ -56,7 +65,7 @@ pub enum TextObjectType {
     Word,
     /// WORD (delimited only by whitespace)
     BigWord,
-    /// (, ), [, ], {, }
+    /// (, ), \[, ], {, }
     Brackets,
     /// ", ', `
     Quote,
@@ -86,7 +95,7 @@ impl Default for TextObject {
 #[non_exhaustive]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq, EnumDiscriminants, EnumIter)]
 #[strum_discriminants(doc = "This is the auto generated discriminant type for [`EditCommand`]")]
-#[strum_discriminants(derive(EnumString, VariantArray))]
+#[strum_discriminants(derive(EnumIter, EnumString, VariantArray))]
 #[strum_discriminants(strum(ascii_case_insensitive))]
 pub enum EditCommand {
     /// Move to the start of the buffer
@@ -204,6 +213,18 @@ pub enum EditCommand {
     /// - On Unix systems LF (`"\n"`)
     /// - On Windows CRLF (`"\r\n"`)
     InsertNewline,
+
+    /// Inserts a new line above the current line
+    ///
+    /// - On Unix systems LF (`"\n"`)
+    /// - On Windows CRLF (`"\r\n"`)
+    InsertNewlineAbove,
+
+    /// Inserts a new line below the current line
+    ///
+    /// - On Unix systems LF (`"\n"`)
+    /// - On Windows CRLF (`"\r\n"`)
+    InsertNewlineBelow,
 
     /// Replace a character
     ReplaceChar(char),
@@ -487,6 +508,12 @@ pub enum EditCommand {
     },
 }
 
+// FIXME: This implementation makes no sense to be here, and should be removed in a future version
+// It was originally added for nushell to show all the available commands and their parameters to
+// the users. Hence some are marked `Optional` and some have different parameter names.
+// This is also very hard to keep in sync with nushell.
+// So, recently its discriminants are exposed using the strum EnumDiscriminants, and downstream is
+// expected to use that if they want to display the list of available commands to their users.
 impl Display for EditCommand {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -536,6 +563,8 @@ impl Display for EditCommand {
             EditCommand::InsertChar(_) => write!(f, "InsertChar  Value: <char>"),
             EditCommand::InsertString(_) => write!(f, "InsertString Value: <string>"),
             EditCommand::InsertNewline => write!(f, "InsertNewline"),
+            EditCommand::InsertNewlineAbove => write!(f, "InsertNewlineAbove"),
+            EditCommand::InsertNewlineBelow => write!(f, "InsertNewlineBelow"),
             EditCommand::ReplaceChar(_) => write!(f, "ReplaceChar <char>"),
             EditCommand::ReplaceChars(_, _) => write!(f, "ReplaceChars <int> <string>"),
             EditCommand::Backspace => write!(f, "Backspace"),
@@ -661,6 +690,8 @@ impl EditCommand {
             | EditCommand::CutChar
             | EditCommand::InsertString(_)
             | EditCommand::InsertNewline
+            | EditCommand::InsertNewlineAbove
+            | EditCommand::InsertNewlineBelow
             | EditCommand::ReplaceChar(_)
             | EditCommand::ReplaceChars(_, _)
             | EditCommand::BackspaceWord
@@ -806,7 +837,7 @@ impl UndoBehavior {
 /// Reedline supported actions.
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug, EnumDiscriminants, EnumIter)]
 #[strum_discriminants(doc = "This is the auto generated discriminant type for [`ReedlineEvent`]")]
-#[strum_discriminants(derive(EnumString, VariantArray))]
+#[strum_discriminants(derive(EnumIter, EnumString, VariantArray))]
 #[strum_discriminants(strum(ascii_case_insensitive))]
 pub enum ReedlineEvent {
     /// No op event
@@ -937,7 +968,12 @@ pub enum ReedlineEvent {
     /// Move to the previous history page
     MenuPagePrevious,
 
-    /// Way to bind the execution of a whole command (directly returning from [`crate::Reedline::read_line()`]) to a keybinding
+    /// Triggers an immediate return from [`Reedline::read_line()`](crate::Reedline::read_line) with an opaque payload.
+    ///
+    /// Reedline does not inspect or validate the contents of this string. It is
+    /// passed directly through to the caller as a [`Signal::HostCommand`].
+    /// Use this to send custom instructions or serialized data from a keybinding
+    /// logic back to the main application loop.
     ExecuteHostCommand(String),
 
     /// Open text editor
@@ -947,6 +983,12 @@ pub enum ReedlineEvent {
     ViChangeMode(String),
 }
 
+// FIXME: This implementation makes no sense to be here, and should be removed in a future version
+// It was originally added for nushell to show all the available commands and their parameters to
+// the users.
+// This is also very hard to keep in sync with nushell.
+// So, recently its discriminants are exposed using the strum EnumDiscriminants, and downstream is
+// expected to use that if they want to display the list of available commands to their users.
 impl Display for ReedlineEvent {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -1040,5 +1082,17 @@ impl TryFrom<Event> for ReedlineRawEvent {
 impl From<ReedlineRawEvent> for Event {
     fn from(event: ReedlineRawEvent) -> Self {
         event.0
+    }
+}
+
+#[cfg(feature = "helix")]
+impl TryFrom<ReedlineRawEvent> for KeyEvent {
+    type Error = ReedlineRawEvent;
+
+    fn try_from(event: ReedlineRawEvent) -> Result<Self, Self::Error> {
+        match event.0 {
+            Event::Key(key_event) => Ok(key_event),
+            other => Err(ReedlineRawEvent(other)),
+        }
     }
 }

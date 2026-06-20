@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub struct NushellMcpServer {
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
     evaluator: Evaluator,
 }
@@ -145,8 +146,8 @@ mod tests {
             .as_str()
             .expect("instructions should be a string");
         assert!(
-            instructions.contains("Nushell native commands"),
-            "instructions should document command discovery"
+            instructions.contains("list_commands") && instructions.contains("command_help"),
+            "instructions should point at the command discovery tools (list_commands / command_help)"
         );
 
         let server_info = json
@@ -201,6 +202,29 @@ mod tests {
                 .unwrap_or("")
                 .contains("List available Nushell native commands"),
             "list_commands tool description should mention native command discovery"
+        );
+    }
+
+    #[test]
+    fn evaluate_tool_input_schema_exposes_only_input_property() {
+        let router = NushellMcpServer::tool_router();
+        let evaluate_tool = router
+            .get("evaluate")
+            .expect("evaluate tool should be registered");
+
+        let properties = evaluate_tool
+            .input_schema
+            .get("properties")
+            .and_then(JsonValue::as_object)
+            .expect("evaluate input schema should expose a properties object");
+
+        let mut property_names: Vec<_> = properties.keys().cloned().collect();
+        property_names.sort();
+        assert_eq!(
+            property_names,
+            vec!["input".to_string()],
+            "evaluate tool should accept only `input`; per-call timeout must be \
+             controlled exclusively via the NU_MCP_PROMOTE_AFTER env var"
         );
     }
 

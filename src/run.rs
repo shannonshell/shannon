@@ -286,7 +286,9 @@ pub(crate) fn run_repl(
                 eprintln!(
                     "{fg}Welcome to {green}{bold}Shannon{reset}{fg}, based on the {green}Nu{reset}{fg} language, where all data is structured!{reset}"
                 );
-                eprintln!("{fg}Version: {green}{version}{fg} (nushell {green}{nu_version}{fg}){reset}");
+                eprintln!(
+                    "{fg}Version: {green}{version}{fg} (nushell {green}{nu_version}{fg}){reset}"
+                );
                 eprintln!(
                     "{green}{bold}Startup Time:{reset}{fg} {:?}{reset}",
                     entire_start_time.elapsed()

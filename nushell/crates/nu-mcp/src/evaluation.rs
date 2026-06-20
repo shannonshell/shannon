@@ -176,9 +176,15 @@ pub(crate) fn shell_error_to_mcp_error(
 /// Maximum length for job descriptions shown in `job list`.
 const JOB_DESCRIPTION_MAX_LEN: usize = 40;
 
-/// How long an evaluation can run before being auto-promoted to a background job.
-/// Overridden via `NU_MCP_PROMOTE_AFTER` env var (e.g. `30sec`, `5sec`).
-const DEFAULT_PROMOTE_AFTER: Duration = Duration::from_secs(10);
+/// How long an evaluation can run before being auto-promoted to a background
+/// job. Overridden via the `NU_MCP_PROMOTE_AFTER` env var on the persistent
+/// stack.
+///
+/// 2 minutes is deliberate: a shorter default (we had 10s) made Claude Opus 4.7
+/// give up on nushell because everyday commands kept getting shoved into the
+/// background. Keep the happy path synchronous; callers who know a command is
+/// long-running can widen the window by setting `$env.NU_MCP_PROMOTE_AFTER`.
+const DEFAULT_PROMOTE_AFTER: Duration = Duration::from_secs(120);
 
 /// Evaluates Nushell code in a persistent REPL-style context for MCP.
 ///
@@ -281,7 +287,11 @@ impl Evaluator {
     }
 
     /// Evaluates nushell source code, promoting to a background job on
-    /// cancellation or if the evaluation exceeds `NU_MCP_PROMOTE_AFTER` (default 10s).
+    /// cancellation or if the evaluation exceeds its promote-after timeout.
+    ///
+    /// Timeout resolution:
+    /// 1. `NU_MCP_PROMOTE_AFTER` env var on the persistent stack.
+    /// 2. [`DEFAULT_PROMOTE_AFTER`] (2 minutes).
     pub async fn eval_async(
         &self,
         nu_source: &str,
@@ -654,7 +664,8 @@ fn eval_on_state(
 /// Returns the duration after which a running evaluation is auto-promoted
 /// to a background job.
 ///
-/// Defaults to 10s. Can be overridden via `NU_MCP_PROMOTE_AFTER` env var.
+/// Defaults to [`DEFAULT_PROMOTE_AFTER`] (2 minutes). Can be overridden via
+/// `NU_MCP_PROMOTE_AFTER` env var on the persistent stack.
 fn promote_timeout(engine_state: &EngineState, stack: &Stack) -> Duration {
     stack
         .get_env_var(engine_state, "NU_MCP_PROMOTE_AFTER")
@@ -760,17 +771,24 @@ fn process_pipeline(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use nu_engine::eval_expression;
+    #[cfg(unix)]
+    use nu_protocol::engine::StateWorkingSet;
+    #[cfg(unix)]
     use nu_protocol::{
         ShellError, Signature, SyntaxShape, Value,
-        engine::{Call, Command as NuCommand, StateWorkingSet},
+        engine::{Call, Command as NuCommand},
         shell_error::io::IoError,
     };
+    #[cfg(unix)]
     use std::process::{Command as ProcessCommand, Stdio};
 
+    #[cfg(unix)]
     #[derive(Clone)]
     struct TestRunExternal;
 
+    #[cfg(unix)]
     impl NuCommand for TestRunExternal {
         fn name(&self) -> &str {
             "run-external"
@@ -1160,6 +1178,63 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn promote_timeout_defaults_when_env_var_unset() {
+        let engine_state = nu_cmd_lang::create_default_context();
+        let evaluator = Evaluator::new(engine_state);
+
+        let state = evaluator.state.lock().await;
+        assert_eq!(
+            promote_timeout(&state.engine_state, &state.stack),
+            DEFAULT_PROMOTE_AFTER,
+            "without NU_MCP_PROMOTE_AFTER the default 2-minute timeout should apply"
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_timeout_reads_nu_mcp_promote_after_env_var() {
+        let engine_state = nu_cmd_lang::create_default_context();
+        let evaluator = Evaluator::new(engine_state);
+
+        evaluator
+            .eval_async(
+                "$env.NU_MCP_PROMOTE_AFTER = 750ms",
+                CancellationToken::new(),
+            )
+            .await
+            .expect("setting NU_MCP_PROMOTE_AFTER should succeed");
+
+        let state = evaluator.state.lock().await;
+        assert_eq!(
+            promote_timeout(&state.engine_state, &state.stack),
+            Duration::from_millis(750),
+            "promote_timeout should honor NU_MCP_PROMOTE_AFTER on the persistent stack"
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_timeout_ignores_malformed_env_var() {
+        let engine_state = nu_cmd_lang::create_default_context();
+        let evaluator = Evaluator::new(engine_state);
+
+        // A non-duration value must not override the default; otherwise a typo
+        // could silently disable promotion entirely.
+        evaluator
+            .eval_async(
+                "$env.NU_MCP_PROMOTE_AFTER = 'not-a-duration'",
+                CancellationToken::new(),
+            )
+            .await
+            .expect("setting NU_MCP_PROMOTE_AFTER to a string should succeed");
+
+        let state = evaluator.state.lock().await;
+        assert_eq!(
+            promote_timeout(&state.engine_state, &state.stack),
+            DEFAULT_PROMOTE_AFTER,
+            "malformed NU_MCP_PROMOTE_AFTER should fall back to the default"
+        );
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn test_external_command_promotion_respects_promote_after_env() {
@@ -1254,13 +1329,21 @@ mod tests {
         );
 
         // Original variable should still be 1 (forked state not committed)
-        let result = evaluator
+        let result_nuon = evaluator
             .eval_async("$x", CancellationToken::new())
             .await
             .unwrap();
-        assert!(
-            result.contains('1') && !result.contains("999"),
-            "Variable should still be 1 after promoted eval, got: {result}"
+        let result = nuon::from_nuon(&result_nuon, None).unwrap();
+        let output = result
+            .into_record()
+            .unwrap()
+            .remove("output")
+            .unwrap()
+            .into_string()
+            .unwrap();
+        assert_eq!(
+            output, "1",
+            "Variable should still be 1 after promoted eval, got: {result_nuon}"
         );
     }
 

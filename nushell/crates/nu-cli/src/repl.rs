@@ -8,6 +8,7 @@ use crate::prompt_update::{
 use crate::{
     NuHighlighter, NuValidator, NushellPrompt,
     completions::NuCompleter,
+    hints::ExternalHinter,
     nu_highlight::NoOpHighlighter,
     prompt_update,
     reedline_config::{KeybindingsMode, add_menus, create_keybindings},
@@ -18,12 +19,11 @@ use log::{error, trace, warn};
 use miette::{ErrReport, IntoDiagnostic, Result};
 use nu_cmd_base::util::get_editor;
 use nu_color_config::StyleComputer;
-#[allow(deprecated)]
 use nu_engine::env_to_strings;
 use nu_engine::exit::cleanup_exit;
 use nu_parser::{lex, parse, trim_quotes_str};
 use nu_protocol::shell_error::io::IoError;
-use nu_protocol::{BannerKind, shell_error};
+use nu_protocol::{BannerKind, ShellIntegrationConfig, shell_error};
 use nu_protocol::{
     Config, HistoryConfig, HistoryFileFormat, PipelineData, ShellError, Span, Spanned, Value,
     config::NuCursorShape,
@@ -33,7 +33,7 @@ use nu_protocol::{
 use nu_utils::time::Instant;
 use nu_utils::{
     filesystem::{PermissionResult, have_permission},
-    perf,
+    perf, stderr_write_all_and_flush,
 };
 #[cfg(feature = "sqlite")]
 use reedline::SqliteBackedHistory;
@@ -86,6 +86,7 @@ pub fn evaluate_repl(
     let use_color = config.use_ansi_coloring.get(engine_state);
 
     let mut entry_num = 0;
+    let mut is_hostcommand = false;
 
     // Let's grab the shell_integration configs
     let shell_integration_osc2 = config.shell_integration.osc2;
@@ -162,7 +163,7 @@ pub fn evaluate_repl(
                 eval_source(
                     engine_state,
                     &mut unique_stack,
-                    r#"banner --short"#.as_bytes(),
+                    "banner --short".as_bytes(),
                     "show short banner",
                     PipelineData::empty(),
                     false,
@@ -172,7 +173,7 @@ pub fn evaluate_repl(
                 eval_source(
                     engine_state,
                     &mut unique_stack,
-                    r#"banner"#.as_bytes(),
+                    "banner".as_bytes(),
                     "show_banner",
                     PipelineData::empty(),
                     false,
@@ -207,6 +208,7 @@ pub fn evaluate_repl(
                 use_color,
                 entry_num: &mut entry_num,
                 hostname: hostname.as_deref(),
+                is_hostcommand: &mut is_hostcommand,
                 mode_dispatcher: mode_dispatcher.clone(),
             });
 
@@ -302,6 +304,12 @@ fn get_line_editor(engine_state: &mut EngineState, use_color: bool) -> Result<Re
 
         line_editor = setup_history(engine_state, line_editor, history)?;
 
+        // Lock the startup-only `$env.config.history.*` options (`path`, `max_size`,
+        // `file_format`, `isolation`) against further changes. Reedline owns the history
+        // backend from this point on, so runtime mutations of these fields would silently do
+        // nothing — better to reject them outright.
+        engine_state.history_locked_after_startup = true;
+
         perf!("setup history", start_time, use_color);
     }
     Ok(line_editor)
@@ -316,7 +324,226 @@ struct LoopContext<'a> {
     use_color: bool,
     entry_num: &'a mut usize,
     hostname: Option<&'a str>,
+    is_hostcommand: &'a mut bool,
     mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
+}
+
+struct RunContext<'a> {
+    engine_state: &'a mut EngineState,
+    stack: &'a mut Stack,
+    line_editor: Reedline,
+    command: String,
+    hostname: Option<&'a str>,
+    use_color: bool,
+    shell_integration: &'a ShellIntegrationConfig,
+    entry_num: &'a mut usize,
+    mode_dispatcher: Option<std::sync::Arc<std::sync::Mutex<Box<dyn crate::ModeDispatcher>>>>,
+}
+
+fn run_command(ctx: RunContext) -> Reedline {
+    use nu_cmd_base::hook;
+
+    let RunContext {
+        engine_state,
+        stack,
+        mut line_editor,
+        command,
+        hostname,
+        use_color,
+        shell_integration,
+        entry_num,
+        mode_dispatcher,
+    } = ctx;
+
+    let history_supports_meta = match engine_state.history_config().map(|h| h.file_format) {
+        #[cfg(feature = "sqlite")]
+        Some(HistoryFileFormat::Sqlite) => true,
+        _ => false,
+    };
+
+    if history_supports_meta {
+        prepare_history_metadata(&command, hostname, engine_state, &mut line_editor);
+    }
+
+    // For pre_exec_hook
+    let mut start_time = Instant::now();
+
+    // Right before we start running the code the user gave us, fire the `pre_execution`
+    // hook
+    {
+        // Set the REPL buffer to the current command for the "pre_execution" hook
+        let mut repl = engine_state.repl_state.lock().expect("repl state mutex");
+        repl.buffer = command.clone();
+        drop(repl);
+
+        if let Err(err) = hook::eval_hooks(
+            engine_state,
+            // &mut stack,
+            stack,
+            vec![],
+            &engine_state.get_config().hooks.pre_execution.clone(),
+            "pre_execution",
+        ) {
+            report_shell_error(None, engine_state, &err);
+        }
+    }
+
+    perf!("pre_execution_hook", start_time, use_color);
+
+    let mut repl = engine_state.repl_state.lock().expect("repl state mutex");
+    repl.cursor_pos = line_editor.current_insertion_point();
+    repl.buffer = line_editor.current_buffer_contents().to_string();
+    drop(repl);
+
+    if shell_integration.osc633 {
+        if stack
+            .get_env_var(engine_state, "TERM_PROGRAM")
+            .and_then(|v| v.as_str().ok())
+            == Some("vscode")
+        {
+            start_time = Instant::now();
+
+            run_ansi_sequence(VSCODE_PRE_EXECUTION_MARKER);
+
+            perf!(
+                "pre_execute_marker (633;C) ansi escape sequence",
+                start_time,
+                use_color
+            );
+        } else if shell_integration.osc133 {
+            start_time = Instant::now();
+
+            run_ansi_sequence(PRE_EXECUTION_MARKER);
+
+            perf!(
+                "pre_execute_marker (133;C) ansi escape sequence",
+                start_time,
+                use_color
+            );
+        }
+    } else if shell_integration.osc133 {
+        start_time = Instant::now();
+
+        run_ansi_sequence(PRE_EXECUTION_MARKER);
+
+        perf!(
+            "pre_execute_marker (133;C) ansi escape sequence",
+            start_time,
+            use_color
+        );
+    }
+
+    // Actual command execution logic starts from here
+    let cmd_execution_start_time = Instant::now();
+
+    let mut shannon_handled = false;
+    if let Some(ref dispatcher) = mode_dispatcher {
+        let mode = stack
+            .get_env_var(engine_state, "SHANNON_MODE")
+            .and_then(|v| v.as_str().ok().map(str::to_string))
+            .unwrap_or_else(|| "nu".to_string());
+        if mode != "nu" {
+            let env_strings = env_to_strings(engine_state, stack).unwrap_or_else(|e| {
+                warn!("Couldn't convert environment variable values to strings: {e}");
+                HashMap::default()
+            });
+            let cwd = stack
+                .get_env_var(engine_state, "PWD")
+                .and_then(|v| v.as_str().ok())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            let result = dispatcher.lock().expect("mode dispatcher mutex").execute(
+                &mode,
+                &command,
+                env_strings,
+                cwd,
+            );
+
+            for (key, value) in &result.env {
+                stack.add_env_var(key.clone(), Value::string(value, Span::unknown()));
+            }
+            let _ = stack.set_cwd(&result.cwd);
+            let _ = std::env::set_current_dir(&result.cwd);
+            stack.set_last_exit_code(result.exit_code, Span::unknown());
+            shannon_handled = true;
+        }
+    }
+
+    if !shannon_handled {
+        match parse_operation(command.clone(), engine_state, stack) {
+            Ok(ReplOperation::AutoCd { cwd, target, span }) => {
+                do_auto_cd(target, cwd, stack, engine_state, span);
+
+                run_finaliziation_ansi_sequence(
+                    stack,
+                    engine_state,
+                    use_color,
+                    shell_integration.osc633,
+                    shell_integration.osc133,
+                );
+            }
+            Ok(ReplOperation::RunCommand(cmd)) => {
+                line_editor = do_run_cmd(
+                    &cmd,
+                    stack,
+                    engine_state,
+                    line_editor,
+                    shell_integration.osc2,
+                    *entry_num,
+                    use_color,
+                );
+
+                run_finaliziation_ansi_sequence(
+                    stack,
+                    engine_state,
+                    use_color,
+                    shell_integration.osc633,
+                    shell_integration.osc133,
+                );
+            }
+            // as the name implies, we do nothing in this case
+            Ok(ReplOperation::DoNothing) => {}
+            Err(ref e) => error!("Error parsing operation: {e}"),
+        }
+    }
+    let cmd_duration = cmd_execution_start_time.elapsed();
+
+    // No source span for REPL-generated timing values
+    stack.add_env_var(
+        "CMD_DURATION_MS".into(),
+        Value::string(format!("{}", cmd_duration.as_millis()), Span::unknown()),
+    );
+
+    if history_supports_meta
+        && let Err(e) = fill_in_result_related_history_metadata(
+            &command,
+            engine_state,
+            cmd_duration,
+            stack,
+            &mut line_editor,
+        )
+    {
+        warn!("Could not fill in result related history metadata: {e}");
+    }
+
+    if shell_integration.osc2 {
+        run_shell_integration_osc2(None, engine_state, stack, use_color);
+    }
+    if shell_integration.osc7 {
+        run_shell_integration_osc7(hostname, engine_state, stack, use_color);
+    }
+    if shell_integration.osc9_9 {
+        run_shell_integration_osc9_9(engine_state, stack, use_color);
+    }
+    if shell_integration.osc633 {
+        run_shell_integration_osc633(engine_state, stack, use_color, command);
+    }
+    if shell_integration.reset_application_mode {
+        run_shell_integration_reset_application_mode();
+    }
+
+    line_editor = flush_engine_state_repl_buffer(engine_state, line_editor);
+    line_editor
 }
 
 /// Perform one iteration of the REPL loop
@@ -336,6 +563,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         use_color,
         entry_num,
         hostname,
+        is_hostcommand,
         mode_dispatcher,
     } = ctx;
 
@@ -352,6 +580,13 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
     perf!("reset signals", start_time, use_color);
 
     start_time = Instant::now();
+
+    // Juhan said to do this :)
+    let mut repl = engine_state.repl_state.lock().expect("repl state mutex");
+    repl.cursor_pos = line_editor.current_insertion_point();
+    repl.buffer = line_editor.current_buffer_contents().to_string();
+    drop(repl);
+
     // Check all the environment variables they ask for
     // fire the "env_change" hook
     if let Err(error) = hook::eval_env_change_hook(
@@ -402,10 +637,10 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         // try to enable bracketed paste
         // It doesn't work on windows system: https://github.com/crossterm-rs/crossterm/issues/737
         .use_bracketed_paste(cfg!(not(target_os = "windows")) && config.bracketed_paste)
-        // Shannon: use mode-aware highlighter
         .with_highlighter({
-            let shannon_mode = stack_arc.get_env_var(engine_state, "SHANNON_MODE")
-                .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
+            let shannon_mode = stack_arc
+                .get_env_var(engine_state, "SHANNON_MODE")
+                .and_then(|v| v.as_str().ok().map(str::to_string))
                 .unwrap_or_else(|| "nu".to_string());
             if shannon_mode == "bash" {
                 Box::new(crate::bash_highlight::BashHighlighter::new(&config))
@@ -413,11 +648,11 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
             } else if shannon_mode != "nu" {
                 Box::<NoOpHighlighter>::default() as Box<dyn reedline::Highlighter>
             } else {
-                Box::new(NuHighlighter {
-                    engine_state: engine_reference.clone(),
+                Box::new(NuHighlighter::new(
+                    engine_reference.clone(),
                     // STACK-REFERENCE 1
-                    stack: stack_arc.clone(),
-                }) as Box<dyn reedline::Highlighter>
+                    stack_arc.clone(),
+                )) as Box<dyn reedline::Highlighter>
             }
         })
         .with_validator(Box::new(NuValidator {
@@ -440,6 +675,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 .to_string(),
         ))
         .with_cursor_config(cursor_config)
+        .with_abbreviations(config.abbreviations.clone())
         .with_visual_selection_style(nu_ansi_term::Style {
             is_reverse: true,
             ..Default::default()
@@ -460,11 +696,19 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
 
     start_time = Instant::now();
     line_editor = if config.use_ansi_coloring.get(engine_state) && config.show_hints {
-        line_editor.with_hinter(Box::new({
-            // As of Nov 2022, "hints" color_config closures only get `null` passed in.
-            let style = style_computer.compute("hints", &Value::nothing(Span::unknown()));
-            CwdAwareHinter::default().with_style(style)
-        }))
+        // As of Nov 2022, "hints" color_config closures only get `null` passed in.
+        // No meaningful span — this is a synthetic null value for style computation.
+        let style = style_computer.compute("hints", &Value::nothing(Span::unknown()));
+        if let Some(closure) = config.hinter.closure.as_ref() {
+            line_editor.with_hinter(Box::new(ExternalHinter::new(
+                engine_reference.clone(),
+                stack_arc.clone(),
+                closure.clone(),
+                style,
+            )))
+        } else {
+            line_editor.with_hinter(Box::new(CwdAwareHinter::default().with_style(style)))
+        }
     } else {
         line_editor.disable_hints()
     };
@@ -537,6 +781,15 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
 
     perf!("update_prompt", start_time, use_color);
 
+    // If we don't flush the engine state, then the pre_prompt and env_change hooks cannot modify
+    // the commandline. But if we always flush the engine state, then the modification to the commandline done in
+    // ExecuteHostCommand will be overridden.
+    // So, we flush the engine state only if last signal wasn't a HostCommand
+    if !*is_hostcommand {
+        line_editor = flush_engine_state_repl_buffer(engine_state, line_editor);
+    }
+    *is_hostcommand = false;
+
     *entry_num += 1;
 
     start_time = Instant::now();
@@ -552,13 +805,7 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
         // Ensure immediately accept is always cleared
         .with_immediately_accept(false);
 
-    // Let's grab the shell_integration configs
-    let shell_integration_osc2 = config.shell_integration.osc2;
-    let shell_integration_osc7 = config.shell_integration.osc7;
-    let shell_integration_osc9_9 = config.shell_integration.osc9_9;
-    let shell_integration_osc133 = config.shell_integration.osc133;
-    let shell_integration_osc633 = config.shell_integration.osc633;
-    let shell_integration_reset_application_mode = config.shell_integration.reset_application_mode;
+    let shell_integration = &config.shell_integration;
 
     // TODO: we may clone the stack, this can lead to major performance issues
     // so we should avoid it or making stack cheaper to clone.
@@ -568,237 +815,48 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
 
     let line_editor_input_time = Instant::now();
     match input {
-        Ok(Signal::Success(repl_cmd_line_text)) => {
-            // Shannon: handle mode switch command
-            if repl_cmd_line_text.trim() == "__shannon_switch" {
-                if let Some(ref _dispatcher) = mode_dispatcher {
-                    let current = stack
-                        .get_env_var(engine_state, "SHANNON_MODE")
-                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
-                        .unwrap_or_else(|| "nu".to_string());
-                    let modes = ["nu", "bash"];
-                    let next_idx = modes.iter().position(|m| *m == current)
-                        .map(|i| (i + 1) % modes.len())
-                        .unwrap_or(0);
-                    stack.add_env_var(
-                        "SHANNON_MODE".to_string(),
-                        Value::string(modes[next_idx], Span::unknown()),
-                    );
-                }
+        Ok(Signal::Success(command)) => {
+            if command.trim() == "__shannon_switch" {
+                switch_shannon_mode(engine_state, &mut stack);
                 return (true, stack, line_editor);
             }
-            // Shannon: handle exit from non-nu modes
-            if repl_cmd_line_text.trim() == "exit" {
-                if let Some(ref _dispatcher) = mode_dispatcher {
-                    let mode = stack
-                        .get_env_var(engine_state, "SHANNON_MODE")
-                        .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
-                        .unwrap_or_else(|| "nu".to_string());
-                    if mode != "nu" {
-                        return (false, stack, line_editor);
-                    }
-                }
-            }
-
-            let history_supports_meta = match engine_state.history_config().map(|h| h.file_format) {
-                #[cfg(feature = "sqlite")]
-                Some(HistoryFileFormat::Sqlite) => true,
-                _ => false,
-            };
-
-            if history_supports_meta {
-                prepare_history_metadata(
-                    &repl_cmd_line_text,
-                    hostname,
-                    engine_state,
-                    &mut line_editor,
-                );
-            }
-
-            // For pre_exec_hook
-            start_time = Instant::now();
-
-            // Right before we start running the code the user gave us, fire the `pre_execution`
-            // hook
-            {
-                // Set the REPL buffer to the current command for the "pre_execution" hook
-                let mut repl = engine_state.repl_state.lock().expect("repl state mutex");
-                repl.buffer = repl_cmd_line_text.to_string();
-                drop(repl);
-
-                if let Err(err) = hook::eval_hooks(
-                    engine_state,
-                    &mut stack,
-                    vec![],
-                    &engine_state.get_config().hooks.pre_execution.clone(),
-                    "pre_execution",
-                ) {
-                    report_shell_error(None, engine_state, &err);
-                }
-            }
-
-            perf!("pre_execution_hook", start_time, use_color);
-
-            let mut repl = engine_state.repl_state.lock().expect("repl state mutex");
-            repl.cursor_pos = line_editor.current_insertion_point();
-            repl.buffer = line_editor.current_buffer_contents().to_string();
-            drop(repl);
-
-            if shell_integration_osc633 {
-                if stack
-                    .get_env_var(engine_state, "TERM_PROGRAM")
-                    .and_then(|v| v.as_str().ok())
-                    == Some("vscode")
-                {
-                    start_time = Instant::now();
-
-                    run_ansi_sequence(VSCODE_PRE_EXECUTION_MARKER);
-
-                    perf!(
-                        "pre_execute_marker (633;C) ansi escape sequence",
-                        start_time,
-                        use_color
-                    );
-                } else if shell_integration_osc133 {
-                    start_time = Instant::now();
-
-                    run_ansi_sequence(PRE_EXECUTION_MARKER);
-
-                    perf!(
-                        "pre_execute_marker (133;C) ansi escape sequence",
-                        start_time,
-                        use_color
-                    );
-                }
-            } else if shell_integration_osc133 {
-                start_time = Instant::now();
-
-                run_ansi_sequence(PRE_EXECUTION_MARKER);
-
-                perf!(
-                    "pre_execute_marker (133;C) ansi escape sequence",
-                    start_time,
-                    use_color
-                );
-            }
-
-            // Actual command execution logic starts from here
-            let cmd_execution_start_time = Instant::now();
-
-            // Shannon mode dispatch — intercept non-nushell modes
-            let mut shannon_handled = false;
-            if let Some(ref dispatcher) = mode_dispatcher {
-                let mode = stack
+            if command.trim() == "exit"
+                && stack
                     .get_env_var(engine_state, "SHANNON_MODE")
-                    .and_then(|v| v.as_str().ok().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "nu".to_string());
-                if mode != "nu" {
-                    #[allow(deprecated)]
-                    let env_strings = env_to_strings(engine_state, &stack).unwrap_or_default();
-                    let cwd = stack
-                        .get_env_var(engine_state, "PWD")
-                        .and_then(|v| v.as_str().ok())
-                        .map(std::path::PathBuf::from)
-                        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-                    let result = dispatcher.lock().unwrap().execute(
-                        &mode,
-                        &repl_cmd_line_text,
-                        env_strings,
-                        cwd,
-                    );
-                    for (key, value) in &result.env {
-                        stack.add_env_var(
-                            key.clone(),
-                            Value::string(value, Span::unknown()),
-                        );
-                    }
-                    let _ = stack.set_cwd(&result.cwd);
-                    let _ = std::env::set_current_dir(&result.cwd);
-                    shannon_handled = true;
-                }
-            }
-
-            if !shannon_handled {
-            match parse_operation(repl_cmd_line_text.clone(), engine_state, &stack) {
-                Ok(operation) => match operation {
-                    ReplOperation::AutoCd { cwd, target, span } => {
-                        do_auto_cd(target, cwd, &mut stack, engine_state, span);
-
-                        run_finaliziation_ansi_sequence(
-                            &stack,
-                            engine_state,
-                            use_color,
-                            shell_integration_osc633,
-                            shell_integration_osc133,
-                        );
-                    }
-                    ReplOperation::RunCommand(cmd) => {
-                        line_editor = do_run_cmd(
-                            &cmd,
-                            &mut stack,
-                            engine_state,
-                            line_editor,
-                            shell_integration_osc2,
-                            *entry_num,
-                            use_color,
-                        );
-
-                        run_finaliziation_ansi_sequence(
-                            &stack,
-                            engine_state,
-                            use_color,
-                            shell_integration_osc633,
-                            shell_integration_osc133,
-                        );
-                    }
-                    // as the name implies, we do nothing in this case
-                    ReplOperation::DoNothing => {}
-                },
-                Err(ref e) => error!("Error parsing operation: {e}"),
-            }
-            } // end if !shannon_handled
-            let cmd_duration = cmd_execution_start_time.elapsed();
-
-            // No source span for REPL-generated timing values
-            stack.add_env_var(
-                "CMD_DURATION_MS".into(),
-                Value::string(format!("{}", cmd_duration.as_millis()), Span::unknown()),
-            );
-
-            if history_supports_meta
-                && let Err(e) = fill_in_result_related_history_metadata(
-                    &repl_cmd_line_text,
-                    engine_state,
-                    cmd_duration,
-                    &mut stack,
-                    &mut line_editor,
-                )
+                    .and_then(|v| v.as_str().ok().map(str::to_string))
+                    .is_some_and(|mode| mode != "nu")
             {
-                warn!("Could not fill in result related history metadata: {e}");
+                return (false, stack, line_editor);
             }
-
-            if shell_integration_osc2 {
-                run_shell_integration_osc2(None, engine_state, &mut stack, use_color);
+            line_editor = run_command(RunContext {
+                engine_state,
+                stack: &mut stack,
+                line_editor,
+                command,
+                hostname,
+                use_color,
+                shell_integration,
+                entry_num,
+                mode_dispatcher: mode_dispatcher.clone(),
+            });
+        }
+        Ok(Signal::HostCommand(command)) => {
+            *is_hostcommand = true;
+            if command.trim() == "__shannon_switch" {
+                switch_shannon_mode(engine_state, &mut stack);
+                return (true, stack, line_editor);
             }
-            if shell_integration_osc7 {
-                run_shell_integration_osc7(hostname, engine_state, &mut stack, use_color);
-            }
-            if shell_integration_osc9_9 {
-                run_shell_integration_osc9_9(engine_state, &mut stack, use_color);
-            }
-            if shell_integration_osc633 {
-                run_shell_integration_osc633(
-                    engine_state,
-                    &mut stack,
-                    use_color,
-                    repl_cmd_line_text,
-                );
-            }
-            if shell_integration_reset_application_mode {
-                run_shell_integration_reset_application_mode();
-            }
-
-            line_editor = flush_engine_state_repl_buffer(engine_state, line_editor);
+            line_editor = run_command(RunContext {
+                engine_state,
+                stack: &mut stack,
+                line_editor,
+                command,
+                hostname,
+                use_color,
+                shell_integration,
+                entry_num,
+                mode_dispatcher: mode_dispatcher.clone(),
+            });
         }
         Ok(Signal::CtrlC) => {
             // `Reedline` clears the line content. New prompt is shown
@@ -806,8 +864,8 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 &stack,
                 engine_state,
                 use_color,
-                shell_integration_osc633,
-                shell_integration_osc133,
+                shell_integration.osc633,
+                shell_integration.osc133,
             );
         }
         Ok(Signal::CtrlD) => {
@@ -817,8 +875,8 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
                 &stack,
                 engine_state,
                 use_color,
-                shell_integration_osc633,
-                shell_integration_osc133,
+                shell_integration.osc633,
+                shell_integration.osc133,
             );
 
             println!();
@@ -828,26 +886,22 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
             // if cleanup_exit didn't exit, we should keep running
             return (true, stack, line_editor);
         }
+        // TODO: handle other signals like Signal::ExternalBreak
+        Ok(_) => {}
         Err(err) => {
-            let message = err.to_string();
-            if !message.contains("duration") {
-                eprintln!("Error: {err:?}");
-                // TODO: Identify possible error cases where a hard failure is preferable
-                // Ignoring and reporting could hide bigger problems
-                // e.g. https://github.com/nushell/nushell/issues/6452
-                // Alternatively only allow that expected failures let the REPL loop
+            if !err.to_string().contains("duration") {
+                write_repl_error_details(&err);
+                cleanup_exit((), engine_state, 1);
+                return (true, stack, line_editor);
             }
 
             run_finaliziation_ansi_sequence(
                 &stack,
                 engine_state,
                 use_color,
-                shell_integration_osc633,
-                shell_integration_osc133,
+                shell_integration.osc633,
+                shell_integration.osc133,
             );
-        }
-        Ok(_) => {
-            // Handle any new reedline Signal variants
         }
     }
     perf!(
@@ -951,7 +1005,7 @@ fn parse_operation(
         .cwd(Some(stack))
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_default();
-    let mut orig = s.clone();
+    let mut orig = s.trim().to_string();
     if orig.starts_with('`') {
         orig = trim_quotes_str(&orig).to_string()
     }
@@ -1286,6 +1340,23 @@ fn flush_engine_state_repl_buffer(
     line_editor
 }
 
+fn switch_shannon_mode(engine_state: &EngineState, stack: &mut Stack) {
+    let current = stack
+        .get_env_var(engine_state, "SHANNON_MODE")
+        .and_then(|v| v.as_str().ok().map(str::to_string))
+        .unwrap_or_else(|| "nu".to_string());
+    let modes = ["nu", "bash"];
+    let next_idx = modes
+        .iter()
+        .position(|mode| *mode == current)
+        .map(|idx| (idx + 1) % modes.len())
+        .unwrap_or(0);
+    stack.add_env_var(
+        "SHANNON_MODE".to_string(),
+        Value::string(modes[next_idx], Span::unknown()),
+    );
+}
+
 ///
 /// Setup history management for Reedline
 ///
@@ -1320,7 +1391,6 @@ fn setup_keybindings(engine_state: &EngineState, line_editor: Reedline) -> Reedl
     match create_keybindings(engine_state.get_config()) {
         Ok(keybindings) => match keybindings {
             KeybindingsMode::Emacs(mut keybindings) => {
-                // Shannon: Shift+Tab to cycle shell modes
                 keybindings.add_binding(
                     crossterm::event::KeyModifiers::SHIFT,
                     crossterm::event::KeyCode::BackTab,
@@ -1333,9 +1403,8 @@ fn setup_keybindings(engine_state: &EngineState, line_editor: Reedline) -> Reedl
                 mut insert_keybindings,
                 mut normal_keybindings,
             } => {
-                // Shannon: Shift+Tab to cycle shell modes (both vi modes)
-                for kb in [&mut insert_keybindings, &mut normal_keybindings] {
-                    kb.add_binding(
+                for keybindings in [&mut insert_keybindings, &mut normal_keybindings] {
+                    keybindings.add_binding(
                         crossterm::event::KeyModifiers::SHIFT,
                         crossterm::event::KeyCode::BackTab,
                         reedline::ReedlineEvent::ExecuteHostCommand("__shannon_switch".into()),
@@ -1488,6 +1557,10 @@ fn run_ansi_sequence(seq: &str) {
     } else if let Err(e) = io::stdout().flush() {
         warn!("Error flushing stdio {e}");
     }
+}
+
+fn write_repl_error_details(error: &impl std::fmt::Debug) {
+    let _ = stderr_write_all_and_flush(format!("Error: {error:?}\n"));
 }
 
 fn run_finaliziation_ansi_sequence(
@@ -1822,7 +1895,7 @@ mod test_auto_cd {
 
     #[test]
     fn escape_vscode_semicolon_test() {
-        let input = r#"now;is"#;
+        let input = "now;is";
         let expected = r#"now\x3Bis"#;
         let actual = escape_special_vscode_bytes(input).unwrap();
         assert_eq!(expected, actual);
