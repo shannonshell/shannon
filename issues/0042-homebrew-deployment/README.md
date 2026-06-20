@@ -18,8 +18,9 @@ brew trust shannonshell/shannon
 brew install shannon
 ```
 
-If the final tap owner should instead be `ryanxcharles/shannon`, record that
-decision explicitly before publishing.
+The tap must be owned by the Shannon organization:
+`shannonshell/homebrew-shannon`. Do not publish a Shannon Homebrew tap under
+`ryanxcharles/homebrew-shannon`.
 
 ## Background
 
@@ -48,8 +49,8 @@ needed for a normal shell install. The first implementation should be simple and
 auditable:
 
 - keep the formula source of truth in this repository, likely `dist/shannon.rb`;
-- publish the formula through a separate Homebrew tap repository following
-  Homebrew naming conventions, likely `shannonshell/homebrew-shannon`;
+- publish the formula through the separate Homebrew tap repository
+  `shannonshell/homebrew-shannon`;
 - point the formula at a stable, hash-pinned GitHub Release source tarball,
   preferably an uploaded release asset rather than GitHub's regenerable
   `/archive/` tarballs;
@@ -95,8 +96,7 @@ The formula verification bar should include:
 
 ## Open Questions
 
-- Should the canonical tap be `shannonshell/homebrew-shannon` or
-  `ryanxcharles/homebrew-shannon`?
+- How should publication authenticate to the `shannonshell` organization tap?
 - Should the first release publish only a formula/source build, or also publish
   a bottle immediately?
 - Should the formula install any shell integration files, completions, or
@@ -109,4 +109,4 @@ The formula verification bar should include:
 ## Experiments
 
 - [Experiment 1: Formula, tap, and bottle deployment](01-formula-tap-and-bottle.md)
-  — **Designed**
+  — **Fail**

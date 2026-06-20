@@ -11,19 +11,17 @@ still have a local preflight before any irreversible publication step, so a bad
 formula, incomplete source tarball, or broken install test fails before pushing
 public artifacts.
 
-The immediate tap target is `ryanxcharles/homebrew-shannon`, installed as:
+The immediate tap target is `shannonshell/homebrew-shannon`, installed as:
 
 ```bash
-brew tap ryanxcharles/shannon
-brew trust ryanxcharles/shannon
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
 brew install shannon
 ```
 
-This choice is deliberate for the first publication because this checkout's
-`origin` is `ryanxcharles/shannon` and local GitHub authentication is for
-`ryanxcharles`. The issue can later add a small follow-up or mirror step for
-`shannonshell/homebrew-shannon` if that organization should own the canonical
-tap.
+This tap owner is mandatory. Shannon has a GitHub organization, `shannonshell`,
+and the Homebrew tap must live there. Do not publish a Shannon tap as
+`ryanxcharles/homebrew-shannon`.
 
 The first Homebrew release version is `0.5.6`. The original design-review fix
 used `0.5.5`, matching the package version at the time, but publication
@@ -50,9 +48,9 @@ Planned repo changes:
 
 Planned external publication changes:
 
-- `ryanxcharles/shannon` — create or update GitHub Release `v0.5.6` with a
+- `shannonshell/shannon` — create or update GitHub Release `v0.5.6` with a
   source tarball asset named `shannon-0.5.6.tar.gz`.
-- `ryanxcharles/homebrew-shannon` — create or update a public Homebrew tap with
+- `shannonshell/homebrew-shannon` — create or update a public Homebrew tap with
   `Formula/shannon.rb`, a README containing the tap/trust/install commands, and
   a bottle release if bottling succeeds.
 
@@ -75,10 +73,9 @@ Publication sequence:
 
 1. Preflight local state:
    - confirm the Shannon repo is clean;
-   - confirm `origin` is `ryanxcharles/shannon`;
-   - confirm GitHub CLI auth is for `ryanxcharles`;
-   - confirm whether `v0.5.6` already exists on `ryanxcharles/shannon`;
-   - confirm whether `ryanxcharles/homebrew-shannon` already exists.
+   - confirm GitHub CLI auth has permission to publish to `shannonshell`;
+   - confirm whether `v0.5.6` already exists on `shannonshell/shannon`;
+   - confirm whether `shannonshell/homebrew-shannon` already exists.
 2. Record design review approval and commit this experiment plan before
    implementation.
 3. Implement `dist/shannon.rb`, `scripts/make-source-tarball.sh`, and README
@@ -101,22 +98,22 @@ Publication sequence:
    - create tag `v0.5.6` pointing at that commit;
    - create the GitHub Release with `shannon-0.5.6.tar.gz`;
    - update the tap formula URL and sha256 to the uploaded release asset;
-   - create/push `ryanxcharles/homebrew-shannon` if it does not exist.
+   - create/push `shannonshell/homebrew-shannon` if it does not exist.
 8. Run public formula checks after the release URL exists:
-   - `brew style ryanxcharles/shannon/shannon`;
-   - `brew audit --new --strict ryanxcharles/shannon/shannon`;
+   - `brew style shannonshell/shannon/shannon`;
+   - `brew audit --new --strict shannonshell/shannon/shannon`;
    - record and justify any expected third-party tap warnings.
 9. Build a bottle if Homebrew can bottle the formula on this machine:
-   - `brew install --build-bottle ryanxcharles/shannon/shannon`;
+   - `brew install --build-bottle shannonshell/shannon/shannon`;
    - `brew bottle --json --no-rebuild --root-url=...`;
    - create a tap release and upload the bottle;
    - merge the emitted bottle block into `Formula/shannon.rb`;
    - push the tap.
 10. Verify the public cold install:
     - uninstall any local `shannon` formula;
-    - untap/re-tap `ryanxcharles/shannon`;
+    - untap/re-tap `shannonshell/shannon`;
     - prove untrusted install refusal if Homebrew requires trust;
-    - `brew trust ryanxcharles/shannon`;
+    - `brew trust shannonshell/shannon`;
     - `brew install shannon`;
     - verify version, nu command execution, `brew test shannon`, and bottle
       pour/source-build behavior.
@@ -179,7 +176,7 @@ Pass criteria:
 - The installed `shannon --version` reports the Shannon version and embedded
   Nushell `0.113.1`.
 - The installed binary can run a simple Nushell command with `shannon -c`.
-- A public tap install works from `ryanxcharles/homebrew-shannon`.
+- A public tap install works from `shannonshell/homebrew-shannon`.
 - The README documents Homebrew installation and source/developer alternatives.
 - If a bottle is published, the cold install pours it; if bottling is blocked,
   the issue records why and verifies the source-build path instead.
@@ -195,3 +192,41 @@ Fail criteria:
   Nushell command.
 - Publishing would overwrite an existing GitHub release or tap artifact without
   explicit approval and a recovery plan.
+
+## Result
+
+**Result:** Fail
+
+The experiment was stopped because the implementation and publication path
+targeted the wrong Homebrew tap owner. Shannon has an organization,
+`shannonshell`, and the tap must be `shannonshell/homebrew-shannon`, installed
+as `brew tap shannonshell/shannon`.
+
+The original approved plan also targeted the wrong owner. After the failure, the
+issue README and this experiment file were corrected to show the required
+organization tap, and the local README/formula artifacts were updated to use
+`shannonshell` URLs instead of `ryanxcharles` URLs.
+
+The failed path created unintended external artifacts under the personal
+account:
+
+- `ryanxcharles/homebrew-shannon` was created and contains the local tap
+  commits.
+- `ryanxcharles/shannon` received pushed Issue 42 commits, tag `v0.5.6`, and a
+  GitHub Release `v0.5.6` with `shannon-0.5.6.tar.gz`.
+
+Do not continue from those artifacts. The next experiment should either remove
+or explicitly supersede the accidental personal tap/release artifacts, then
+publish through `shannonshell/homebrew-shannon`.
+
+Because `v0.5.6` now exists on the personal fork and points at the failed
+publication path, the next experiment should use a fresh patch version for the
+organization-owned release unless an explicit cleanup plan removes the personal
+tag/release and safely reclaims the version.
+
+## Conclusion
+
+The formula shape and local Homebrew source-build proof were useful, but the
+publication target was wrong. The correct next step is a new experiment focused
+on the `shannonshell` organization tap and cleanup/supersession of the
+accidental personal-account artifacts.

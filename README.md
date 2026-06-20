@@ -70,8 +70,8 @@ nushell and bash configured, shannon uses your existing setup automatically.
 With [Homebrew](https://brew.sh) on macOS:
 
 ```sh
-brew tap ryanxcharles/shannon
-brew trust ryanxcharles/shannon
+brew tap shannonshell/shannon
+brew trust shannonshell/shannon
 brew install shannon
 ```
 

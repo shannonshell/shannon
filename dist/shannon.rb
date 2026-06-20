@@ -1,7 +1,7 @@
 class Shannon < Formula
   desc "Poly-shell built on nushell with seamless bash compatibility"
-  homepage "https://github.com/ryanxcharles/shannon"
-  url "https://github.com/ryanxcharles/shannon/releases/download/v0.5.6/shannon-0.5.6.tar.gz"
+  homepage "https://github.com/shannonshell/shannon"
+  url "https://github.com/shannonshell/shannon/releases/download/v0.5.6/shannon-0.5.6.tar.gz"
   sha256 "8d649109f001d1013115e5376c4a9c399d7b3338c7bb7137c7b6d8d54b160d27"
   license "MIT"
 
